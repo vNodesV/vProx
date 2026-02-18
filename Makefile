@@ -48,32 +48,32 @@ geo:
 ## Create .env if missing (non-geo defaults)
 
 env:
-    @if [[ ! -f "$(ENV_FILE)" ]]; then \
-        echo "# Optional geo DB paths" > "$(ENV_FILE)"; \
-        echo "IP2LOCATION_MMDB=" >> "$(ENV_FILE)"; \
-        echo "GEOLITE2_COUNTRY_DB=" >> "$(ENV_FILE)"; \
-        echo "GEOLITE2_ASN_DB=" >> "$(ENV_FILE)"; \
-        echo "" >> "$(ENV_FILE)"; \
-        echo "# Backup automation" >> "$(ENV_FILE)"; \
-        echo "VPROX_BACKUP_ENABLED=false" >> "$(ENV_FILE)"; \
-        echo "VPROX_BACKUP_INTERVAL_DAYS=0" >> "$(ENV_FILE)"; \
-        echo "VPROX_BACKUP_MAX_BYTES=0" >> "$(ENV_FILE)"; \
-        echo "VPROX_BACKUP_CHECK_MINUTES=10" >> "$(ENV_FILE)"; \
-        echo "" >> "$(ENV_FILE)"; \
-        echo "# Rate limiting" >> "$(ENV_FILE)"; \
-        echo "VPROX_RPS=25" >> "$(ENV_FILE)"; \
-        echo "VPROX_BURST=100" >> "$(ENV_FILE)"; \
-        echo "VPROX_AUTO_ENABLED=true" >> "$(ENV_FILE)"; \
-        echo "VPROX_AUTO_THRESHOLD=120" >> "$(ENV_FILE)"; \
-        echo "VPROX_AUTO_WINDOW_SEC=10" >> "$(ENV_FILE)"; \
-        echo "VPROX_AUTO_RPS=1" >> "$(ENV_FILE)"; \
-        echo "VPROX_AUTO_BURST=1" >> "$(ENV_FILE)"; \
-        echo "VPROX_AUTO_TTL_SEC=900" >> "$(ENV_FILE)"; \
-        echo "" >> "$(ENV_FILE)"; \
-        echo "# Server" >> "$(ENV_FILE)"; \
-        echo "VPROX_ADDR=:3000" >> "$(ENV_FILE)"; \
-        echo "Created $(ENV_FILE)"; \
-    fi
+	@if [[ ! -f "$(ENV_FILE)" ]]; then \
+		echo "# Optional geo DB paths" > "$(ENV_FILE)"; \
+		echo "IP2LOCATION_MMDB=" >> "$(ENV_FILE)"; \
+		echo "GEOLITE2_COUNTRY_DB=" >> "$(ENV_FILE)"; \
+		echo "GEOLITE2_ASN_DB=" >> "$(ENV_FILE)"; \
+		echo "" >> "$(ENV_FILE)"; \
+		echo "# Backup automation" >> "$(ENV_FILE)"; \
+		echo "VPROX_BACKUP_ENABLED=false" >> "$(ENV_FILE)"; \
+		echo "VPROX_BACKUP_INTERVAL_DAYS=0" >> "$(ENV_FILE)"; \
+		echo "VPROX_BACKUP_MAX_BYTES=0" >> "$(ENV_FILE)"; \
+		echo "VPROX_BACKUP_CHECK_MINUTES=10" >> "$(ENV_FILE)"; \
+		echo "" >> "$(ENV_FILE)"; \
+		echo "# Rate limiting" >> "$(ENV_FILE)"; \
+		echo "VPROX_RPS=25" >> "$(ENV_FILE)"; \
+		echo "VPROX_BURST=100" >> "$(ENV_FILE)"; \
+		echo "VPROX_AUTO_ENABLED=true" >> "$(ENV_FILE)"; \
+		echo "VPROX_AUTO_THRESHOLD=120" >> "$(ENV_FILE)"; \
+		echo "VPROX_AUTO_WINDOW_SEC=10" >> "$(ENV_FILE)"; \
+		echo "VPROX_AUTO_RPS=1" >> "$(ENV_FILE)"; \
+		echo "VPROX_AUTO_BURST=1" >> "$(ENV_FILE)"; \
+		echo "VPROX_AUTO_TTL_SEC=900" >> "$(ENV_FILE)"; \
+		echo "" >> "$(ENV_FILE)"; \
+		echo "# Server" >> "$(ENV_FILE)"; \
+		echo "VPROX_ADDR=:3000" >> "$(ENV_FILE)"; \
+		echo "Created $(ENV_FILE)"; \
+	fi
 
 ## Create chain template config
 
