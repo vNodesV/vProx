@@ -106,13 +106,13 @@ type ChainConfig struct {
 // --------------------- GLOBALS ---------------------
 
 var (
-	chains        = make(map[string]*ChainConfig)
+	chains       = make(map[string]*ChainConfig)
 	defaultPorts Ports
 
-	vproxHome string
-	configDir string
-	dataDir   string
-	logsDir   string
+	vproxHome  string
+	configDir  string
+	dataDir    string
+	logsDir    string
 	archiveDir string
 
 	httpClient = &http.Client{
