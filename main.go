@@ -2,17 +2,22 @@ package main
 
 import (
 	"compress/gzip"
+	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"log"
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	toml "github.com/pelletier/go-toml/v2"
@@ -102,10 +107,13 @@ type ChainConfig struct {
 
 var (
 	chains        = make(map[string]*ChainConfig)
-	backupCfg     = &backup.Backup{}
-	BackupCfgFile = backupCfg
-
 	defaultPorts Ports
+
+	vproxHome string
+	configDir string
+	dataDir   string
+	logsDir   string
+	archiveDir string
 
 	httpClient = &http.Client{
 		Timeout: 5 * time.Second,
@@ -119,6 +127,10 @@ var (
 	// logger state
 	srcCounter   = make(map[string]int64)
 	counterMutex sync.Mutex
+
+	chainLoggerMu sync.Mutex
+	chainLoggers  = make(map[string]*log.Logger)
+	chainLogFiles = make(map[string]*os.File)
 )
 
 const (
@@ -229,6 +241,11 @@ func validateConfig(c *ChainConfig) error {
 			return fmt.Errorf("aliases.rest contains invalid hostname: %q", a)
 		}
 	}
+	for _, a := range c.Aliases.API {
+		if !isValidHostname(a) {
+			return fmt.Errorf("aliases.api contains invalid hostname: %q", a)
+		}
+	}
 
 	// Services sanity: at least one service enabled
 	if !(c.Services.RPC || c.Services.REST || c.Services.GRPC || c.Services.GRPCWeb || c.Services.APIAlias || c.Services.WebSocket) {
@@ -288,16 +305,33 @@ func loadPorts(path string) (Ports, error) {
 	return p, nil
 }
 
+func registerHost(host string, c *ChainConfig) error {
+	if host == "" {
+		return nil
+	}
+	if existing, ok := chains[host]; ok {
+		if existing.ChainName != c.ChainName {
+			return fmt.Errorf("duplicate host %q in chain %q conflicts with %q", host, c.ChainName, existing.ChainName)
+		}
+	}
+	chains[host] = c
+	return nil
+}
+
 func loadChains(dir string) error {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return err
 	}
 	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".toml") {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasSuffix(name, ".toml") {
 			continue
 		}
-		fpath := filepath.Join(dir, entry.Name())
+		if strings.EqualFold(name, "ports.toml") {
+			continue
+		}
+		fpath := filepath.Join(dir, name)
 		f, err := os.Open(fpath)
 		if err != nil {
 			return err
@@ -321,27 +355,47 @@ func loadChains(dir string) error {
 		for i, a := range c.Aliases.REST {
 			c.Aliases.REST[i] = strings.ToLower(strings.TrimSpace(a))
 		}
+		for i, a := range c.Aliases.API {
+			c.Aliases.API[i] = strings.ToLower(strings.TrimSpace(a))
+		}
 
 		// register base host
-		chains[base] = &c
+		if err := registerHost(base, &c); err != nil {
+			return fmt.Errorf("%s: %w", entry.Name(), err)
+		}
 
 		// register standard vhosts (rpc.<base>, <rest|api>.<base>) when enabled
 		if c.Expose.VHost {
 			rp := c.Expose.VHostPrefix.RPC
 			ap := c.Expose.VHostPrefix.REST
-			chains[rp+"."+base] = &c
-			chains[ap+"."+base] = &c
+			if err := registerHost(rp+"."+base, &c); err != nil {
+				return fmt.Errorf("%s: %w", entry.Name(), err)
+			}
+			if err := registerHost(ap+"."+base, &c); err != nil {
+				return fmt.Errorf("%s: %w", entry.Name(), err)
+			}
 		}
 
 		// register explicit alias hosts
 		for _, h := range c.Aliases.RPC {
 			if h != "" {
-				chains[h] = &c
+				if err := registerHost(h, &c); err != nil {
+					return fmt.Errorf("%s: %w", entry.Name(), err)
+				}
 			}
 		}
 		for _, h := range c.Aliases.REST {
 			if h != "" {
-				chains[h] = &c
+				if err := registerHost(h, &c); err != nil {
+					return fmt.Errorf("%s: %w", entry.Name(), err)
+				}
+			}
+		}
+		for _, h := range c.Aliases.API {
+			if h != "" {
+				if err := registerHost(h, &c); err != nil {
+					return fmt.Errorf("%s: %w", entry.Name(), err)
+				}
 			}
 		}
 	}
@@ -424,9 +478,9 @@ func bannerPath(chain, routePrefix string) string {
 	chain = strings.ToLower(chain)
 	switch routePrefix {
 	case rpcPrefix:
-		return filepath.Join("msg", chain, "rpc.msg")
+		return filepath.Join(configDir, "msg", chain, "rpc.msg")
 	case restPrefix, apiPrefix:
-		return filepath.Join("msg", chain, "rest.msg")
+		return filepath.Join(configDir, "msg", chain, "rest.msg")
 	}
 	return ""
 }
@@ -448,6 +502,7 @@ func clientIP(r *http.Request) string {
 
 func logRequestSummary(r *http.Request, proxied bool, route string, host string, start time.Time) {
 	src := clientIP(r)
+	hostNorm := normalizeHost(host)
 
 	// counter
 	counterMutex.Lock()
@@ -471,7 +526,7 @@ func logRequestSummary(r *http.Request, proxied bool, route string, host string,
 	status := limit.StatusOf(r)
 
 	header := fmt.Sprintf("[ :::: LOGGING SUMMARY :::: %s ]", ts)
-	line2 := fmt.Sprintf("  HOST: %s  ROUTE: %s PROXIED: %t", host, route, proxied)
+	line2 := fmt.Sprintf("  HOST: %s  ROUTE: %s PROXIED: %t", hostNorm, route, proxied)
 	line3 := fmt.Sprintf("  REQUEST: %s", dst)
 	line4 := fmt.Sprintf("  IP: %s (%d) %.2fms UA: %s", src, srcQty, durMS, ua)
 	if country == "" {
@@ -484,15 +539,180 @@ func logRequestSummary(r *http.Request, proxied bool, route string, host string,
 		width = len(line3)
 	}
 	footer := fmt.Sprintf("[ %s ]", strings.Repeat("-", width))
-	log.Println()
-	log.Println(header)
-	log.Println(line2)
-	log.Println(line3)
-	log.Println(line4)
-	log.Println(footer)
+	logLines(log.Default(), "", header, line2, line3, line4, footer)
+	if ch, ok := chains[hostNorm]; ok {
+		if cl := getChainLogger(ch); cl != nil {
+			logLines(cl, "", header, line2, line3, line4, footer)
+		}
+	}
 }
 
 // --------------------- UTILS ---------------------
+
+func resolveVProxHome() string {
+	if v := strings.TrimSpace(os.Getenv("VPROX_HOME")); v != "" {
+		return v
+	}
+	if h, err := os.UserHomeDir(); err == nil && h != "" {
+		return filepath.Join(h, ".vProx")
+	}
+	return ".vProx"
+}
+
+func normalizeHost(raw string) string {
+	h := strings.ToLower(strings.TrimSpace(raw))
+	if h == "" {
+		return h
+	}
+	if strings.HasPrefix(h, "[") {
+		if host, _, err := net.SplitHostPort(h); err == nil {
+			return host
+		}
+		return strings.Trim(h, "[]")
+	}
+	if strings.Count(h, ":") > 1 {
+		return h
+	}
+	if host, _, err := net.SplitHostPort(h); err == nil {
+		return host
+	}
+	return h
+}
+
+func logLines(l *log.Logger, lines ...string) {
+	for _, line := range lines {
+		l.Println(line)
+	}
+}
+
+func getChainLogger(c *ChainConfig) *log.Logger {
+	if c == nil {
+		return nil
+	}
+	file := strings.TrimSpace(c.Logging.File)
+	if file == "" {
+		return nil
+	}
+	if !filepath.IsAbs(file) {
+		if strings.HasPrefix(file, "logs"+string(os.PathSeparator)) || strings.HasPrefix(file, "logs/") {
+			file = filepath.Join(vproxHome, file)
+		} else {
+			file = filepath.Join(logsDir, file)
+		}
+	}
+
+	chainLoggerMu.Lock()
+	defer chainLoggerMu.Unlock()
+	if lg, ok := chainLoggers[file]; ok {
+		return lg
+	}
+	if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
+		return nil
+	}
+	f, err := os.OpenFile(file, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return nil
+	}
+	lg := log.New(f, "", 0)
+	chainLoggers[file] = lg
+	chainLogFiles[file] = f
+	return lg
+}
+
+func closeChainLoggers() {
+	chainLoggerMu.Lock()
+	defer chainLoggerMu.Unlock()
+	for path, f := range chainLogFiles {
+		_ = f.Close()
+		delete(chainLogFiles, path)
+		delete(chainLoggers, path)
+	}
+}
+
+func envBool(key string) bool {
+	v := strings.TrimSpace(os.Getenv(key))
+	return v == "1" || strings.EqualFold(v, "true") || strings.EqualFold(v, "yes")
+}
+
+func envBoolDefault(key string, def bool) bool {
+	v := strings.TrimSpace(os.Getenv(key))
+	if v == "" {
+		return def
+	}
+	return v == "1" || strings.EqualFold(v, "true") || strings.EqualFold(v, "yes")
+}
+
+func envInt(key string, def int) int {
+	v := strings.TrimSpace(os.Getenv(key))
+	if v == "" {
+		return def
+	}
+	if n, err := strconv.Atoi(v); err == nil {
+		return n
+	}
+	return def
+}
+
+func envFloat(key string, def float64) float64 {
+	v := strings.TrimSpace(os.Getenv(key))
+	if v == "" {
+		return def
+	}
+	if n, err := strconv.ParseFloat(v, 64); err == nil {
+		return n
+	}
+	return def
+}
+
+func envBytes(key string) int64 {
+	v := strings.TrimSpace(os.Getenv(key))
+	if v == "" {
+		return 0
+	}
+	if n, err := strconv.ParseInt(v, 10, 64); err == nil {
+		return n
+	}
+	return parseBytes(v)
+}
+
+func parseBytes(s string) int64 {
+	s = strings.TrimSpace(strings.ToUpper(s))
+	if s == "" {
+		return 0
+	}
+	mult := int64(1)
+	for _, suf := range []struct {
+		S string
+		M int64
+	}{{"KB", 1 << 10}, {"MB", 1 << 20}, {"GB", 1 << 30}, {"TB", 1 << 40}, {"B", 1}} {
+		if strings.HasSuffix(s, suf.S) {
+			mult = suf.M
+			s = strings.TrimSpace(strings.TrimSuffix(s, suf.S))
+			break
+		}
+	}
+	if n, err := strconv.ParseInt(s, 10, 64); err == nil {
+		return n * mult
+	}
+	return 0
+}
+
+func hasChainConfigs(dir string) bool {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return false
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if strings.HasSuffix(name, ".toml") && !strings.EqualFold(name, "ports.toml") {
+			return true
+		}
+	}
+	return false
+}
 
 func inList(list []string, needle string) bool {
 	needle = strings.ToLower(strings.TrimSpace(needle))
@@ -508,7 +728,7 @@ func inList(list []string, needle string) bool {
 
 func handler(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
-	host := strings.ToLower(r.Host)
+	host := normalizeHost(r.Host)
 
 	chain, ok := chains[host]
 	if !ok {
@@ -549,7 +769,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			ap = "api"
 		}
 		isRPCvhost = strings.HasPrefix(host, rp+".") || inList(chain.Aliases.RPC, host)
-		isRESTvhost = strings.HasPrefix(host, ap+".") || inList(chain.Aliases.REST, host)
+		isRESTvhost = strings.HasPrefix(host, ap+".") || inList(chain.Aliases.REST, host) || inList(chain.Aliases.API, host)
 	}
 
 	var (
@@ -738,57 +958,142 @@ func handler(w http.ResponseWriter, r *http.Request) {
 // --------------------- BACKUP -------------------
 
 func main() {
-	if err := os.MkdirAll("logs", 0755); err != nil {
-		log.Fatalf("Could not create logs directory: %v", err)
+	if len(os.Args) > 1 && os.Args[1] == "backup" {
+		os.Args[1] = "--backup"
 	}
-	f, err := os.OpenFile("logs/main.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	backupFlag := flag.Bool("backup", false, "run backup and exit")
+	homeFlag := flag.String("home", "", "override VPROX_HOME")
+	configFlag := flag.String("config", "", "override config directory")
+	addrFlag := flag.String("addr", "", "listen address (default :3000)")
+	flag.Parse()
+
+	vproxHome = resolveVProxHome()
+	if *homeFlag != "" {
+		vproxHome = *homeFlag
+	}
+	if vproxHome != "" {
+		_ = os.Setenv("VPROX_HOME", vproxHome)
+	}
+
+	configDir = filepath.Join(vproxHome, "config")
+	if *configFlag != "" {
+		if filepath.IsAbs(*configFlag) {
+			configDir = *configFlag
+		} else {
+			configDir = filepath.Join(vproxHome, *configFlag)
+		}
+	}
+	dataDir = filepath.Join(vproxHome, "data")
+	logsDir = filepath.Join(vproxHome, "logs")
+	archiveDir = filepath.Join(logsDir, "archived")
+
+	for _, dir := range []string{configDir, dataDir, logsDir, archiveDir} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			log.Fatalf("Could not create directory %s: %v", dir, err)
+		}
+	}
+
+	mainLogPath := filepath.Join(logsDir, "main.log")
+	f, err := os.OpenFile(mainLogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		log.Fatalf("Could not open logs/main.log: %v", err)
+		log.Fatalf("Could not open %s: %v", mainLogPath, err)
 	}
 	defer f.Close()
 	log.SetOutput(f)
 	log.SetFlags(0) // no default date/time; our logger prints its own header
+
+	if *backupFlag {
+		if err := backup.RunOnce(backup.Options{
+			LogPath:    mainLogPath,
+			ArchiveDir: archiveDir,
+			StatePath:  filepath.Join(dataDir, "backup.last"),
+		}); err != nil {
+			log.Fatalf("Backup failed: %v", err)
+		}
+		log.Println("Backup completed")
+		return
+	}
 
 	// Geo status line
 	log.Println(geo.Info())
 
 	// Load configs (TOML only)
 	var loadErr error
-	defaultPorts, loadErr = loadPorts("chains/ports/ports.toml")
+	portsPath := filepath.Join(configDir, "ports.toml")
+	if _, err := os.Stat(portsPath); err != nil {
+		portsPath = "chains/ports/ports.toml"
+	}
+	defaultPorts, loadErr = loadPorts(portsPath)
 	if loadErr != nil {
 		log.Fatalf("Could not load default ports: %v", loadErr)
 	}
-	if err := loadChains("chains"); err != nil {
+	chainsDir := configDir
+	if !hasChainConfigs(chainsDir) {
+		chainsDir = "chains"
+	}
+	if err := loadChains(chainsDir); err != nil {
 		log.Fatalf("Could not load chain configs: %v", err)
 	}
 
 	// --- Limiter: defaults ok, overrides limited, 429 blocked
-	lim := limit.New(
-		limit.RateSpec{RPS: 25, Burst: 100}, // defaults
-		nil,
+	defaultRPS := envFloat("VPROX_RPS", 25)
+	defaultBurst := envInt("VPROX_BURST", 100)
+	autoEnabled := envBoolDefault("VPROX_AUTO_ENABLED", true)
+	autoThreshold := envInt("VPROX_AUTO_THRESHOLD", 120)
+	autoWindowSec := envInt("VPROX_AUTO_WINDOW_SEC", 10)
+	autoPenaltyRPS := envFloat("VPROX_AUTO_RPS", 1)
+	autoPenaltyBurst := envInt("VPROX_AUTO_BURST", 1)
+	autoTTL := envInt("VPROX_AUTO_TTL_SEC", 900)
+
+	limOpts := []limit.Option{
 		limit.WithTrustProxy(true),
-		limit.WithLogPath("logs/rate-limit.jsonl"),
+		limit.WithLogPath(filepath.Join(logsDir, "rate-limit.jsonl")),
 		limit.WithLogOnlyImportant(),  // JSONL: only 429/auto-add/auto-expire/wait-canceled
 		limit.WithMirrorToMainLog(),   // mirror important events into main.log
 		limit.WithDefaultActionDrop(), // use Allow() for defaults (429 on overflow)
-		limit.WithAutoQuarantine(limit.AutoRule{
-			Threshold: 120,
-			Window:    10 * time.Second,
-			Penalty:   limit.RateSpec{RPS: 1, Burst: 1}, // IMPORTANT: burst >= 1
-			TTL:       15 * time.Minute,
-		}),
-		// If you want heartbeat lines, uncomment:
-		// limit.WithAllowLogEvery(30*time.Second),
+	}
+	if autoEnabled {
+		limOpts = append(limOpts, limit.WithAutoQuarantine(limit.AutoRule{
+			Threshold: autoThreshold,
+			Window:    time.Duration(autoWindowSec) * time.Second,
+			Penalty:   limit.RateSpec{RPS: autoPenaltyRPS, Burst: autoPenaltyBurst}, // burst >= 1
+			TTL:       time.Duration(autoTTL) * time.Second,
+		}))
+	}
+	lim := limit.New(
+		limit.RateSpec{RPS: defaultRPS, Burst: defaultBurst},
+		nil,
+		limOpts...,
 	)
 
 	// Build mux and routes
 	mux := http.NewServeMux()
 
+	var stopBackup func()
+	if envBool("VPROX_BACKUP_ENABLED") {
+		intervalDays := envInt("VPROX_BACKUP_INTERVAL_DAYS", 0)
+		maxBytes := envBytes("VPROX_BACKUP_MAX_BYTES")
+		checkMin := envInt("VPROX_BACKUP_CHECK_MINUTES", 10)
+		var err error
+		stopBackup, err = backup.StartAuto(backup.Options{
+			LogPath:       mainLogPath,
+			ArchiveDir:    archiveDir,
+			StatePath:     filepath.Join(dataDir, "backup.last"),
+			IntervalDays:  intervalDays,
+			MaxBytes:      maxBytes,
+			CheckInterval: time.Duration(checkMin) * time.Minute,
+		})
+		if err != nil {
+			log.Printf("[backup] auto start failed: %v", err)
+		}
+	}
+
 	mux.HandleFunc("/websocket", ws.HandleWS(ws.Deps{
 		ClientIP:          clientIP,
 		LogRequestSummary: logRequestSummary,
 		BackendWSParams: func(host string) (string, time.Duration, time.Duration, bool) {
-			ch, ok := chains[strings.ToLower(host)]
+			host = normalizeHost(host)
+			ch, ok := chains[host]
 			if !ok || !ch.Services.WebSocket || !ch.Services.RPC {
 				return "", 0, 0, false
 			}
@@ -813,9 +1118,58 @@ func main() {
 	}
 	mux.HandleFunc("/", handler) // catch-all
 
+	addr := ":3000"
+	if v := strings.TrimSpace(os.Getenv("VPROX_ADDR")); v != "" {
+		addr = v
+	}
+	if *addrFlag != "" {
+		addr = *addrFlag
+	}
+
+	server := &http.Server{
+		Addr:              addr,
+		Handler:           lim.Middleware(mux),
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+
+	cleanup := func() {
+		if stopBackup != nil {
+			stopBackup()
+		}
+		_ = lim.Close()
+		geo.Close()
+		closeChainLoggers()
+	}
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- server.ListenAndServe()
+	}()
+
 	// Start server wrapped by limiter middleware
 	log.Println("")
 	log.Println("LOG RESTARTED #############################")
-	log.Println("[INFO] vProx listening on :3000")
-	log.Fatal(http.ListenAndServe(":3000", lim.Middleware(mux)))
+	log.Printf("[INFO] vProx listening on %s", addr)
+
+	select {
+	case err := <-errCh:
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatalf("Server error: %v", err)
+		}
+		cleanup()
+	case <-ctx.Done():
+		log.Println("[INFO] shutdown requested")
+		ctxTimeout, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := server.Shutdown(ctxTimeout); err != nil {
+			log.Printf("Shutdown error: %v", err)
+		}
+		cleanup()
+	}
 }

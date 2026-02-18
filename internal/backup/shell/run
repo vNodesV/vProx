@@ -1,7 +1,0 @@
-#!/usr/bin/env bash
-## SHELL Version of planned Log Component of the Backup Module for vApp
-source $(dirname $0)/src/data
-
-
-## ARRAY FROM VARS
-startBackup

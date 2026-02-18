@@ -5,8 +5,8 @@ appVersion = 0.1.0
 
 [FileManager]
 logFile = "main.log"
-logLocation = "/internal/backup/logs/"
-logDst = "/internal/backup/archived/"
+logLocation = "$HOME/.vProx/logs/"
+logDst = "$HOME/.vProx/logs/archived/"
 interval = "12h"
 timedate = ""
 tarFile = "archive.$logFile.$timedate.$extension"
