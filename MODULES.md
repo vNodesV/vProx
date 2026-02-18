@@ -164,6 +164,12 @@ Backups are written to:
 make install
 ```
 
+**Create a template config**:
+
+```bash
+make config
+```
+
 **Optional GEO DB copy** (expects `ip2l/ip2location.mmdb` in repo):
 
 ```bash

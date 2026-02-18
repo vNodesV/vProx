@@ -23,8 +23,6 @@ Configuration is **TOML-only**. By default, vProx uses `$HOME/.vProx` as its run
 - **Default ports**: `$HOME/.vProx/config/ports.toml`
 - **Per-chain config**: `$HOME/.vProx/config/*.toml`
 
-Sample chain configs exist in the repo under `chains/` and are copied during `make install`.
-
 ### Geo DBs (optional)
 
 If you want geo lookups in logs, provide one of the following:
@@ -54,7 +52,7 @@ By default, vProx listens on **:3000** and routes based on the **Host** header.
 
 ## 🧱 Install (Linux)
 
-The `make install` flow builds and installs the binary, copies configs into `$HOME/.vProx/config`, and sets up runtime folders so the service can run independent of the repo.
+The `make install` flow builds and installs the binary and sets up runtime folders so the service can run independent of the repo.
 
 - `make install`
 
@@ -124,6 +122,7 @@ Backups create `main.log.<timestamp>.tar.gz` in `$HOME/.vProx/logs/archived`.
 
 ## 🧰 Notes
 
+- Create your chain configs under `$HOME/.vProx/config` (use `make config` to generate a template).
 - If you change chain configs, restart the server.
 
 ## 📄 License

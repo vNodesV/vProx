@@ -1021,7 +1021,7 @@ func main() {
 	var loadErr error
 	portsPath := filepath.Join(configDir, "ports.toml")
 	if _, err := os.Stat(portsPath); err != nil {
-		portsPath = "chains/ports/ports.toml"
+		log.Fatalf("ports config missing: %s", portsPath)
 	}
 	defaultPorts, loadErr = loadPorts(portsPath)
 	if loadErr != nil {
@@ -1029,7 +1029,7 @@ func main() {
 	}
 	chainsDir := configDir
 	if !hasChainConfigs(chainsDir) {
-		chainsDir = "chains"
+		log.Fatalf("no chain configs found in %s", chainsDir)
 	}
 	if err := loadChains(chainsDir); err != nil {
 		log.Fatalf("Could not load chain configs: %v", err)
