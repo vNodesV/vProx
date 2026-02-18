@@ -134,10 +134,10 @@ build:
 install: build
 	mkdir -p "$(GOPATH_BIN)"
 	cp "$(BUILD_OUT)" "$(GOPATH_BIN)/$(APP_NAME)"
-    sudo ln -sf "$(GOPATH_BIN)/$(APP_NAME)" "/usr/local/bin/$(APP_NAME)"
-    @mkdir -p "$(CFG_DIR)"
-    @cp -n chains/*.toml "$(CFG_DIR)/" 2>/dev/null || true
-    @cp -n chains/ports/ports.toml "$(CFG_DIR)/ports.toml" 2>/dev/null || true
+	sudo ln -sf "$(GOPATH_BIN)/$(APP_NAME)" "/usr/local/bin/$(APP_NAME)"
+	@mkdir -p "$(CFG_DIR)"
+	@cp -n chains/*.toml "$(CFG_DIR)/" 2>/dev/null || true
+	@cp -n chains/ports/ports.toml "$(CFG_DIR)/ports.toml" 2>/dev/null || true
 
 ## Create systemd service file
 
