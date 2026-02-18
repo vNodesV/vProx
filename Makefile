@@ -140,23 +140,23 @@ install: build
 ## Create systemd service file
 
 systemd:
-	@sudo tee "$(SYSTEMD_PATH)" > /dev/null <<'EOF'
-[Unit]
-Description=Custom Go RPC Rewriter Proxy for Tendermint
-After=network.target
-Wants=network-online.target
+	@sudo tee "$(SYSTEMD_PATH)" > /dev/null <<-'EOF'
+	[Unit]
+	Description=Custom Go RPC Rewriter Proxy for Tendermint
+	After=network.target
+	Wants=network-online.target
 
-[Service]
-Environment=VPROX_HOME=/home/vnodesv/.vProx
-EnvironmentFile=/home/vnodesv/.vProx/.env
-Environment=IP2LOCATION_MMDB=/usr/local/share/IP2Proxy/ip2location.mmdb
-Environment=IP2PROXY_DISABLE=1
-ExecStart=/usr/local/bin/vProx
-Restart=no
-User=vnodesv
-WorkingDirectory=/home/vnodesv/.vProx
-Environment=GOTRACEBACK=all
+	[Service]
+	Environment=VPROX_HOME=/home/vnodesv/.vProx
+	EnvironmentFile=/home/vnodesv/.vProx/.env
+	Environment=IP2LOCATION_MMDB=/usr/local/share/IP2Proxy/ip2location.mmdb
+	Environment=IP2PROXY_DISABLE=1
+	ExecStart=/usr/local/bin/vProx
+	Restart=no
+	User=vnodesv
+	WorkingDirectory=/home/vnodesv/.vProx
+	Environment=GOTRACEBACK=all
 
-[Install]
-WantedBy=multi-user.target
-EOF
+	[Install]
+	WantedBy=multi-user.target
+	EOF
