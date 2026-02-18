@@ -1,0 +1,83 @@
+#!/usr/local/env bash
+## FUNCTIONS 
+
+#!/bin/bash
+## ERROR HANDLER & GENERAL DATA LOADER##
+
+err() {
+    local exit_code=$?
+    local line_number=$1
+    local func_name=$2
+    local script_name=$(basename "$0")
+    local sourced_file=${BASH_SOURCE[1]}
+    local menuErr="0"
+    local choice="empty"
+    local module=$3
+    if [ $line_number = $menuErr ]; then
+        ####### ERR Handling for wrong menu choice, triggered by adding $menuErr to cmd. config"
+        local exit_code=1
+        local ta=""
+        echo ""
+        echo "[ SELECTION ERROR ]" >&2
+        read -p "Try again? {y/n}; " ta
+            case $ta in
+                y) $module
+                ;;
+                n) exit 1
+                ;;
+                *) echo "Please select (y)es or (n)o to continue or CTRL-C to exit: " 
+                   $module
+            esac
+    else
+        echo "[ERROR] ${func_name} in ${sourced_file} (called from ${script_name}) at line ${line_number} (exit code: ${exit_code})" >&2
+        exit $exit_code
+    fi
+}
+
+validateConfig() {
+    if [ $CONFIG_COMPLETE == 1 ]; then
+        for key in "${!BACKUP_VARS[@]}"; do
+            declare "$key"="${BACKUP_VARS[$key]}"
+        done
+        echo "[INFO] Configuration loaded successfully."     
+    else
+        echo "[ERROR] Configuration incomplete or not loaded. Please check the configuration file." >&2
+        exit 1
+    fi
+}
+
+directoryCheck() {
+    # VALIDATED DIRECTORIES & FILES
+    # declaring temp variables for directories
+    declare -A DIRS_TO_CHECK=(
+        [DIR_LOCAL]="$DIR_LOCAL"
+        [LOGDIR]="$LOGDIR"
+        [DSTDIR]="$DSTDIR"
+        [TMPDIR]="$TMPDIR"
+    )
+    # Check and create directories if they do not exist
+    for dir in "${!DIRS_TO_CHECK[@]}"; do
+        if [ ! -d "${DIRS_TO_CHECK[$dir]}" ]; then
+            echo "[WARNING] Directory ${DIRS_TO_CHECK[$dir]} does not exist. Creating it now."
+            mkdir -p "${DIRS_TO_CHECK[$dir]}" || err $LINENO "[ERROR] Failed to create directory ${DIRS_TO_CHECK[$dir]}" "${FUNCNAME[0]}"
+            echo "[INFO] Directory ${DIRS_TO_CHECK[$dir]} created successfully."
+        fi
+    done    
+}
+
+## log file name can be overwritten from the configfile by passing the name and location of the log. i.e "vProxB foo.log"
+moveLog() {
+    echo "[INFO] Stopping vProx service..."
+    eval "${CMDS_RUN[stop_service]}" || err $LINENO "moveLog" "main"
+    
+    echo "[INFO] Moving active log file to temporary location..."
+    eval "${CMDS_RUN[move_log]}" || err $LINENO "moveLog" "main"
+    
+    echo "[INFO] Copying log file attributes back to original location..."
+    eval "${CMDS_RUN[cp_attributes]}" || err $LINENO "moveLog" "main"
+    
+    echo "[INFO] Starting vProx service..."
+    eval "${CMDS_RUN[start_service]}" || err $LINENO "moveLog" "main"
+    
+    echo "[INFO] Log file moved and service restarted successfully."
+}

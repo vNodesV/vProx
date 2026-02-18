@@ -1,0 +1,71 @@
+{
+    "version": "1.0",
+    "last_updated": "2023-10-01T12:00:00Z",
+    "chains": {
+        "elys": {
+            "elysRBX": {
+                "host": "elys.srvs.vnodesv.net",
+                "ip": "10.0.0.11",
+                "default_ports": true,
+                "routes": {
+                    "expose": {
+                        "path": true,
+                        "vhost": true
+                    },
+                    "expose.vhost_prefix": {
+                        "rpc": "rpc",
+                        "rest": "rest"
+                    }
+                },
+                "msg": true,
+                "api_msg": "For best CLI results, use https://rest.elys.srvs.vnodesv.net:443 or https://elys.rest.fr.vnodesv.net:443",
+                "rpc_msg": "For best CLI results, use https://rpc.elys.srvs.vnodesv.net:443 or https://elys.rpc.fr.vnodesv.net:443",    
+                "services": {
+                    "rpc": true,
+                    "rest": true,
+                    "websocket": true,
+                    "grpc": false,
+                    "grpc_web": false,
+                    "api_alias": false
+                },
+                "aliases": {
+                    "rpc": ["elys.rpc.fr.vnodesv.net"],
+                    "rest": ["elys.rest.fr.vnodesv.net"]
+                }
+
+            },
+            "cheqd-services": {
+                "host": "cheqd.srvs.vnodesv.net",
+                "ip":"10.0.0.13",
+                "default_ports": true,
+                "routes": {
+                    "expose": {
+                        "path": true,
+                        "vhost": true
+                    },
+                    "expose.vhost_prefix": {
+                        "rpc": "rpc",
+                        "rest": "rest"
+                    }
+                },
+                "msg": true,
+                "api_msg": "For best CLI results, use https://api.cheqd.srvs.vnodesv.net:443",
+                "rpc_msg": "For best CLI results, use https://rpc.cheqd.srvs.vnodesv.net:443",
+                "services": {
+                    "rpc": true,
+                    "rest": true,
+                    "websocket": true,
+                    "grpc": true,
+                    "grpc_web": true,
+                    "api_alias": true
+                },
+                "aliases": {
+                    "rpc": ["rpc.cheqd.srvs.vnodesv.net:443"],
+                    "rest": ["api.cheqd.srvs.vnodesv.net:443"]
+                }
+            }
+        }
+    }
+
+}
+

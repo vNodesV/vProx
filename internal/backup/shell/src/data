@@ -1,0 +1,37 @@
+#!/usr/local/env bash
+CONFIG_COMPLETE=1
+### DATA & VARs SOURCES
+## VARS
+### CONFIGURATIONS
+source $(dirname $0)/src/func
+CYCLE=43200 #-- 12 hours in seconds
+MAXLOG="75000" #-- tar.lz4 files over MAXLOG ---> 75M in bytes? 
+DIR_LOCAL=/home/$(whoami)/vProx
+LOGDIR="$DIR_LOCAL/logs"
+SRC_DIR=/home/$(whoami)/vApp/modules/vProx/logs
+ACTIVE_LOGFILE="main.log"
+LOG="$SRC_DIR/$ACTIVE_LOGFILE"
+DSTDIR="$LOGDIR/archives"
+LOGSIZE=$(du $LOG | awk '{ print $1 }' | sed 's/[A-Za-z]//g') ## cmd returns human-readable size and remove letters at the end, keeping only the digits.
+
+COMP=$(
+
+    if [[ $LOGSIZE -gt $MAXLOG ]]; then
+        echo "tar.lz4"
+    else
+        echo "tar"
+    fi
+
+)
+TIMESTAMP="$(date +%Y-%m-%d_%H%M%S)"
+FILENAME="backup.$TIMESTAMP.$COMP"
+TMPDIR="$LOGDIR/tmp"
+###
+### DECLARE ARRAY FOR GLOBAL USE
+declare -A CMDS_RUN=(
+    ## PROD
+    [stop_service]="sudo service vProx stop"
+    [move_log]="mv $SRC_DIR/$ACTIVE_LOGFILE $TMPDIR/"
+    [cp_attributes]="cp --attributes-only $TMPDIR/$ACTIVE_LOGFILE $SRC_DIR/"
+    [start_service]="sudo service vProx start"
+)

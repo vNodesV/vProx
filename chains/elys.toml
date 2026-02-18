@@ -1,0 +1,45 @@
+chain_name     = "elysRBX"
+host           = "elys.srvs.vnodesv.net"
+ip             = "10.0.0.11"
+default_ports  = false
+msg            = false
+
+[message]
+# api_msg = "For best CLI results, use https://rest.elys.srvs.vnodesv.net:443 or https://elys.rest.fr.vnodesv.net:443"
+# rpc_msg = "For best CLI results, use https://rpc.elys.srvs.vnodesv.net:443 or https://elys.rpc.fr.vnodesv.net:443"
+
+[aliases]
+rpc  = ["elys.rpc.fr.vnodesv.net"]
+rest = ["elys.rest.fr.vnodesv.net"]
+
+[expose]
+path  = true
+vhost = true
+
+[expose.vhost_prefix]
+rpc  = "rpc"
+rest = "rest"
+
+[services]
+rpc        = true
+rest       = true
+websocket  = true
+grpc       = true
+grpc_web   = false
+api_alias  = true
+
+[ports]
+rpc      = 26657
+rest     = 1317
+grpc     = 9090
+grpc_web = 9091
+api      = 1317
+
+[features]
+inject_rpc_index    = true
+inject_rest_swagger = true
+absolute_links      = "auto"
+
+[logging]
+file   = "logs/elys.log"
+format = "summary"

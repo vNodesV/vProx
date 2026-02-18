@@ -1,0 +1,14 @@
+{
+    "$schema": 1,
+    "version": "1.0",
+        "cfg": {
+            "log_file": "../logs/main.log",
+            "destination": "/archived",
+            "interval": "12h",
+            "extension": "tar",
+            "source": "logs/",
+            "timedate": "",
+            "output": "$log_file_.$timedate.$extension"
+        }
+
+}

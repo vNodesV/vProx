@@ -1,0 +1,17 @@
+## TOML Config file for Backup Mod
+[HouseKeeping]
+cfgFile = "/internal/backup/cfg/config.toml"
+appVersion = 0.1.0
+
+[FileManager]
+logFile = "main.log"
+logLocation = "/internal/backup/logs/"
+logDst = "/internal/backup/archived/"
+interval = "12h"
+timedate = ""
+tarFile = "archive.$logFile.$timedate.$extension"
+
+[Compressor]
+extension = "tar.gz"
+level = ""
+
