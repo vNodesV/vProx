@@ -133,6 +133,9 @@ var (
 	chainLoggerMu sync.Mutex
 	chainLoggers  = make(map[string]*log.Logger)
 	chainLogFiles = make(map[string]*os.File)
+
+	logKVRe   = regexp.MustCompile(`([a-zA-Z_][a-zA-Z0-9_]*)=("([^"\\]|\\.)*"|[^ ]+)`)
+	longHexRe = regexp.MustCompile(`\b[0-9A-Fa-f]{24,}\b`)
 )
 
 const (
@@ -141,6 +144,15 @@ const (
 	grpcPrefix    = "/grpc"
 	grpcWebPrefix = "/grpc-web"
 	apiPrefix     = "/api"
+
+	ansiReset   = "\x1b[0m"
+	ansiDim     = "\x1b[2m"
+	ansiBlue    = "\x1b[34m"
+	ansiCyan    = "\x1b[36m"
+	ansiGreen   = "\x1b[32m"
+	ansiYellow  = "\x1b[33m"
+	ansiMagenta = "\x1b[35m"
+	ansiRed     = "\x1b[31m"
 )
 
 // --------------------- VALIDATION ---------------------
@@ -588,6 +600,107 @@ func logLines(l *log.Logger, lines ...string) {
 	for _, line := range lines {
 		l.Println(line)
 	}
+}
+
+type splitLogWriter struct {
+	stdout   io.Writer
+	file     io.Writer
+	colorize bool
+}
+
+func (w *splitLogWriter) Write(p []byte) (int, error) {
+	if w.file != nil {
+		if _, err := w.file.Write(p); err != nil {
+			return 0, err
+		}
+	}
+	if w.stdout != nil {
+		out := p
+		if w.colorize {
+			out = []byte(colorizeLogLine(string(p)))
+		}
+		if _, err := w.stdout.Write(out); err != nil {
+			return 0, err
+		}
+	}
+	return len(p), nil
+}
+
+func colorizeLogLine(line string) string {
+	if strings.TrimSpace(line) == "" {
+		return line
+	}
+
+	trail := ""
+	if strings.HasSuffix(line, "\n") {
+		trail = "\n"
+		line = strings.TrimSuffix(line, "\n")
+	}
+
+	parts := strings.SplitN(line, " ", 3)
+	if len(parts) < 3 {
+		return line + trail
+	}
+
+	base := ansiDim + parts[0] + ansiReset + " " + colorLevel(parts[1]) + parts[1] + ansiReset + " "
+	rest := parts[2]
+
+	firstKV := logKVRe.FindStringIndex(rest)
+	if firstKV == nil {
+		return base + ansiCyan + rest + ansiReset + trail
+	}
+
+	msg := strings.TrimSpace(rest[:firstKV[0]])
+	kvs := rest[firstKV[0]:]
+	kvColored := logKVRe.ReplaceAllStringFunc(kvs, func(m string) string {
+		kv := strings.SplitN(m, "=", 2)
+		if len(kv) != 2 {
+			return m
+		}
+		k, v := kv[0], kv[1]
+		return ansiBlue + k + ansiReset + "=" + colorValueForKey(k, v)
+	})
+
+	if msg == "" {
+		return base + kvColored + trail
+	}
+	return base + ansiCyan + msg + ansiReset + " " + kvColored + trail
+}
+
+func colorLevel(level string) string {
+	switch strings.ToUpper(strings.TrimSpace(level)) {
+	case "DBG":
+		return ansiBlue
+	case "WRN":
+		return ansiYellow
+	case "ERR":
+		return ansiRed
+	default:
+		return ansiGreen
+	}
+}
+
+func colorValueForKey(key, value string) string {
+	switch strings.ToLower(strings.TrimSpace(key)) {
+	case "module":
+		return ansiMagenta + value + ansiReset
+	case "height", "latency_ms", "src_count":
+		return ansiYellow + value + ansiReset
+	case "status":
+		if strings.EqualFold(strings.Trim(value, `"`), "ok") {
+			return ansiGreen + value + ansiReset
+		}
+		return ansiRed + value + ansiReset
+	case "error":
+		return ansiRed + value + ansiReset
+	case "request_id", "ip", "host", "route", "method":
+		return ansiCyan + value + ansiReset
+	}
+	vTrim := strings.Trim(value, `"`)
+	if longHexRe.MatchString(vTrim) {
+		return ansiGreen + value + ansiReset
+	}
+	return ansiGreen + value + ansiReset
 }
 
 func getChainLogger(c *ChainConfig) *log.Logger {
@@ -1106,7 +1219,7 @@ func main() {
 	defer f.Close()
 
 	if startMode && !*quietFlag {
-		log.SetOutput(io.MultiWriter(os.Stdout, f))
+		log.SetOutput(&splitLogWriter{stdout: os.Stdout, file: f, colorize: true})
 	} else {
 		// In non-start mode we keep file-only behavior.
 		// With --quiet in start mode, also keep file-only output.
