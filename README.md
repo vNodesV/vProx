@@ -79,15 +79,20 @@ To generate the systemd unit file:
 
 - `make systemd`
 
-Then enable and start the service (Linux):
+`make install` also renders a local unit file at:
 
+- `$HOME/.vProx/service/vProx.service`
+
+To use that unit on a systemd host, copy it and enable the service:
+
+- `sudo cp $HOME/.vProx/service/vProx.service /etc/systemd/system/vProx.service`
 - `sudo systemctl daemon-reload`
-- `sudo systemctl enable vprox`
-- `sudo systemctl start vprox`
+- `sudo systemctl enable vProx.service`
+- `sudo systemctl start vProx.service`
 
 To follow live service logs in CosmosSDK-style line output:
 
-- `journalctl -u vprox.service -f --output=cat`
+- `journalctl -u vProx.service -f --output=cat`
 
 To run a manual backup of `main.log`:
 

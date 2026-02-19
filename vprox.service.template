@@ -1,11 +1,14 @@
 [Unit]
-Description=vProx - Reverse Proxy for Blockchain Node Services
+Description=vProx by vNodes[V] GO RPC Proxy handler and IP2Proxy API server.
 After=network.target
 Wants=network-online.target
 
 [Service]
+Type=simple
 Environment=VPROX_HOME=__HOME__/.vProx
-EnvironmentFile=__HOME__/.vProx/.env
+Environment=IP2LOCATION_MMDB=__HOME__/.vProx/data/geolocation/ip2location.mmdb
+Environment=GOTRACEBACK=all
+EnvironmentFile=-__HOME__/.vProx/.env
 ExecStart=/usr/local/bin/vProx start
 Restart=on-failure
 RestartSec=5

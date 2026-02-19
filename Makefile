@@ -13,6 +13,8 @@ CFG_DIR := $(VPROX_HOME)/config
 CHAINS_DIR := $(VPROX_HOME)/chains
 INTERNAL_DIR := $(VPROX_HOME)/internal
 ARCHIVE_DIR := $(LOG_DIR)/archived
+SERVICE_DIR := $(VPROX_HOME)/service
+SERVICE_PATH := $(SERVICE_DIR)/vProx.service
 
 # GeoLocation database
 GEO_DB_SRC := ip2l/ip2location.mmdb
@@ -25,11 +27,9 @@ GOPATH := $(shell go env GOPATH)
 GOROOT := $(shell go env GOROOT)
 GOPATH_BIN := $(GOPATH)/bin
 
-SYSTEMD_PATH := /etc/systemd/system/vprox.service
-
 .PHONY: all validate-go dirs geo config build install clean systemd env
 
-all: validate-go dirs geo config env install systemd
+all: validate-go dirs geo config env install
 
 ## Validate Go environment
 
@@ -150,6 +150,7 @@ install:
 	sudo ln -sf "$(GOPATH_BIN)/$(APP_NAME)" "/usr/local/bin/$(APP_NAME)"
 	@echo "✓ Installed to $(GOPATH_BIN)/$(APP_NAME)"
 	@echo "✓ Symlinked to /usr/local/bin/$(APP_NAME)"
+	@$(MAKE) systemd
 
 ## Clean local build artifacts (never touches installed binary)
 
@@ -161,32 +162,32 @@ clean:
 ## Create or update systemd service file
 
 systemd:
-	@echo "Setting up systemd service..."
-	@EXPECTED_EXEC="/usr/local/bin/vProx start"; \
-	if [[ -f "$(SYSTEMD_PATH)" ]]; then \
-		CURRENT_EXEC=$$(grep "^ExecStart=" "$(SYSTEMD_PATH)" | cut -d= -f2); \
-		if [[ "$$CURRENT_EXEC" == "$$EXPECTED_EXEC" ]]; then \
-			echo "✓ vProx.service already exists with correct ExecStart"; \
-			echo "  Skipping service file creation"; \
+	@echo "Rendering local systemd service file..."
+	@mkdir -p "$(SERVICE_DIR)"
+	@TMP_RENDERED="$$(mktemp)"; \
+	sed "s|__HOME__|$(HOME)|g; s|__USER__|$(USER)|g" vprox.service.template > "$$TMP_RENDERED"; \
+	if [[ -f "$(SERVICE_PATH)" ]]; then \
+		if cmp -s "$$TMP_RENDERED" "$(SERVICE_PATH)"; then \
+			echo "✓ Local vProx.service already up to date"; \
 		else \
-			echo "⚠ vProx.service exists but has different ExecStart:"; \
-			echo "  Current:  $$CURRENT_EXEC"; \
-			echo "  Expected: $$EXPECTED_EXEC"; \
-			echo "  Updating service file..."; \
-			sed "s|__HOME__|$(HOME)|g; s|__USER__|$(USER)|g" vprox.service.template | sudo tee "$(SYSTEMD_PATH)" > /dev/null; \
-			echo "✓ Updated $(SYSTEMD_PATH)"; \
+			echo "⚠ Local vProx.service differs from template; applying update..."; \
+			cp "$$TMP_RENDERED" "$(SERVICE_PATH)"; \
+			echo "✓ Updated $(SERVICE_PATH)"; \
+			echo "⚠ This version generated a new service file. Review it and replace the current system service if needed."; \
 		fi; \
 	else \
-		echo "Creating new systemd service file..."; \
-		sed "s|__HOME__|$(HOME)|g; s|__USER__|$(USER)|g" vprox.service.template | sudo tee "$(SYSTEMD_PATH)" > /dev/null; \
-		echo "✓ Created $(SYSTEMD_PATH)"; \
-	fi
+		echo "Creating new local systemd service file..."; \
+		cp "$$TMP_RENDERED" "$(SERVICE_PATH)"; \
+		echo "✓ Created $(SERVICE_PATH)"; \
+	fi; \
+	rm -f "$$TMP_RENDERED"
 	@echo ""
-	@echo "To enable and start the service, run:"
+	@echo "To install this unit on a systemd host, run:"
+	@echo "  sudo cp $(SERVICE_PATH) /etc/systemd/system/vProx.service"
 	@echo "  sudo systemctl daemon-reload"
-	@echo "  sudo systemctl enable vprox"
-	@echo "  sudo systemctl start vprox"
+	@echo "  sudo systemctl enable vProx.service"
+	@echo "  sudo systemctl start vProx.service"
 	@echo ""
 	@echo "To check status:"
-	@echo "  sudo systemctl status vprox"
+	@echo "  sudo systemctl status vProx.service"
 
