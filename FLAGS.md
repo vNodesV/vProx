@@ -8,14 +8,14 @@ This file intentionally stays short.
 
 ## Quick usage
 
-- `vProx -h` — show built-in help
-- `vProx -validate` — validate config and exit
-- `vProx -info -verbose` — print resolved runtime/config summary
-- `vProx -dry-run` — load everything without starting server
-- `vProx -backup` — run one backup cycle and exit
+- `vProx --help` — show built-in help
+- `vProx --validate` — validate config and exit
+- `vProx --info --verbose` — print resolved runtime/config summary
+- `vProx --dry-run` — load everything without starting server
+- `vProx --backup` — run one backup cycle and exit
 
 ## Most common overrides
 
-- `-home`, `-config`, `-chains`, `-log-file`, `-addr`
-- `-rps`, `-burst`, `-disable-auto`, `-auto-rps`, `-auto-burst`
-- `-disable-backup`, `-verbose`, `-quiet`, `-version`
+- `--home`, `--config`, `--chains`, `--log-file`, `--addr`
+- `--rps`, `--burst`, `--disable-auto`, `--auto-rps`, `--auto-burst`
+- `--disable-backup`, `--verbose`, `--quiet`, `--version`

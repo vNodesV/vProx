@@ -987,6 +987,34 @@ func main() {
 	disableAutoFlag := flag.Bool("disable-auto", false, "disable auto-quarantine")
 	disableBackupFlag := flag.Bool("disable-backup", false, "disable automatic backup loop")
 
+	flag.Usage = func() {
+		out := flag.CommandLine.Output()
+		fmt.Fprintln(out, "Usage: vProx [--flags]")
+		fmt.Fprintln(out, "")
+		fmt.Fprintln(out, "Flags:")
+		fmt.Fprintln(out, "  --addr string           listen address (default :3000)")
+		fmt.Fprintln(out, "  --auto-burst int        override auto-quarantine burst (env: VPROX_AUTO_BURST)")
+		fmt.Fprintln(out, "  --auto-rps float        override auto-quarantine RPS (env: VPROX_AUTO_RPS)")
+		fmt.Fprintln(out, "  --backup                run backup and exit")
+		fmt.Fprintln(out, "  --burst int             override default burst (env: VPROX_BURST)")
+		fmt.Fprintln(out, "  --chains string         override chains directory")
+		fmt.Fprintln(out, "  --config string         override config directory")
+		fmt.Fprintln(out, "  --disable-auto          disable auto-quarantine")
+		fmt.Fprintln(out, "  --disable-backup        disable automatic backup loop")
+		fmt.Fprintln(out, "  --dry-run               load everything but don't start server")
+		fmt.Fprintln(out, "  --help                  show this help")
+		fmt.Fprintln(out, "  --home string           override VPROX_HOME")
+		fmt.Fprintln(out, "  --info                  show loaded config summary and exit")
+		fmt.Fprintln(out, "  --log-file string       override main log file path")
+		fmt.Fprintln(out, "  --quiet                 suppress non-error output")
+		fmt.Fprintln(out, "  --rps float             override default RPS (env: VPROX_RPS)")
+		fmt.Fprintln(out, "  --validate              validate configs and exit")
+		fmt.Fprintln(out, "  --verbose               verbose logging output")
+		fmt.Fprintln(out, "  --version               show version and exit")
+		fmt.Fprintln(out, "")
+		fmt.Fprintln(out, "Note: Go's flag parser accepts both --flag and -flag; use --flag as the documented style.")
+	}
+
 	flag.Parse()
 
 	// Handle version flag first
