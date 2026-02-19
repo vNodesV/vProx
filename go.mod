@@ -1,4 +1,4 @@
-module github.com/vNodesV/vApp/modules/vProx
+module github.com/vNodesV/vProx
 
 go 1.25
 

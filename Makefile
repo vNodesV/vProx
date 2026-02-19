@@ -1,8 +1,9 @@
 SHELL := /bin/bash
 
 APP_NAME := vProx
-BUILD_SRC := main.go
-BUILD_OUT := $(APP_NAME)
+BUILD_SRC := ./cmd/vprox
+BUILD_DIR := .build
+BUILD_OUT := $(BUILD_DIR)/$(APP_NAME)
 
 VPROX_HOME := $(HOME)/.vProx
 DATA_DIR := $(VPROX_HOME)/data
@@ -26,9 +27,9 @@ GOPATH_BIN := $(GOPATH)/bin
 
 SYSTEMD_PATH := /etc/systemd/system/vprox.service
 
-.PHONY: all validate-go dirs geo config build install systemd env
+.PHONY: all validate-go dirs geo config build install clean systemd env
 
-all: validate-go dirs geo config env build install systemd
+all: validate-go dirs geo config env install systemd
 
 ## Validate Go environment
 
@@ -133,18 +134,29 @@ config: dirs
 
 build:
 	@echo "Building $(APP_NAME)..."
+	mkdir -p "$(BUILD_DIR)"
 	go build -o "$(BUILD_OUT)" "$(BUILD_SRC)"
 	@echo "✓ Build complete"
+	@echo "  Output: $(BUILD_OUT)"
 
 ## Install to GOPATH/bin and symlink to /usr/local/bin
+##
+## Note: this builds directly to GOPATH/bin and does not write a compiled binary into the repo directory.
 
-install: build
+install:
 	@echo "Installing $(APP_NAME)..."
 	mkdir -p "$(GOPATH_BIN)"
-	cp "$(BUILD_OUT)" "$(GOPATH_BIN)/$(APP_NAME)"
+	go build -o "$(GOPATH_BIN)/$(APP_NAME)" "$(BUILD_SRC)"
 	sudo ln -sf "$(GOPATH_BIN)/$(APP_NAME)" "/usr/local/bin/$(APP_NAME)"
 	@echo "✓ Installed to $(GOPATH_BIN)/$(APP_NAME)"
 	@echo "✓ Symlinked to /usr/local/bin/$(APP_NAME)"
+
+## Clean local build artifacts (never touches installed binary)
+
+clean:
+	@echo "Cleaning build artifacts..."
+	rm -rf "$(BUILD_DIR)" "./$(APP_NAME)"
+	@echo "✓ Clean"
 
 ## Create or update systemd service file
 

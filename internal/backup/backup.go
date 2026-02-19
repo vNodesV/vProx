@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	applog "github.com/vNodesV/vApp/modules/vProx/internal/logging"
+	applog "github.com/vNodesV/vProx/internal/logging"
 )
 
 // Options controls backup behavior.

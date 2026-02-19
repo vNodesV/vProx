@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	applog "github.com/vNodesV/vApp/modules/vProx/internal/logging"
+	applog "github.com/vNodesV/vProx/internal/logging"
 )
 
 // Deps abstracts what we need from main without importing it.
@@ -39,6 +39,8 @@ func HandleWS(d Deps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		host := strings.ToLower(r.Host)
+		requestID := applog.EnsureRequestID(r)
+		applog.SetResponseRequestID(w, requestID)
 
 		backendURL, idle, hard, ok := d.BackendWSParams(host)
 		if !ok {
@@ -47,8 +49,12 @@ func HandleWS(d Deps) http.HandlerFunc {
 			return
 		}
 
-		// Upgrade client side
-		cConn, err := upgrader.Upgrade(w, r, nil)
+		// Upgrade client side (echo request id in handshake response headers)
+		respHdr := http.Header{}
+		if requestID != "" {
+			respHdr.Set(applog.RequestIDHeader, requestID)
+		}
+		cConn, err := upgrader.Upgrade(w, r, respHdr)
 		if err != nil {
 			d.LogRequestSummary(r, false, "ws-upgrade-fail", host, start)
 			return
@@ -59,6 +65,9 @@ func HandleWS(d Deps) http.HandlerFunc {
 		hdr := http.Header{}
 		hdr.Set("X-Forwarded-For", d.ClientIP(r))
 		hdr.Set("X-Forwarded-Host", host)
+		if requestID != "" {
+			hdr.Set(applog.RequestIDHeader, requestID)
+		}
 
 		bConn, _, err := websocket.DefaultDialer.Dial(backendURL, hdr)
 		if err != nil {
@@ -193,8 +202,6 @@ func HandleWS(d Deps) http.HandlerFunc {
 		up := atomic.LoadInt64(&upBytes)
 		down := atomic.LoadInt64(&downBytes)
 		total := up + down
-		requestID := applog.EnsureRequestID(r)
-
 		applog.Print("INFO", "ws", "session_closed",
 			applog.F("request_id", requestID),
 			applog.F("backend", backendURL),

@@ -62,7 +62,7 @@ See `.env.example` for optional environment variables (geo + backup automation).
 
 From the repo root (dev):
 
-- `go run .`
+- `go run ./cmd/vprox`
 
 By default, vProx listens on **:3000** and routes based on the **Host** header.
 
@@ -91,7 +91,11 @@ To run a manual backup of `main.log`:
 
 ## 🧪 Build
 
-- `go build -o vprox .`
+- `make build`
+
+Or, if you prefer raw Go tooling (keeps artifacts out of the repo root):
+
+- `go build -o ./.build/vProx ./cmd/vprox`
 
 ## 📂 Logs
 

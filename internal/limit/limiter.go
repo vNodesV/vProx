@@ -14,8 +14,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/vNodesV/vApp/modules/vProx/internal/geo"
-	applog "github.com/vNodesV/vApp/modules/vProx/internal/logging"
+	"github.com/vNodesV/vProx/internal/geo"
+	applog "github.com/vNodesV/vProx/internal/logging"
 	"golang.org/x/time/rate"
 )
 

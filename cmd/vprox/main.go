@@ -21,11 +21,11 @@ import (
 	"time"
 
 	toml "github.com/pelletier/go-toml/v2"
-	backup "github.com/vNodesV/vApp/modules/vProx/internal/backup"
-	"github.com/vNodesV/vApp/modules/vProx/internal/geo"
-	"github.com/vNodesV/vApp/modules/vProx/internal/limit"
-	applog "github.com/vNodesV/vApp/modules/vProx/internal/logging"
-	ws "github.com/vNodesV/vApp/modules/vProx/internal/ws"
+	backup "github.com/vNodesV/vProx/internal/backup"
+	"github.com/vNodesV/vProx/internal/geo"
+	"github.com/vNodesV/vProx/internal/limit"
+	applog "github.com/vNodesV/vProx/internal/logging"
+	ws "github.com/vNodesV/vProx/internal/ws"
 )
 
 // --------------------- TYPES ---------------------
@@ -733,6 +733,8 @@ func inList(list []string, needle string) bool {
 
 func handler(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
+	requestID := applog.EnsureRequestID(r)
+	applog.SetResponseRequestID(w, requestID)
 	host := normalizeHost(r.Host)
 
 	chain, ok := chains[host]
@@ -868,6 +870,10 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.Header = r.Header.Clone()
+	// Ensure correlation id is forwarded to upstream.
+	if requestID != "" {
+		req.Header.Set(applog.RequestIDHeader, requestID)
+	}
 
 	// Propagate forwarding info
 	req.Header.Set("X-Forwarded-Host", host)
@@ -1021,7 +1027,7 @@ func main() {
 	if *versionFlag {
 		fmt.Println("vProx - Reverse proxy with rate limiting and geolocation")
 		fmt.Println("Version: 1.0.0")
-		// TODO: Build with ldflags for version: go build -ldflags "-X main.BuildVersion=..."
+		// TODO: Build with ldflags for version: go build -ldflags \"-X main.BuildVersion=...\"
 		os.Exit(0)
 	}
 
@@ -1075,7 +1081,7 @@ func main() {
 	}
 
 	// Setup logging
-	f, err := os.OpenFile(mainLogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(mainLogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
 		log.Fatalf("Could not open %s: %v", mainLogPath, err)
 	}

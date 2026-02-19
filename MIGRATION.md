@@ -120,7 +120,7 @@ $HOME/.vProx/
 ## Affected Code Paths
 
 ### Go Code Changes
-1. **main.go**: 
+1. **cmd/vprox/main.go**: 
    - Added `chainsDir` variable
    - Updated directory initialization to use `data/logs`
    - Loads chain configs from both `chains/` and `config/` for backward compatibility
@@ -163,8 +163,9 @@ tree -L 3 ~/.vProx/
 ls -lh ~/.vProx/data/geolocation/
 
 # Check if application can find config and geo database
-./vProx --help
-timeout 2 ./vProx 2>&1 | grep -i geo
+make build
+./.build/vProx --help
+timeout 2 ./.build/vProx 2>&1 | grep -i geo
 ```
 
 ### Verify Systemd Service
