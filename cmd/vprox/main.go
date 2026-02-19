@@ -1094,24 +1094,23 @@ func main() {
 	}
 
 	// Setup logging.
-	// - start mode: stdout/stderr (systemd/journalctl friendly, Cosmos-style)
-	// - default mode: append to main log file
-	if startMode {
-		log.SetOutput(os.Stdout)
-	} else {
-		f, err := os.OpenFile(mainLogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-		if err != nil {
-			log.Fatalf("Could not open %s: %v", mainLogPath, err)
-		}
-		defer f.Close()
+	// - start mode: mirror logs to both stdout (journald) and main.log (tail -f)
+	// - default mode: append to main.log only
+	if err := os.MkdirAll(filepath.Dir(mainLogPath), 0o755); err != nil {
+		log.Fatalf("Could not create log directory for %s: %v", mainLogPath, err)
+	}
+	f, err := os.OpenFile(mainLogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		log.Fatalf("Could not open %s: %v", mainLogPath, err)
+	}
+	defer f.Close()
 
-		// Apply logging level based on flags
-		if !*quietFlag {
-			log.SetOutput(f)
-		} else {
-			// Quiet mode: only log to file, suppress stdout
-			log.SetOutput(f)
-		}
+	if startMode && !*quietFlag {
+		log.SetOutput(io.MultiWriter(os.Stdout, f))
+	} else {
+		// In non-start mode we keep file-only behavior.
+		// With --quiet in start mode, also keep file-only output.
+		log.SetOutput(f)
 	}
 	log.SetFlags(0) // no default date/time; our logger prints its own header
 
