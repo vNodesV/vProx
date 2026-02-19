@@ -6,12 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
+
+	applog "github.com/vNodesV/vApp/modules/vProx/internal/logging"
 )
 
 // Options controls backup behavior.
@@ -118,9 +119,9 @@ func StartAuto(opts Options) (func(), error) {
 			if err != nil || !should {
 				return
 			}
-			log.Printf("[backup] triggered (%s)", reason)
+			applog.Print("INFO", "backup", "triggered", applog.F("reason", reason))
 			if err := RunOnce(opts); err != nil {
-				log.Printf("[backup] failed: %v", err)
+				applog.Print("ERROR", "backup", "failed", applog.F("error", err.Error()))
 			}
 		}
 

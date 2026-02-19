@@ -68,5 +68,6 @@ tmp/
 *~
 .DS_Store
 
-# Agent files (local only, not for distribution)
-.github/agents/
+# Agent/collab files (local only, not for distribution)
+agents/
+/docs/

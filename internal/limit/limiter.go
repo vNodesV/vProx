@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/vNodesV/vApp/modules/vProx/internal/geo"
+	applog "github.com/vNodesV/vApp/modules/vProx/internal/logging"
 	"golang.org/x/time/rate"
 )
 
@@ -79,6 +80,29 @@ type strikeState struct {
 type Option func(*IPLimiter)
 
 // WithLogPath sets the JSONL log path (default: $VPROX_HOME/data/logs/rate-limit.jsonl).
+//
+// Log format (JSONL - one JSON object per line):
+//
+//	{
+//	  "ts": "2025-01-15T10:30:45.123456Z",
+//	  "level": "ERROR|WARN|INFO|DEBUG",
+//	  "event": "429|auto-override-add|auto-override-expire|allow-sample|...",
+//	  "reason": "429|auto-override-add|auto-override-expire|allow-sample|...",
+//	  "ip": "192.0.2.1",
+//	  "country": "US",
+//	  "asn": "AS1234",
+//	  "method": "GET",
+//	  "path": "/rpc",
+//	  "host": "api.example.com",
+//	  "user_agent": "curl/7.64.1",
+//	  "ua": "curl/7.64.1",
+//	  "rps": 25.0,
+//	  "burst": 100
+//	}
+//
+// Mirror log (when enabled) writes to main log in standard format:
+//
+//	ts="..." level="ERROR" component="limiter" event="429" reason="429" ip="192.0.2.1" country="US" asn="AS1234" method="GET" path="/rpc" host="api.example.com" rps=25 burst=100 ua="curl/7.64.1"
 func WithLogPath(p string) Option {
 	return func(l *IPLimiter) {
 		_ = os.MkdirAll(filepath.Dir(p), 0o755)
@@ -125,12 +149,16 @@ func WithAutoQuarantine(rule AutoRule) Option {
 	}
 }
 
-// WithLogOnlyImportant filters JSONL to 429/auto-add/auto-expire/wait-canceled.
+// WithLogOnlyImportant filters JSONL to ERROR/WARN events: 429, auto-add, auto-expire, wait-canceled.
+// INFO and DEBUG events are only logged when this option is not set.
 func WithLogOnlyImportant() Option {
 	return func(l *IPLimiter) { l.logImportantOnly = true }
 }
 
 // WithMirrorToMainLog mirrors important limiter events to main.log via the global logger.
+//
+// Format: ts=<...> level=<...> component="limiter" event=<TYPE> reason=<TYPE> ip=<...> ...
+// where level is ERROR, WARN, INFO, or DEBUG based on event type.
 func WithMirrorToMainLog() Option {
 	return func(l *IPLimiter) { l.mirrorMain = true }
 }
@@ -185,6 +213,9 @@ func StatusOf(r *http.Request) string {
 // Middleware wraps an http.Handler with IP rate limiting + auto-quarantine.
 func (l *IPLimiter) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestID := applog.EnsureRequestID(r)
+		applog.SetResponseRequestID(w, requestID)
+
 		ip := l.clientIP(r)
 
 		// expire any auto override
@@ -197,11 +228,14 @@ func (l *IPLimiter) Middleware(next http.Handler) http.Handler {
 		// optional debug line
 		if os.Getenv("LIMIT_DEBUG") == "1" {
 			dbg := map[string]any{
-				"ts":       l.now().UTC().Format(time.RFC3339Nano),
-				"debug":    "lim",
-				"ip":       ip,
-				"override": l.hasOverride(ip),
-				"path":     r.URL.Path,
+				"ts":           l.now().UTC().Format(time.RFC3339Nano),
+				"level":        "DEBUG",
+				"event":        "limiter-debug",
+				"request_id":   requestID,
+				"ip":           ip,
+				"has_override": l.hasOverride(ip),
+				"path":         r.URL.Path,
+				"method":       r.Method,
 			}
 			if b, _ := json.Marshal(dbg); b != nil {
 				l.logger.Println(string(b))
@@ -511,6 +545,19 @@ func (l *IPLimiter) shouldLog(reason string) bool {
 	}
 }
 
+func (l *IPLimiter) logEventLevel(reason string) string {
+	switch reason {
+	case "429", "wait-canceled":
+		return "ERROR"
+	case "auto-override-add":
+		return "WARN"
+	case "auto-override-expire", "allow-sample":
+		return "INFO"
+	default:
+		return "DEBUG"
+	}
+}
+
 func (l *IPLimiter) logEvent(ip string, r *http.Request, reason string) {
 	if !l.shouldLog(reason) {
 		return
@@ -526,38 +573,67 @@ func (l *IPLimiter) logEvent(ip string, r *http.Request, reason string) {
 		spec = o.(RateSpec)
 	}
 
+	ts := l.now().UTC()
+	level := l.logEventLevel(reason)
+
+	// Structured JSONL record for rate-limit.jsonl
 	type ev struct {
-		TS      string  `json:"ts"`
-		IP      string  `json:"ip"`
-		Country string  `json:"country,omitempty"`
-		ASN     string  `json:"asn,omitempty"`
-		Method  string  `json:"method"`
-		Path    string  `json:"path"`
-		Host    string  `json:"host"`
-		UA      string  `json:"ua"`
-		Reason  string  `json:"reason"`
-		RPS     float64 `json:"rps"`
-		Burst   int     `json:"burst"`
+		Timestamp string  `json:"ts"`
+		Level     string  `json:"level"`
+		Event     string  `json:"event"`
+		Reason    string  `json:"reason"`
+		RequestID string  `json:"request_id,omitempty"`
+		IP        string  `json:"ip"`
+		Country   string  `json:"country,omitempty"`
+		ASN       string  `json:"asn,omitempty"`
+		Method    string  `json:"method"`
+		Path      string  `json:"path"`
+		Host      string  `json:"host"`
+		UserAgent string  `json:"user_agent,omitempty"`
+		UA        string  `json:"ua,omitempty"`
+		RPS       float64 `json:"rps"`
+		Burst     int     `json:"burst"`
 	}
+	ua := r.Header.Get("User-Agent")
+	requestID := applog.RequestIDFrom(r)
 	rec := ev{
-		TS:      l.now().UTC().Format(time.RFC3339Nano),
-		IP:      ip,
-		Country: country,
-		ASN:     asn,
-		Method:  r.Method,
-		Path:    r.URL.Path,
-		Host:    r.Host,
-		UA:      r.Header.Get("User-Agent"),
-		Reason:  reason,
-		RPS:     spec.RPS,
-		Burst:   spec.Burst,
+		Timestamp: ts.Format(time.RFC3339Nano),
+		Level:     level,
+		Event:     reason,
+		Reason:    reason,
+		RequestID: requestID,
+		IP:        ip,
+		Country:   country,
+		ASN:       asn,
+		Method:    r.Method,
+		Path:      r.URL.Path,
+		Host:      r.Host,
+		UserAgent: ua,
+		UA:        ua,
+		RPS:       spec.RPS,
+		Burst:     spec.Burst,
 	}
 	if b, err := json.Marshal(rec); err == nil {
 		l.logger.Println(string(b))
 	}
 
+	// Standard mirror logging to main log
 	if l.mirrorMain {
-		log.Printf("[rate] reason=%s ip=%s country=%s asn=%s rps=%.2f burst=%d path=%s host=%s ua=%q",
-			reason, ip, country, asn, spec.RPS, spec.Burst, r.URL.Path, r.Host, r.Header.Get("User-Agent"))
+		if ua == "" {
+			ua = "-"
+		}
+		applog.Print(level, "limiter", reason,
+			applog.F("reason", reason),
+			applog.F("request_id", requestID),
+			applog.F("ip", ip),
+			applog.F("country", country),
+			applog.F("asn", asn),
+			applog.F("method", r.Method),
+			applog.F("path", r.URL.Path),
+			applog.F("host", r.Host),
+			applog.F("rps", spec.RPS),
+			applog.F("burst", spec.Burst),
+			applog.F("ua", ua),
+		)
 	}
 }

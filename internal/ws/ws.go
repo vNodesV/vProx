@@ -2,7 +2,6 @@ package ws
 
 import (
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"strings"
@@ -11,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	applog "github.com/vNodesV/vApp/modules/vProx/internal/logging"
 )
 
 // Deps abstracts what we need from main without importing it.
@@ -193,17 +193,22 @@ func HandleWS(d Deps) http.HandlerFunc {
 		up := atomic.LoadInt64(&upBytes)
 		down := atomic.LoadInt64(&downBytes)
 		total := up + down
+		requestID := applog.EnsureRequestID(r)
 
-		log.Printf("[WS] backend=%s idle=%0.fs max=%0.fs dur=%s up=%s down=%s total=%s avg=%s cause=%s",
-			backendURL,
-			idle.Seconds(),
-			hard.Seconds(),
-			dur.Truncate(time.Millisecond),
-			humanBytes(up),
-			humanBytes(down),
-			humanBytes(total),
-			humanRate(total, dur),
-			cause,
+		applog.Print("INFO", "ws", "session_closed",
+			applog.F("request_id", requestID),
+			applog.F("backend", backendURL),
+			applog.F("idle_sec", idle.Seconds()),
+			applog.F("max_sec", hard.Seconds()),
+			applog.F("duration", dur.Truncate(time.Millisecond).String()),
+			applog.F("up_bytes", up),
+			applog.F("down_bytes", down),
+			applog.F("total_bytes", total),
+			applog.F("up_human", humanBytes(up)),
+			applog.F("down_human", humanBytes(down)),
+			applog.F("total_human", humanBytes(total)),
+			applog.F("avg", humanRate(total, dur)),
+			applog.F("cause", cause),
 		)
 	}
 }

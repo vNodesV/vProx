@@ -24,6 +24,7 @@ import (
 	backup "github.com/vNodesV/vApp/modules/vProx/internal/backup"
 	"github.com/vNodesV/vApp/modules/vProx/internal/geo"
 	"github.com/vNodesV/vApp/modules/vProx/internal/limit"
+	applog "github.com/vNodesV/vApp/modules/vProx/internal/logging"
 	ws "github.com/vNodesV/vApp/modules/vProx/internal/ws"
 )
 
@@ -504,6 +505,7 @@ func clientIP(r *http.Request) string {
 func logRequestSummary(r *http.Request, proxied bool, route string, host string, start time.Time) {
 	src := clientIP(r)
 	hostNorm := normalizeHost(host)
+	requestID := applog.EnsureRequestID(r)
 
 	// counter
 	counterMutex.Lock()
@@ -515,7 +517,6 @@ func logRequestSummary(r *http.Request, proxied bool, route string, host string,
 	durMS := time.Since(start).Seconds() * 1000
 	dst := r.URL.RequestURI()
 	ua := r.Header.Get("User-Agent")
-	ts := start.Local().Format("2006/01/02 15:04:05")
 
 	// Country (CF hint then local db)
 	country := strings.TrimSpace(r.Header.Get("CF-IPCountry"))
@@ -526,24 +527,27 @@ func logRequestSummary(r *http.Request, proxied bool, route string, host string,
 	// Status from limiter (defaults ok, overrides limited, 429 blocked doesn't reach here)
 	status := limit.StatusOf(r)
 
-	header := fmt.Sprintf("[ :::: LOGGING SUMMARY :::: %s ]", ts)
-	line2 := fmt.Sprintf("  HOST: %s  ROUTE: %s PROXIED: %t", hostNorm, route, proxied)
-	line3 := fmt.Sprintf("  REQUEST: %s", dst)
-	line4 := fmt.Sprintf("  IP: %s (%d) %.2fms UA: %s", src, srcQty, durMS, ua)
 	if country == "" {
 		country = "--"
 	}
-	line4 += fmt.Sprintf("  COUNTRY: %s  STATUS: %s", country, status)
-
-	width := len(line4)
-	if len(line3) > width {
-		width = len(line3)
-	}
-	footer := fmt.Sprintf("[ %s ]", strings.Repeat("-", width))
-	logLines(log.Default(), "", header, line2, line3, line4, footer)
+	line := applog.Line("INFO", "access", "request",
+		applog.F("request_id", requestID),
+		applog.F("host", hostNorm),
+		applog.F("route", route),
+		applog.F("proxied", proxied),
+		applog.F("request", dst),
+		applog.F("method", r.Method),
+		applog.F("ip", src),
+		applog.F("src_count", srcQty),
+		applog.F("latency_ms", durMS),
+		applog.F("ua", ua),
+		applog.F("country", country),
+		applog.F("status", status),
+	)
+	log.Println(line)
 	if ch, ok := chains[hostNorm]; ok {
 		if cl := getChainLogger(ch); cl != nil {
-			logLines(cl, "", header, line2, line3, line4, footer)
+			cl.Println(line)
 		}
 	}
 }
@@ -989,7 +993,7 @@ func main() {
 	if *versionFlag {
 		fmt.Println("vProx - Reverse proxy with rate limiting and geolocation")
 		fmt.Println("Version: 1.0.0")
-		// TODO: Build with ldflags for version: go build -ldflags "-X main.BuildVersion=..." 
+		// TODO: Build with ldflags for version: go build -ldflags "-X main.BuildVersion=..."
 		os.Exit(0)
 	}
 
@@ -1071,7 +1075,7 @@ func main() {
 	}
 
 	// Geo status line
-	log.Println(geo.Info())
+	applog.Print("INFO", "geo", "status", applog.F("message", geo.Info()))
 
 	// Load configs (TOML only)
 	var loadErr error
@@ -1095,7 +1099,7 @@ func main() {
 			log.Fatalf("Could not load chain configs from %s: %v", chainsDir, err)
 		}
 		foundChains = true
-		log.Printf("Loaded chain configs from %s", chainsDir)
+		applog.Print("INFO", "config", "chains_loaded", applog.F("dir", chainsDir))
 	}
 	if hasChainConfigs(configDir) {
 		if err := loadChains(configDir); err != nil {
@@ -1106,7 +1110,7 @@ func main() {
 			log.Fatalf("Could not load chain configs from %s: %v", configDir, err)
 		}
 		foundChains = true
-		log.Printf("Loaded chain configs from %s", configDir)
+		applog.Print("INFO", "config", "chains_loaded", applog.F("dir", configDir))
 	}
 	if !foundChains {
 		log.Fatalf("no chain configs found in %s or %s", chainsDir, configDir)
@@ -1280,7 +1284,7 @@ func main() {
 			CheckInterval: time.Duration(checkMin) * time.Minute,
 		})
 		if err != nil {
-			log.Printf("[backup] auto start failed: %v", err)
+			applog.Print("ERROR", "backup", "auto_start_failed", applog.F("error", err.Error()))
 		}
 	}
 
@@ -1349,9 +1353,7 @@ func main() {
 	}()
 
 	// Start server wrapped by limiter middleware
-	log.Println("")
-	log.Println("LOG RESTARTED #############################")
-	log.Printf("[INFO] vProx listening on %s", addr)
+	applog.Print("INFO", "server", "started", applog.F("addr", addr))
 
 	select {
 	case err := <-errCh:
@@ -1360,11 +1362,11 @@ func main() {
 		}
 		cleanup()
 	case <-ctx.Done():
-		log.Println("[INFO] shutdown requested")
+		applog.Print("INFO", "server", "shutdown_requested")
 		ctxTimeout, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if err := server.Shutdown(ctxTimeout); err != nil {
-			log.Printf("Shutdown error: %v", err)
+			applog.Print("ERROR", "server", "shutdown_error", applog.F("error", err.Error()))
 		}
 		cleanup()
 	}

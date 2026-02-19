@@ -140,6 +140,15 @@ Backups create `main.log.<timestamp>.tar.gz` in `$HOME/.vProx/data/logs/archived
 - For backward compatibility, chain configs in `$HOME/.vProx/config/` are also loaded.
 - If you change chain configs, restart the server.
 
+## 🤝 Local collaboration artifacts
+
+The following paths are intentionally local-only and ignored by git:
+
+- `docs/`
+- any `agents/` directory (for example `.github/agents/`)
+
+They are used for session notes/agent coordination and are not part of distributable runtime source.
+
 ## 📄 License
 
 Apache-2.0. See `LICENSE`.
