@@ -962,12 +962,38 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "backup" {
 		os.Args[1] = "--backup"
 	}
+
+	// Parse flags
 	backupFlag := flag.Bool("backup", false, "run backup and exit")
 	homeFlag := flag.String("home", "", "override VPROX_HOME")
 	configFlag := flag.String("config", "", "override config directory")
+	chainsFlag := flag.String("chains", "", "override chains directory")
 	addrFlag := flag.String("addr", "", "listen address (default :3000)")
+	logFileFlag := flag.String("log-file", "", "override main log file path")
+	validateFlag := flag.Bool("validate", false, "validate configs and exit")
+	dryRunFlag := flag.Bool("dry-run", false, "load everything but don't start server")
+	verboseFlag := flag.Bool("verbose", false, "verbose logging output")
+	quietFlag := flag.Bool("quiet", false, "suppress non-error output")
+	versionFlag := flag.Bool("version", false, "show version and exit")
+	infoFlag := flag.Bool("info", false, "show loaded config summary and exit")
+	rpsFlag := flag.Float64("rps", 0, "override default RPS (env: VPROX_RPS)")
+	burstFlag := flag.Int("burst", 0, "override default burst (env: VPROX_BURST)")
+	autoRpsFlag := flag.Float64("auto-rps", 0, "override auto-quarantine RPS (env: VPROX_AUTO_RPS)")
+	autoBurstFlag := flag.Int("auto-burst", 0, "override auto-quarantine burst (env: VPROX_AUTO_BURST)")
+	disableAutoFlag := flag.Bool("disable-auto", false, "disable auto-quarantine")
+	disableBackupFlag := flag.Bool("disable-backup", false, "disable automatic backup loop")
+
 	flag.Parse()
 
+	// Handle version flag first
+	if *versionFlag {
+		fmt.Println("vProx - Reverse proxy with rate limiting and geolocation")
+		fmt.Println("Version: 1.0.0")
+		// TODO: Build with ldflags for version: go build -ldflags "-X main.BuildVersion=..." 
+		os.Exit(0)
+	}
+
+	// Resolve home directory
 	vproxHome = resolveVProxHome()
 	if *homeFlag != "" {
 		vproxHome = *homeFlag
@@ -976,6 +1002,7 @@ func main() {
 		_ = os.Setenv("VPROX_HOME", vproxHome)
 	}
 
+	// Resolve directories
 	configDir = filepath.Join(vproxHome, "config")
 	if *configFlag != "" {
 		if filepath.IsAbs(*configFlag) {
@@ -984,24 +1011,51 @@ func main() {
 			configDir = filepath.Join(vproxHome, *configFlag)
 		}
 	}
+
 	chainsDir = filepath.Join(vproxHome, "chains")
+	if *chainsFlag != "" {
+		if filepath.IsAbs(*chainsFlag) {
+			chainsDir = *chainsFlag
+		} else {
+			chainsDir = filepath.Join(vproxHome, *chainsFlag)
+		}
+	}
+
 	dataDir = filepath.Join(vproxHome, "data")
 	logsDir = filepath.Join(dataDir, "logs")
 	archiveDir = filepath.Join(logsDir, "archived")
 
+	// Create directories
 	for _, dir := range []string{configDir, chainsDir, dataDir, logsDir, archiveDir} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			log.Fatalf("Could not create directory %s: %v", dir, err)
 		}
 	}
 
+	// Resolve log file
 	mainLogPath := filepath.Join(logsDir, "main.log")
+	if *logFileFlag != "" {
+		if filepath.IsAbs(*logFileFlag) {
+			mainLogPath = *logFileFlag
+		} else {
+			mainLogPath = filepath.Join(logsDir, *logFileFlag)
+		}
+	}
+
+	// Setup logging
 	f, err := os.OpenFile(mainLogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		log.Fatalf("Could not open %s: %v", mainLogPath, err)
 	}
 	defer f.Close()
-	log.SetOutput(f)
+
+	// Apply logging level based on flags
+	if !*quietFlag {
+		log.SetOutput(f)
+	} else {
+		// Quiet mode: only log to file, suppress stdout
+		log.SetOutput(f)
+	}
 	log.SetFlags(0) // no default date/time; our logger prints its own header
 
 	if *backupFlag {
@@ -1029,11 +1083,15 @@ func main() {
 	if loadErr != nil {
 		log.Fatalf("Could not load default ports: %v", loadErr)
 	}
-	
+
 	// Load chain configs from both chains/ (preferred) and config/ (backward compatibility)
 	foundChains := false
 	if hasChainConfigs(chainsDir) {
 		if err := loadChains(chainsDir); err != nil {
+			if *validateFlag {
+				log.Printf("[VALIDATE] Error loading chains from %s: %v", chainsDir, err)
+				os.Exit(1)
+			}
 			log.Fatalf("Could not load chain configs from %s: %v", chainsDir, err)
 		}
 		foundChains = true
@@ -1041,6 +1099,10 @@ func main() {
 	}
 	if hasChainConfigs(configDir) {
 		if err := loadChains(configDir); err != nil {
+			if *validateFlag {
+				log.Printf("[VALIDATE] Error loading chains from %s: %v", configDir, err)
+				os.Exit(1)
+			}
 			log.Fatalf("Could not load chain configs from %s: %v", configDir, err)
 		}
 		foundChains = true
@@ -1048,6 +1110,54 @@ func main() {
 	}
 	if !foundChains {
 		log.Fatalf("no chain configs found in %s or %s", chainsDir, configDir)
+	}
+
+	// Handle --validate flag: print config summary and exit
+	if *validateFlag {
+		log.Println("")
+		log.Println("CONFIG VALIDATION SUCCESSFUL #############################")
+		log.Printf("[VALIDATE] Loaded %d chains from %s and %s", len(chains), chainsDir, configDir)
+		for host := range chains {
+			log.Printf("  • %s", host)
+		}
+		log.Printf("[VALIDATE] Default ports: RPC=%d, REST=%d, gRPC=%d, gRPC-Web=%d, API=%d",
+			defaultPorts.RPC, defaultPorts.REST, defaultPorts.GRPC, defaultPorts.GRPCWeb, defaultPorts.API)
+		log.Println("[VALIDATE] All configs OK")
+		return
+	}
+
+	// Handle --info flag: print info and exit
+	if *infoFlag {
+		log.Println("")
+		log.Println("VPROX CONFIGURATION INFO #############################")
+		log.Printf("VPROX_HOME:        %s", vproxHome)
+		log.Printf("Config directory:  %s", configDir)
+		log.Printf("Chains directory:  %s", chainsDir)
+		log.Printf("Data directory:    %s", dataDir)
+		log.Printf("Logs directory:    %s", logsDir)
+		log.Printf("Main log file:     %s", mainLogPath)
+		log.Println("")
+		log.Printf("Loaded chains: %d", len(chains))
+		for host, ch := range chains {
+			log.Printf("  • %s (%s) @ %s", host, ch.ChainName, ch.IP)
+		}
+		log.Println("")
+		log.Printf("Default ports: RPC=%d, REST=%d, gRPC=%d, gRPC-Web=%d, API=%d",
+			defaultPorts.RPC, defaultPorts.REST, defaultPorts.GRPC, defaultPorts.GRPCWeb, defaultPorts.API)
+		if *verboseFlag {
+			log.Println("")
+			log.Println("[VERBOSE] Per-chain details:")
+			for host, ch := range chains {
+				log.Printf("  %s:", host)
+				log.Printf("    Services: RPC=%v, REST=%v, WebSocket=%v, gRPC=%v, gRPC-Web=%v",
+					ch.Services.RPC, ch.Services.REST, ch.Services.WebSocket, ch.Services.GRPC, ch.Services.GRPCWeb)
+				if !ch.DefaultPorts {
+					log.Printf("    Ports: RPC=%d, REST=%d, gRPC=%d, gRPC-Web=%d",
+						ch.Ports.RPC, ch.Ports.REST, ch.Ports.GRPC, ch.Ports.GRPCWeb)
+				}
+			}
+		}
+		return
 	}
 
 	// --- Limiter: defaults ok, overrides limited, 429 blocked
@@ -1059,6 +1169,47 @@ func main() {
 	autoPenaltyRPS := envFloat("VPROX_AUTO_RPS", 1)
 	autoPenaltyBurst := envInt("VPROX_AUTO_BURST", 1)
 	autoTTL := envInt("VPROX_AUTO_TTL_SEC", 900)
+
+	// Apply CLI overrides for rate limiting
+	if *rpsFlag > 0 {
+		defaultRPS = *rpsFlag
+		if *verboseFlag {
+			log.Printf("[CLI] Override default RPS: %.2f", defaultRPS)
+		}
+	}
+	if *burstFlag > 0 {
+		defaultBurst = *burstFlag
+		if *verboseFlag {
+			log.Printf("[CLI] Override default burst: %d", defaultBurst)
+		}
+	}
+	if *disableAutoFlag {
+		autoEnabled = false
+		if *verboseFlag {
+			log.Println("[CLI] Auto-quarantine disabled")
+		}
+	}
+	if *autoRpsFlag > 0 {
+		autoPenaltyRPS = *autoRpsFlag
+		if *verboseFlag {
+			log.Printf("[CLI] Override auto-Q penalty RPS: %.2f", autoPenaltyRPS)
+		}
+	}
+	if *autoBurstFlag > 0 {
+		autoPenaltyBurst = *autoBurstFlag
+		if *verboseFlag {
+			log.Printf("[CLI] Override auto-Q penalty burst: %d", autoPenaltyBurst)
+		}
+	}
+
+	// Determine backup enabled status (before limiter setup for dry-run flag)
+	backupEnabled := envBool("VPROX_BACKUP_ENABLED")
+	if *disableBackupFlag {
+		backupEnabled = false
+		if *verboseFlag {
+			log.Println("[CLI] Automatic backup disabled")
+		}
+	}
 
 	limOpts := []limit.Option{
 		limit.WithTrustProxy(true),
@@ -1084,8 +1235,38 @@ func main() {
 	// Build mux and routes
 	mux := http.NewServeMux()
 
+	// Handle --dry-run flag: load everything but don't start server
+	if *dryRunFlag {
+		log.Println("")
+		log.Println("DRY-RUN MODE #############################")
+		log.Printf("Would listen on: %s", func() string {
+			addr := ":3000"
+			if v := strings.TrimSpace(os.Getenv("VPROX_ADDR")); v != "" {
+				addr = v
+			}
+			if *addrFlag != "" {
+				addr = *addrFlag
+			}
+			return addr
+		}())
+		log.Printf("Loaded chains: %d", len(chains))
+		log.Printf("Rate limit: %.2f RPS, burst %d", defaultRPS, defaultBurst)
+		if autoEnabled {
+			log.Printf("Auto-quarantine: enabled (threshold=%d, penalty=%.2f RPS)", autoThreshold, autoPenaltyRPS)
+		} else {
+			log.Println("Auto-quarantine: disabled")
+		}
+		if backupEnabled {
+			log.Println("Backup: enabled")
+		} else {
+			log.Println("Backup: disabled")
+		}
+		log.Println("[DRY-RUN] All systems ready (not starting server)")
+		return
+	}
+
 	var stopBackup func()
-	if envBool("VPROX_BACKUP_ENABLED") {
+	if backupEnabled {
 		intervalDays := envInt("VPROX_BACKUP_INTERVAL_DAYS", 0)
 		maxBytes := envBytes("VPROX_BACKUP_MAX_BYTES")
 		checkMin := envInt("VPROX_BACKUP_CHECK_MINUTES", 10)

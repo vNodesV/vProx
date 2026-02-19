@@ -1,0 +1,54 @@
+# vProx Chain Configuration Sample
+# Copy this file and customize for each chain you want to proxy
+# Place chain configs in: $HOME/.vProx/chains/
+
+chain_name     = "Meme devnet"
+host           = "meme.srvs.vnodesv.net"
+ip             = "10.0.0.59"
+default_ports  = true
+msg            = false
+
+[message]
+    api_msg = "https://api_link"
+    rpc_msg = "https://rpc_link"
+
+[expose]
+    path  = true        # Enable /rpc, /rest, /websocket on base host
+    vhost = true        # Enable api.<host>, rpc.<host> subdomains
+
+[expose.vhost_prefix]
+    rpc  = "rpc"
+    rest = "api"
+
+[services]
+    rpc        = true
+    rest       = true
+    websocket  = true
+    grpc       = true
+    grpc_web   = true
+    api_alias  = true   # /api -> REST (port 1317)
+
+[ports]              # Used only when default_ports = false
+    rpc      = 26657
+    rest     = 1317
+    grpc     = 9090
+    grpc_web = 9091
+    api      = 1317
+
+[ws]
+    idle_timeout_sec = 3600      # WebSocket idle timeout (default: 3600)
+    max_lifetime_sec = 0         # WebSocket max lifetime, 0 = unlimited
+
+[features]
+    inject_rpc_index    = true      # Inject banner on RPC index HTML
+    inject_rest_swagger = false     # Inject banner on /rest/swagger/
+    absolute_links      = "auto"    # auto | always | never
+
+[logging]
+    file   = "your_chain.log"       # Per-chain log file (logs in data/logs/)
+    format = "summary"              # summary | json | raw
+
+[aliases]
+    rpc  = []   # Additional hostnames for RPC (e.g., ["rpc-alt.example.com"])
+    rest = []   # Additional hostnames for REST
+    api  = []   # Additional hostnames for API
