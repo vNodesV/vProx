@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -24,55 +25,64 @@ func F(key string, value any) Field {
 	return Field{Key: strings.TrimSpace(key), Value: value}
 }
 
-// Line renders a standard structured log line.
+var bareValueRe = regexp.MustCompile(`^[A-Za-z0-9._:/@+\-]+$`)
+
+// Line renders a CosmosSDK/journalctl-cat style structured line.
 //
 // Format:
 //
-//	ts=<RFC3339Nano> level=<LEVEL> component=<COMPONENT> event=<EVENT> key=value ...
-func Line(level, component, event string, fields ...Field) string {
-	ts := time.Now().UTC().Format(time.RFC3339Nano)
+//	<time> <LVL> <message> key=value ... module=<MODULE>
+//
+// Example:
+//
+//	10:23AM INF finalizing commit height=23116134 module=consensus
+func Line(level, module, event string, fields ...Field) string {
+	ts := time.Now().Local().Format("3:04PM")
 	level = strings.ToUpper(strings.TrimSpace(level))
 	if level == "" {
 		level = "INFO"
 	}
-	component = strings.TrimSpace(component)
-	if component == "" {
-		component = "app"
+	module = strings.TrimSpace(module)
+	if module == "" {
+		module = "app"
 	}
 	event = strings.TrimSpace(event)
 	if event == "" {
 		event = "log"
 	}
 
-	parts := []string{
-		"ts=" + encodeValue(ts),
-		"level=" + encodeValue(level),
-		"component=" + encodeValue(component),
-		"event=" + encodeValue(event),
-	}
+	parts := []string{ts, shortLevel(level), normalizeMessage(event)}
+	hasModule := false
 
 	for _, f := range fields {
 		k := strings.TrimSpace(f.Key)
 		if k == "" {
 			continue
 		}
+		if strings.EqualFold(k, "module") {
+			hasModule = true
+		}
 		parts = append(parts, k+"="+encodeValue(f.Value))
+	}
+
+	if !hasModule {
+		parts = append(parts, "module="+encodeValue(module))
 	}
 
 	return strings.Join(parts, " ")
 }
 
 // Print emits a structured line via the global default logger.
-func Print(level, component, event string, fields ...Field) {
-	log.Println(Line(level, component, event, fields...))
+func Print(level, module, event string, fields ...Field) {
+	log.Println(Line(level, module, event, fields...))
 }
 
 // PrintTo emits a structured line via the provided logger.
-func PrintTo(l *log.Logger, level, component, event string, fields ...Field) {
+func PrintTo(l *log.Logger, level, module, event string, fields ...Field) {
 	if l == nil {
 		return
 	}
-	l.Println(Line(level, component, event, fields...))
+	l.Println(Line(level, module, event, fields...))
 }
 
 // RequestIDFrom returns the normalized request id from headers, if present and valid.
@@ -143,13 +153,27 @@ func isSafeRequestID(v string) bool {
 func encodeValue(v any) string {
 	switch x := v.(type) {
 	case nil:
-		return "null"
+		return "-"
 	case string:
+		x = strings.TrimSpace(x)
+		if x == "" {
+			return "\"\""
+		}
+		if bareValueRe.MatchString(x) {
+			return x
+		}
 		return strconv.Quote(x)
 	case fmt.Stringer:
-		return strconv.Quote(x.String())
+		s := strings.TrimSpace(x.String())
+		if s == "" {
+			return "\"\""
+		}
+		if bareValueRe.MatchString(s) {
+			return s
+		}
+		return strconv.Quote(s)
 	case time.Duration:
-		return strconv.Quote(x.String())
+		return x.String()
 	case bool:
 		if x {
 			return "true"
@@ -180,6 +204,36 @@ func encodeValue(v any) string {
 	case uint64:
 		return strconv.FormatUint(x, 10)
 	default:
-		return strconv.Quote(fmt.Sprintf("%v", x))
+		s := strings.TrimSpace(fmt.Sprintf("%v", x))
+		if s == "" {
+			return "\"\""
+		}
+		if bareValueRe.MatchString(s) {
+			return s
+		}
+		return strconv.Quote(s)
 	}
+}
+
+func shortLevel(level string) string {
+	switch strings.ToUpper(strings.TrimSpace(level)) {
+	case "DEBUG":
+		return "DBG"
+	case "WARN", "WARNING":
+		return "WRN"
+	case "ERROR":
+		return "ERR"
+	default:
+		return "INF"
+	}
+}
+
+func normalizeMessage(event string) string {
+	event = strings.TrimSpace(event)
+	if event == "" {
+		return "log"
+	}
+	event = strings.ReplaceAll(event, "_", " ")
+	event = strings.ReplaceAll(event, "-", " ")
+	return event
 }
