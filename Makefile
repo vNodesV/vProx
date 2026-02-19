@@ -162,7 +162,7 @@ clean:
 
 systemd:
 	@echo "Setting up systemd service..."
-	@EXPECTED_EXEC="/usr/local/bin/vProx"; \
+	@EXPECTED_EXEC="/usr/local/bin/vProx start"; \
 	if [[ -f "$(SYSTEMD_PATH)" ]]; then \
 		CURRENT_EXEC=$$(grep "^ExecStart=" "$(SYSTEMD_PATH)" | cut -d= -f2); \
 		if [[ "$$CURRENT_EXEC" == "$$EXPECTED_EXEC" ]]; then \

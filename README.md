@@ -63,6 +63,7 @@ See `.env.example` for optional environment variables (geo + backup automation).
 From the repo root (dev):
 
 - `go run ./cmd/vprox`
+- `go run ./cmd/vprox start` (foreground, logs to stdout)
 
 By default, vProx listens on **:3000** and routes based on the **Host** header.
 
@@ -83,6 +84,10 @@ Then enable and start the service (Linux):
 - `sudo systemctl daemon-reload`
 - `sudo systemctl enable vprox`
 - `sudo systemctl start vprox`
+
+To follow live service logs in CosmosSDK-style line output:
+
+- `journalctl -u vprox.service -f --output=cat`
 
 To run a manual backup of `main.log`:
 

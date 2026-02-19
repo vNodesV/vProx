@@ -969,9 +969,18 @@ func handler(w http.ResponseWriter, r *http.Request) {
 // --------------------- BACKUP -------------------
 
 func main() {
-	if len(os.Args) > 1 && os.Args[1] == "backup" {
-		os.Args[1] = "--backup"
+	rawArgs := os.Args[1:]
+	startMode := false
+	if len(rawArgs) > 0 {
+		switch rawArgs[0] {
+		case "start":
+			startMode = true
+			rawArgs = rawArgs[1:]
+		case "backup":
+			rawArgs[0] = "--backup"
+		}
 	}
+	os.Args = append([]string{os.Args[0]}, rawArgs...)
 
 	// Parse flags
 	backupFlag := flag.Bool("backup", false, "run backup and exit")
@@ -995,7 +1004,11 @@ func main() {
 
 	flag.Usage = func() {
 		out := flag.CommandLine.Output()
-		fmt.Fprintln(out, "Usage: vProx [--flags]")
+		fmt.Fprintln(out, "Usage: vProx [start] [--flags]")
+		fmt.Fprintln(out, "")
+		fmt.Fprintln(out, "Commands:")
+		fmt.Fprintln(out, "  start                   run in foreground and emit logs to stdout (journalctl friendly)")
+		fmt.Fprintln(out, "  backup                  shorthand for --backup")
 		fmt.Fprintln(out, "")
 		fmt.Fprintln(out, "Flags:")
 		fmt.Fprintln(out, "  --addr string           listen address (default :3000)")
@@ -1080,19 +1093,25 @@ func main() {
 		}
 	}
 
-	// Setup logging
-	f, err := os.OpenFile(mainLogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-	if err != nil {
-		log.Fatalf("Could not open %s: %v", mainLogPath, err)
-	}
-	defer f.Close()
-
-	// Apply logging level based on flags
-	if !*quietFlag {
-		log.SetOutput(f)
+	// Setup logging.
+	// - start mode: stdout/stderr (systemd/journalctl friendly, Cosmos-style)
+	// - default mode: append to main log file
+	if startMode {
+		log.SetOutput(os.Stdout)
 	} else {
-		// Quiet mode: only log to file, suppress stdout
-		log.SetOutput(f)
+		f, err := os.OpenFile(mainLogPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+		if err != nil {
+			log.Fatalf("Could not open %s: %v", mainLogPath, err)
+		}
+		defer f.Close()
+
+		// Apply logging level based on flags
+		if !*quietFlag {
+			log.SetOutput(f)
+		} else {
+			// Quiet mode: only log to file, suppress stdout
+			log.SetOutput(f)
+		}
 	}
 	log.SetFlags(0) // no default date/time; our logger prints its own header
 

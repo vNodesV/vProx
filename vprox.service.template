@@ -6,7 +6,7 @@ Wants=network-online.target
 [Service]
 Environment=VPROX_HOME=__HOME__/.vProx
 EnvironmentFile=__HOME__/.vProx/.env
-ExecStart=/usr/local/bin/vProx
+ExecStart=/usr/local/bin/vProx start
 Restart=on-failure
 RestartSec=5
 User=__USER__
