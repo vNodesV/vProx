@@ -1,2 +1,0 @@
-[geo] ip2location-mmdb type=GeoLite2Country database build=2025-08-14 path=/usr/local/share/IP2Proxy/ip2location.mmdb
-Could not load default ports: open chains/ports/ports.toml: no such file or directory

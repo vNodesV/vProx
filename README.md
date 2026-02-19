@@ -20,15 +20,31 @@ A Go-based reverse proxy for blockchain node services (RPC/REST/GRPC/GRPC-Web/AP
 
 Configuration is **TOML-only**. By default, vProx uses `$HOME/.vProx` as its runtime home (override with `VPROX_HOME`).
 
+**Directory Structure:**
+```
+$HOME/.vProx/
+├── config/          # Global configuration
+│   └── ports.toml   # Default port settings
+├── chains/          # Per-chain configurations (*.toml)
+├── data/
+│   ├── geolocation/ # GeoLocation databases
+│   └── logs/        # Application logs
+│       ├── main.log
+│       ├── rate-limit.jsonl
+│       └── archived/
+└── .env             # Environment variables
+```
+
 - **Default ports**: `$HOME/.vProx/config/ports.toml`
-- **Per-chain config**: `$HOME/.vProx/config/*.toml`
+- **Per-chain config**: `$HOME/.vProx/chains/*.toml` (or `config/*.toml` for backward compatibility)
 
 ### Geo DBs (optional)
 
 If you want geo lookups in logs, provide one of the following:
 
-- **IP2Location** MMDB (preferred)
+- **IP2Location / GeoLite2** MMDB (preferred)
   - Default locations tried:
+    - `$HOME/.vProx/data/geolocation/ip2location.mmdb` (installed by `make install`)
     - `/usr/local/share/IP2Proxy/ip2location.mmdb`
     - `/usr/local/share/IP2Location/ip2location.mmdb`
     - `/usr/share/IP2Proxy/ip2location.mmdb`
@@ -56,9 +72,7 @@ The `make install` flow builds and installs the binary and sets up runtime folde
 
 - `make install`
 
-Optional Geo DB copy (if you have `ip2l/ip2location.mmdb` in the repo):
-
-- `make GEO=true install`
+The geolocation database (if present in `ip2l/ip2location.mmdb`) will be automatically installed to `$HOME/.vProx/data/geolocation/`.
 
 To generate the systemd unit file:
 
@@ -81,12 +95,12 @@ To run a manual backup of `main.log`:
 
 ## 📂 Logs
 
-- Main log: `$HOME/.vProx/logs/main.log`
-- Rate limit events: `$HOME/.vProx/logs/rate-limit.jsonl`
+- Main log: `$HOME/.vProx/data/logs/main.log`
+- Rate limit events: `$HOME/.vProx/data/logs/rate-limit.jsonl`
 
 ## 🛡️ Rate limiting
 
-vProx includes an IP-aware rate limiter with optional auto‑quarantine. It writes JSONL events to `$HOME/.vProx/logs/rate-limit.jsonl`.
+vProx includes an IP-aware rate limiter with optional auto‑quarantine. It writes JSONL events to `$HOME/.vProx/data/logs/rate-limit.jsonl`.
 
 Key behaviors:
 
@@ -118,11 +132,12 @@ Automated backups are controlled via `.env` (loaded from `$HOME/.vProx/.env`):
 - `VPROX_BACKUP_MAX_BYTES=52428800` (optional)
 - `VPROX_BACKUP_CHECK_MINUTES=10`
 
-Backups create `main.log.<timestamp>.tar.gz` in `$HOME/.vProx/logs/archived`.
+Backups create `main.log.<timestamp>.tar.gz` in `$HOME/.vProx/data/logs/archived`.
 
 ## 🧰 Notes
 
-- Create your chain configs under `$HOME/.vProx/config` (use `make config` to generate a template).
+- Create your chain configs under `$HOME/.vProx/chains/` (a sample is provided at `chains/chain.sample.toml`).
+- For backward compatibility, chain configs in `$HOME/.vProx/config/` are also loaded.
 - If you change chain configs, restart the server.
 
 ## 📄 License

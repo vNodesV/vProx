@@ -78,7 +78,7 @@ type strikeState struct {
 // Option configures an IPLimiter.
 type Option func(*IPLimiter)
 
-// WithLogPath sets the JSONL log path (default: $VPROX_HOME/logs/rate-limit.jsonl).
+// WithLogPath sets the JSONL log path (default: $VPROX_HOME/data/logs/rate-limit.jsonl).
 func WithLogPath(p string) Option {
 	return func(l *IPLimiter) {
 		_ = os.MkdirAll(filepath.Dir(p), 0o755)
@@ -159,10 +159,10 @@ func New(defaults RateSpec, overrides map[string]RateSpec, opts ...Option) *IPLi
 
 func defaultLogPath() string {
 	if v := strings.TrimSpace(os.Getenv("VPROX_HOME")); v != "" {
-		return filepath.Join(v, "logs", "rate-limit.jsonl")
+		return filepath.Join(v, "data", "logs", "rate-limit.jsonl")
 	}
 	if h, err := os.UserHomeDir(); err == nil && h != "" {
-		return filepath.Join(h, ".vProx", "logs", "rate-limit.jsonl")
+		return filepath.Join(h, ".vProx", "data", "logs", "rate-limit.jsonl")
 	}
 	return "logs/rate-limit.jsonl"
 }

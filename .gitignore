@@ -67,3 +67,6 @@ tmp/
 *.swo
 *~
 .DS_Store
+
+# Agent files (local only, not for distribution)
+.github/agents/

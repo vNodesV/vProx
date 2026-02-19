@@ -6,51 +6,78 @@ BUILD_OUT := $(APP_NAME)
 
 VPROX_HOME := $(HOME)/.vProx
 DATA_DIR := $(VPROX_HOME)/data
-LOG_DIR := $(VPROX_HOME)/logs
+GEO_DIR := $(DATA_DIR)/geolocation
+LOG_DIR := $(DATA_DIR)/logs
 CFG_DIR := $(VPROX_HOME)/config
+CHAINS_DIR := $(VPROX_HOME)/chains
+INTERNAL_DIR := $(VPROX_HOME)/internal
 ARCHIVE_DIR := $(LOG_DIR)/archived
 
-GEO ?= false
-GEO_DB_SRC ?= ip2l/ip2location.mmdb
-GEO_DB_DST := $(DATA_DIR)/ip2location.mmdb
+# GeoLocation database
+GEO_DB_SRC := ip2l/ip2location.mmdb
+GEO_DB_DST := $(GEO_DIR)/ip2location.mmdb
 
 ENV_FILE := $(VPROX_HOME)/.env
 
-GOPATH_BIN := $(shell go env GOPATH)/bin
+# Validate Go environment
+GOPATH := $(shell go env GOPATH)
+GOROOT := $(shell go env GOROOT)
+GOPATH_BIN := $(GOPATH)/bin
 
 SYSTEMD_PATH := /etc/systemd/system/vprox.service
 
-.PHONY: all dirs geo config build install systemd env
+.PHONY: all validate-go dirs geo config build install systemd env
 
-all: dirs geo config env build install systemd
+all: validate-go dirs geo config env build install systemd
+
+## Validate Go environment
+
+validate-go:
+	@echo "Validating Go environment..."
+	@if [[ -z "$(GOROOT)" ]]; then \
+		echo "ERROR: GOROOT is not set. Please ensure Go is properly installed."; \
+		exit 1; \
+	fi
+	@if [[ -z "$(GOPATH)" ]]; then \
+		echo "ERROR: GOPATH is not set. Please ensure Go is properly configured."; \
+		exit 1; \
+	fi
+	@echo "✓ GOROOT: $(GOROOT)"
+	@echo "✓ GOPATH: $(GOPATH)"
+	@echo "✓ Go version: $$(go version)"
 
 ## Create required folders under $HOME/.vProx
 
 dirs:
-	mkdir -p "$(DATA_DIR)" "$(LOG_DIR)" "$(CFG_DIR)" "$(ARCHIVE_DIR)"
+	@echo "Creating directory structure..."
+	mkdir -p "$(DATA_DIR)"
+	mkdir -p "$(GEO_DIR)"
+	mkdir -p "$(LOG_DIR)"
+	mkdir -p "$(ARCHIVE_DIR)"
+	mkdir -p "$(CFG_DIR)"
+	mkdir -p "$(CHAINS_DIR)"
+	mkdir -p "$(INTERNAL_DIR)"
+	@echo "✓ Directory structure created"
 
-## Optionally install GEO DB when GEO=true
+## Install GEO DB automatically (GeoLite2 is free to redistribute)
 
 geo:
-	@if [[ "$(GEO)" == "true" || "$(GEO)" == "TRUE" ]]; then \
-		if [[ ! -f "$(GEO_DB_SRC)" ]]; then \
-			echo "GEO=true but GEO DB not found at $(GEO_DB_SRC)"; \
-			exit 1; \
-		fi; \
-		cp "$(GEO_DB_SRC)" "$(GEO_DB_DST)"; \
-		echo "Copied GEO DB to $(GEO_DB_DST)"; \
-		echo "IP2LOCATION_MMDB=$(GEO_DB_DST)" > "$(ENV_FILE)"; \
-		echo "Wrote $(ENV_FILE) with IP2LOCATION_MMDB"; \
+	@echo "Installing GeoLocation database..."
+	@if [[ ! -f "$(GEO_DB_SRC)" ]]; then \
+		echo "WARNING: GEO DB not found at $(GEO_DB_SRC)"; \
+		echo "Geolocation features will be disabled until a database is provided."; \
 	else \
-		echo "GEO=false; skipping GEO DB install"; \
+		cp "$(GEO_DB_SRC)" "$(GEO_DB_DST)"; \
+		echo "✓ Copied GEO DB to $(GEO_DB_DST)"; \
 	fi
 
-## Create .env if missing (non-geo defaults)
+## Create .env if missing
 
 env:
+	@echo "Setting up environment configuration..."
 	@if [[ ! -f "$(ENV_FILE)" ]]; then \
-		echo "# Optional geo DB paths" > "$(ENV_FILE)"; \
-		echo "IP2LOCATION_MMDB=" >> "$(ENV_FILE)"; \
+		echo "# Geolocation database paths" > "$(ENV_FILE)"; \
+		echo "IP2LOCATION_MMDB=$(GEO_DB_DST)" >> "$(ENV_FILE)"; \
 		echo "GEOLITE2_COUNTRY_DB=" >> "$(ENV_FILE)"; \
 		echo "GEOLITE2_ASN_DB=" >> "$(ENV_FILE)"; \
 		echo "" >> "$(ENV_FILE)"; \
@@ -72,89 +99,82 @@ env:
 		echo "" >> "$(ENV_FILE)"; \
 		echo "# Server" >> "$(ENV_FILE)"; \
 		echo "VPROX_ADDR=:3000" >> "$(ENV_FILE)"; \
-		echo "Created $(ENV_FILE)"; \
+		echo "✓ Created $(ENV_FILE)"; \
+	else \
+		echo "✓ $(ENV_FILE) already exists"; \
 	fi
 
-## Create chain template config
+## Copy chain sample config to user's chains directory
 
 config: dirs
-	cat > "$(CFG_DIR)/chain.toml.template" <<-'EOF'
-	chain_name     = "your_chain"
-	host           = "api-link.example"
-	ip             = "0.0.0.0"
-	default_ports  = false
-	msg            = true
-
-	[message]
-	    api_msg = "https://api_link"
-	    rpc_msg = "https://rpc_link"
-
-	[expose]
-	    path  = true        # /rpc, /rest, /websocket on base host
-	    vhost = true        # enable api.<host>, rpc.<host>
-
-	[expose.vhost_prefix]
-	    rpc  = "rpc"
-	    rest = "api"
-
-	[services]
-	    rpc        = true
-	    rest       = true
-	    websocket  = true
-	    grpc       = true
-	    grpc_web   = true
-	    api_alias  = true   # /api -> REST (1317)
-
-	[ports]              # used only when default_ports = false
-	    rpc      = 26657
-	    rest     = 1317
-	    grpc     = 9090
-	    grpc_web = 9091
-	    api      = 1317
-
-	[features]
-	    inject_rpc_index    = true      # inject on RPC index HTML
-	    inject_rest_swagger = false     # inject on /rest/swagger/
-	    absolute_links      = "auto"    # auto | always | never
-
-	[logging]
-	    file   = "logs/your_chain.log"  # per-chain log (fallback to main.log if empty)
-	    format = "summary"              # (future) summary | json | raw
-	EOF
+	@echo "Installing sample chain configuration..."
+	@if [[ -f "chains/chain.sample.toml" ]]; then \
+		cp "chains/chain.sample.toml" "$(CHAINS_DIR)/chain.sample.toml"; \
+		echo "✓ Copied chain.sample.toml to $(CHAINS_DIR)/"; \
+	else \
+		echo "WARNING: chains/chain.sample.toml not found in repo"; \
+	fi
+	@if [[ ! -f "$(CFG_DIR)/ports.toml" ]]; then \
+		echo "Creating default ports.toml..."; \
+		{ \
+			echo "# Default ports for all chains (override per-chain with default_ports = false)"; \
+			echo "rpc      = 26657"; \
+			echo "rest     = 1317"; \
+			echo "grpc     = 9090"; \
+			echo "grpc_web = 9091"; \
+			echo "api      = 1317"; \
+		} > "$(CFG_DIR)/ports.toml"; \
+		echo "✓ Created $(CFG_DIR)/ports.toml"; \
+	else \
+		echo "✓ $(CFG_DIR)/ports.toml already exists"; \
+	fi
 
 ## Build binary
 
 build:
+	@echo "Building $(APP_NAME)..."
 	go build -o "$(BUILD_OUT)" "$(BUILD_SRC)"
+	@echo "✓ Build complete"
 
 ## Install to GOPATH/bin and symlink to /usr/local/bin
 
 install: build
+	@echo "Installing $(APP_NAME)..."
 	mkdir -p "$(GOPATH_BIN)"
 	cp "$(BUILD_OUT)" "$(GOPATH_BIN)/$(APP_NAME)"
 	sudo ln -sf "$(GOPATH_BIN)/$(APP_NAME)" "/usr/local/bin/$(APP_NAME)"
-	@mkdir -p "$(CFG_DIR)"
+	@echo "✓ Installed to $(GOPATH_BIN)/$(APP_NAME)"
+	@echo "✓ Symlinked to /usr/local/bin/$(APP_NAME)"
 
-## Create systemd service file
+## Create or update systemd service file
 
 systemd:
-	@sudo tee "$(SYSTEMD_PATH)" > /dev/null <<-'EOF'
-	[Unit]
-	Description=Custom Go RPC Rewriter Proxy for Tendermint
-	After=network.target
-	Wants=network-online.target
+	@echo "Setting up systemd service..."
+	@EXPECTED_EXEC="/usr/local/bin/vProx"; \
+	if [[ -f "$(SYSTEMD_PATH)" ]]; then \
+		CURRENT_EXEC=$$(grep "^ExecStart=" "$(SYSTEMD_PATH)" | cut -d= -f2); \
+		if [[ "$$CURRENT_EXEC" == "$$EXPECTED_EXEC" ]]; then \
+			echo "✓ vProx.service already exists with correct ExecStart"; \
+			echo "  Skipping service file creation"; \
+		else \
+			echo "⚠ vProx.service exists but has different ExecStart:"; \
+			echo "  Current:  $$CURRENT_EXEC"; \
+			echo "  Expected: $$EXPECTED_EXEC"; \
+			echo "  Updating service file..."; \
+			sed "s|__HOME__|$(HOME)|g; s|__USER__|$(USER)|g" vprox.service.template | sudo tee "$(SYSTEMD_PATH)" > /dev/null; \
+			echo "✓ Updated $(SYSTEMD_PATH)"; \
+		fi; \
+	else \
+		echo "Creating new systemd service file..."; \
+		sed "s|__HOME__|$(HOME)|g; s|__USER__|$(USER)|g" vprox.service.template | sudo tee "$(SYSTEMD_PATH)" > /dev/null; \
+		echo "✓ Created $(SYSTEMD_PATH)"; \
+	fi
+	@echo ""
+	@echo "To enable and start the service, run:"
+	@echo "  sudo systemctl daemon-reload"
+	@echo "  sudo systemctl enable vprox"
+	@echo "  sudo systemctl start vprox"
+	@echo ""
+	@echo "To check status:"
+	@echo "  sudo systemctl status vprox"
 
-	[Service]
-	Environment=VPROX_HOME=/home/vnodesv/.vProx
-	EnvironmentFile=/home/vnodesv/.vProx/.env
-	Environment=IP2LOCATION_MMDB=/usr/local/share/IP2Proxy/ip2location.mmdb
-	Environment=IP2PROXY_DISABLE=1
-	ExecStart=/usr/local/bin/vProx
-	Restart=no
-	User=vnodesv
-	WorkingDirectory=/home/vnodesv/.vProx
-	Environment=GOTRACEBACK=all
-
-	[Install]
-	WantedBy=multi-user.target
-	EOF

@@ -111,6 +111,7 @@ var (
 
 	vproxHome  string
 	configDir  string
+	chainsDir  string
 	dataDir    string
 	logsDir    string
 	archiveDir string
@@ -983,11 +984,12 @@ func main() {
 			configDir = filepath.Join(vproxHome, *configFlag)
 		}
 	}
+	chainsDir = filepath.Join(vproxHome, "chains")
 	dataDir = filepath.Join(vproxHome, "data")
-	logsDir = filepath.Join(vproxHome, "logs")
+	logsDir = filepath.Join(dataDir, "logs")
 	archiveDir = filepath.Join(logsDir, "archived")
 
-	for _, dir := range []string{configDir, dataDir, logsDir, archiveDir} {
+	for _, dir := range []string{configDir, chainsDir, dataDir, logsDir, archiveDir} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			log.Fatalf("Could not create directory %s: %v", dir, err)
 		}
@@ -1027,12 +1029,25 @@ func main() {
 	if loadErr != nil {
 		log.Fatalf("Could not load default ports: %v", loadErr)
 	}
-	chainsDir := configDir
-	if !hasChainConfigs(chainsDir) {
-		log.Fatalf("no chain configs found in %s", chainsDir)
+	
+	// Load chain configs from both chains/ (preferred) and config/ (backward compatibility)
+	foundChains := false
+	if hasChainConfigs(chainsDir) {
+		if err := loadChains(chainsDir); err != nil {
+			log.Fatalf("Could not load chain configs from %s: %v", chainsDir, err)
+		}
+		foundChains = true
+		log.Printf("Loaded chain configs from %s", chainsDir)
 	}
-	if err := loadChains(chainsDir); err != nil {
-		log.Fatalf("Could not load chain configs: %v", err)
+	if hasChainConfigs(configDir) {
+		if err := loadChains(configDir); err != nil {
+			log.Fatalf("Could not load chain configs from %s: %v", configDir, err)
+		}
+		foundChains = true
+		log.Printf("Loaded chain configs from %s", configDir)
+	}
+	if !foundChains {
+		log.Fatalf("no chain configs found in %s or %s", chainsDir, configDir)
 	}
 
 	// --- Limiter: defaults ok, overrides limited, 429 blocked

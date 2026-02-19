@@ -30,10 +30,14 @@ var (
 
 // Preferred MMDB location(s)
 var ip2lPaths = []string{
-	"/usr/local/share/IP2Proxy/ip2location.mmdb",    // primary (your requested path)
-	"/usr/local/share/IP2Location/ip2location.mmdb", // common alt
+	// User's vProx home directory (new structure)
+	filepath.Join(os.Getenv("HOME"), ".vProx", "data", "geolocation", "ip2location.mmdb"),
+	// System-wide locations
+	"/usr/local/share/IP2Proxy/ip2location.mmdb",
+	"/usr/local/share/IP2Location/ip2location.mmdb",
 	"/usr/share/IP2Proxy/ip2location.mmdb",
 	"/usr/share/IP2Location/ip2location.mmdb",
+	// Fallback to current directory (for dev)
 	"./ip2location.mmdb",
 }
 

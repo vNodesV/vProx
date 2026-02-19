@@ -1,0 +1,18 @@
+[Unit]
+Description=vProx - Reverse Proxy for Blockchain Node Services
+After=network.target
+Wants=network-online.target
+
+[Service]
+Environment=VPROX_HOME=__HOME__/.vProx
+EnvironmentFile=__HOME__/.vProx/.env
+ExecStart=/usr/local/bin/vProx
+Restart=on-failure
+RestartSec=5
+User=__USER__
+WorkingDirectory=__HOME__/.vProx
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
