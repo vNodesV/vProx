@@ -58,6 +58,9 @@ logs/
 # Temporary files
 tmp/
 
+# Local admin helper scripts (do not commit)
+scripts/harden_repo_settings.sh
+
 # Environment files
 .env
 .env.*
