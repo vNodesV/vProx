@@ -3,6 +3,7 @@ package main
 import (
 	"compress/gzip"
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -116,6 +117,8 @@ var (
 	dataDir    string
 	logsDir    string
 	archiveDir string
+
+	accessCountsPath string
 
 	httpClient = &http.Client{
 		Timeout: 5 * time.Second,
@@ -524,6 +527,7 @@ func logRequestSummary(r *http.Request, proxied bool, route string, host string,
 	counterMutex.Lock()
 	srcCounter[src]++
 	srcQty := srcCounter[src]
+	_ = saveAccessCountsLocked(accessCountsPath)
 	counterMutex.Unlock()
 
 	// timing + fields
@@ -563,6 +567,76 @@ func logRequestSummary(r *http.Request, proxied bool, route string, host string,
 			cl.Println(line)
 		}
 	}
+}
+
+func loadAccessCounts(path string) {
+	if strings.TrimSpace(path) == "" {
+		return
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			applog.Print("WARN", "access", "counter_load_failed", applog.F("error", err.Error()))
+		}
+		return
+	}
+	var src map[string]int64
+	if err := json.Unmarshal(b, &src); err != nil {
+		applog.Print("WARN", "access", "counter_load_failed", applog.F("error", err.Error()))
+		return
+	}
+	clean := make(map[string]int64, len(src))
+	for ip, qty := range src {
+		if strings.TrimSpace(ip) == "" || qty < 0 {
+			continue
+		}
+		clean[ip] = qty
+	}
+	counterMutex.Lock()
+	srcCounter = clean
+	counterMutex.Unlock()
+}
+
+func saveAccessCounts(path string) error {
+	if strings.TrimSpace(path) == "" {
+		return nil
+	}
+	counterMutex.Lock()
+	defer counterMutex.Unlock()
+	return saveAccessCountsLocked(path)
+}
+
+func saveAccessCountsLocked(path string) error {
+	if strings.TrimSpace(path) == "" {
+		return nil
+	}
+	buf := make(map[string]int64, len(srcCounter))
+	for ip, qty := range srcCounter {
+		if strings.TrimSpace(ip) == "" || qty < 0 {
+			continue
+		}
+		buf[ip] = qty
+	}
+	b, err := json.MarshalIndent(buf, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, b, 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
+}
+
+func resetAccessCounts(path string) error {
+	counterMutex.Lock()
+	srcCounter = make(map[string]int64)
+	err := saveAccessCountsLocked(path)
+	counterMutex.Unlock()
+	return err
 }
 
 // --------------------- UTILS ---------------------
@@ -1098,6 +1172,9 @@ func main() {
 
 	// Parse flags
 	backupFlag := flag.Bool("backup", false, "run backup and exit")
+	var resetCount bool
+	flag.BoolVar(&resetCount, "reset_count", false, "reset persisted access counters (for backup mode)")
+	flag.BoolVar(&resetCount, "reset-count", false, "reset persisted access counters (for backup mode)")
 	homeFlag := flag.String("home", "", "override VPROX_HOME")
 	configFlag := flag.String("config", "", "override config directory")
 	chainsFlag := flag.String("chains", "", "override chains directory")
@@ -1141,6 +1218,7 @@ func main() {
 		fmt.Fprintln(out, "  --log-file string       override main log file path")
 		fmt.Fprintln(out, "  --quiet                 suppress non-error output")
 		fmt.Fprintln(out, "  --rps float             override default RPS (env: VPROX_RPS)")
+		fmt.Fprintln(out, "  --reset_count           reset persisted access counters (backup mode)")
 		fmt.Fprintln(out, "  --validate              validate configs and exit")
 		fmt.Fprintln(out, "  --verbose               verbose logging output")
 		fmt.Fprintln(out, "  --version               show version and exit")
@@ -1189,6 +1267,7 @@ func main() {
 	dataDir = filepath.Join(vproxHome, "data")
 	logsDir = filepath.Join(dataDir, "logs")
 	archiveDir = filepath.Join(logsDir, "archives")
+	accessCountsPath = filepath.Join(dataDir, "access-counts.json")
 
 	// Create directories
 	for _, dir := range []string{configDir, chainsDir, dataDir, logsDir, archiveDir} {
@@ -1229,6 +1308,12 @@ func main() {
 	log.SetFlags(0) // no default date/time; our logger prints its own header
 
 	if *backupFlag {
+		if resetCount {
+			if err := resetAccessCounts(accessCountsPath); err != nil {
+				log.Fatalf("Failed to reset access counters: %v", err)
+			}
+			applog.Print("INFO", "access", "counter_reset", applog.F("path", accessCountsPath))
+		}
 		if err := backup.RunOnce(backup.Options{
 			LogPath:    mainLogPath,
 			ArchiveDir: archiveDir,
@@ -1241,6 +1326,7 @@ func main() {
 
 	// Geo status line
 	applog.Print("INFO", "geo", "status", applog.F("message", geo.Info()))
+	loadAccessCounts(accessCountsPath)
 
 	// Load configs (TOML only)
 	var loadErr error
@@ -1501,6 +1587,9 @@ func main() {
 	}
 
 	cleanup := func() {
+		if err := saveAccessCounts(accessCountsPath); err != nil {
+			applog.Print("WARN", "access", "counter_save_failed", applog.F("error", err.Error()))
+		}
 		if stopBackup != nil {
 			stopBackup()
 		}
