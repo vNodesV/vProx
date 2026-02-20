@@ -3,7 +3,7 @@
     "version": "1.0",
         "cfg": {
             "log_file": "../logs/main.log",
-            "destination": "/archived",
+            "destination": "/archives",
             "interval": "12h",
             "extension": "tar",
             "source": "logs/",

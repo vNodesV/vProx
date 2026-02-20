@@ -11,7 +11,7 @@ This document covers **all modules** in vProx, how to configure them, and how to
 By default, vProx runs out of:
 
 - `$HOME/.vProx/config` — chain configs and `ports.toml`
-- `$HOME/.vProx/logs` — `main.log`, `rate-limit.jsonl`, archived backups
+- `$HOME/.vProx/data/logs` — `main.log`, `rate-limit.jsonl`, `archives/` backups
 - `$HOME/.vProx/data` — backup state, geo DBs
 
 Override base path with:

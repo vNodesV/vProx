@@ -12,7 +12,7 @@ LOG_DIR := $(DATA_DIR)/logs
 CFG_DIR := $(VPROX_HOME)/config
 CHAINS_DIR := $(VPROX_HOME)/chains
 INTERNAL_DIR := $(VPROX_HOME)/internal
-ARCHIVE_DIR := $(LOG_DIR)/archived
+ARCHIVE_DIR := $(LOG_DIR)/archives
 SERVICE_DIR := $(VPROX_HOME)/service
 SERVICE_PATH := $(SERVICE_DIR)/vProx.service
 

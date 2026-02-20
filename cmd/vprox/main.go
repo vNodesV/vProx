@@ -1187,7 +1187,7 @@ func main() {
 
 	dataDir = filepath.Join(vproxHome, "data")
 	logsDir = filepath.Join(dataDir, "logs")
-	archiveDir = filepath.Join(logsDir, "archived")
+	archiveDir = filepath.Join(logsDir, "archives")
 
 	// Create directories
 	for _, dir := range []string{configDir, chainsDir, dataDir, logsDir, archiveDir} {
@@ -1235,7 +1235,6 @@ func main() {
 		}); err != nil {
 			log.Fatalf("Backup failed: %v", err)
 		}
-		log.Println("Backup completed")
 		return
 	}
 

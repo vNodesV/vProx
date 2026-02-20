@@ -18,7 +18,7 @@ $HOME/.vProx/
 │   └── logs/                 # Application logs
 │       ├── main.log
 │       ├── rate-limit.jsonl
-│       └── archived/         # Archived log backups
+│       └── archives/         # Archived log backups
 ├── internal/                  # Reserved for internal use
 └── .env                       # Environment variables
 ```
@@ -36,7 +36,7 @@ $HOME/.vProx/
 ├── logs/                      # OLD location
 │   ├── main.log
 │   ├── rate-limit.jsonl
-│   └── archived/
+│   └── archives/
 ```
 
 ### Migration Steps

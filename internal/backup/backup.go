@@ -15,6 +15,8 @@ import (
 	applog "github.com/vNodesV/vProx/internal/logging"
 )
 
+const defaultCompression = "tar.gz"
+
 // Options controls backup behavior.
 type Options struct {
 	LogPath       string
@@ -33,12 +35,12 @@ func nowOrDefault(f func() time.Time) func() time.Time {
 	return time.Now
 }
 
-// RunOnce performs a single backup:
-// 1) copy main.log -> main.log.<timestamp>
+// RunOnce performs a single backup for main.log.
+// Expected behavior:
+// 1) copy main.log -> temporary copy
 // 2) truncate main.log
-// 3) tar.gz the copy
-// 4) delete the copy
-// 5) move tar.gz to ArchiveDir
+// 3) compress copy to ArchiveDir as tar.gz
+// 4) write first line to main.log with backup status and metadata
 func RunOnce(opts Options) error {
 	if strings.TrimSpace(opts.LogPath) == "" {
 		return errors.New("backup: LogPath is required")
@@ -47,13 +49,19 @@ func RunOnce(opts Options) error {
 		return errors.New("backup: ArchiveDir is required")
 	}
 
+	nowFn := nowOrDefault(opts.Now)
+	now := nowFn()
+	requestID := applog.NewRequestID()
+	compression := defaultCompression
+
 	logPath := filepath.Clean(opts.LogPath)
 	logDir := filepath.Dir(logPath)
+	archiveDir := filepath.Clean(opts.ArchiveDir)
 
 	if err := os.MkdirAll(logDir, 0o755); err != nil {
 		return fmt.Errorf("backup: create log dir: %w", err)
 	}
-	if err := os.MkdirAll(opts.ArchiveDir, 0o755); err != nil {
+	if err := os.MkdirAll(archiveDir, 0o755); err != nil {
 		return fmt.Errorf("backup: create archive dir: %w", err)
 	}
 
@@ -71,33 +79,42 @@ func RunOnce(opts Options) error {
 	if info.Size() == 0 {
 		return nil
 	}
+	sourceSize := info.Size()
 
-	stamp := nowOrDefault(opts.Now)().Format("20060102_150405")
+	stamp := now.Format("20060102_150405")
 	base := filepath.Base(logPath)
-	copyName := fmt.Sprintf("%s.%s", base, stamp)
+	copyName := fmt.Sprintf("%s.%s.copy", base, stamp)
 	copyPath := filepath.Join(logDir, copyName)
+	tarName := fmt.Sprintf("%s.%s.%s", base, stamp, compression)
+	finalPath := filepath.Join(archiveDir, tarName)
 
 	if err := copyFile(logPath, copyPath, info.Mode()); err != nil {
+		_ = appendBackupStatus(logPath, requestID, "backup_failed", sourceSize, 0, compression, archiveDir, tarName, err.Error())
 		return err
 	}
 	if err := os.Truncate(logPath, 0); err != nil {
+		_ = appendBackupStatus(logPath, requestID, "backup_failed", sourceSize, 0, compression, archiveDir, tarName, err.Error())
 		return fmt.Errorf("backup: truncate log: %w", err)
 	}
 
-	tarName := fmt.Sprintf("%s.%s.tar.gz", base, stamp)
-	tarPath := filepath.Join(logDir, tarName)
-	if err := writeTarGz(copyPath, copyName, tarPath); err != nil {
+	if err := writeTarGz(copyPath, copyName, finalPath); err != nil {
+		_ = writeFirstBackupStatus(logPath, requestID, "backup_failed", sourceSize, 0, compression, archiveDir, tarName, err.Error())
 		return err
 	}
 	_ = os.Remove(copyPath)
 
-	finalPath := filepath.Join(opts.ArchiveDir, tarName)
-	if err := os.Rename(tarPath, finalPath); err != nil {
-		return fmt.Errorf("backup: move archive: %w", err)
+	archiveInfo, err := os.Stat(finalPath)
+	if err != nil {
+		_ = writeFirstBackupStatus(logPath, requestID, "backup_failed", sourceSize, 0, compression, archiveDir, tarName, err.Error())
+		return fmt.Errorf("backup: stat archive: %w", err)
+	}
+
+	if err := writeFirstBackupStatus(logPath, requestID, "backup_successfull", sourceSize, archiveInfo.Size(), compression, archiveDir, tarName, ""); err != nil {
+		return err
 	}
 
 	if opts.StatePath != "" {
-		_ = writeLastRun(opts.StatePath, nowOrDefault(opts.Now)())
+		_ = writeLastRun(opts.StatePath, now)
 	}
 	return nil
 }
@@ -193,6 +210,89 @@ func copyFile(src, dst string, mode os.FileMode) error {
 
 	if _, err := io.Copy(d, s); err != nil {
 		return fmt.Errorf("backup: copy: %w", err)
+	}
+	return nil
+}
+
+func buildBackupStatusLine(requestID, status string, sourceSize, compressedSize int64, compression, location, filename, failed string) string {
+	status = normalizeBackupStatus(status)
+	requestID = strings.ToUpper(strings.TrimSpace(requestID))
+	compression = strings.ToUpper(strings.TrimSpace(compression))
+	fields := []applog.Field{
+		applog.F("module", "BACKUP"),
+		applog.F("requestid", requestID),
+		applog.F("status", "BACKUP STARTED"),
+		applog.F("filesize", humanSize(sourceSize)),
+		applog.F("compression", compression),
+		applog.F("result", status),
+		applog.F("location", strings.TrimSpace(location)),
+		applog.F("filename", strings.TrimSpace(filename)),
+		applog.F("archivesize", humanSize(compressedSize)),
+	}
+	if strings.TrimSpace(failed) != "" {
+		fields = append(fields, applog.F("failed", strings.TrimSpace(failed)))
+	}
+	level := "INFO"
+	if strings.EqualFold(status, "FAILED") {
+		level = "ERROR"
+	}
+	return applog.Line(level, "BACKUP", "BACKUP", fields...)
+}
+
+func normalizeBackupStatus(v string) string {
+	v = strings.ToLower(strings.TrimSpace(v))
+	switch v {
+	case "backup_successfull", "backup_successful", "backup_success", "success":
+		return "SUCCESS"
+	case "backup_failed", "failed", "failure":
+		return "FAILED"
+	default:
+		if strings.Contains(v, "fail") {
+			return "FAILED"
+		}
+		return "SUCCESS"
+	}
+}
+
+func humanSize(bytes int64) string {
+	if bytes < 0 {
+		bytes = 0
+	}
+	units := []string{"B", "KB", "MB", "GB", "TB", "PB"}
+	sz := float64(bytes)
+	unit := units[0]
+	for i := 1; i < len(units) && sz >= 1024; i++ {
+		sz /= 1024
+		unit = units[i]
+	}
+	if unit == "B" {
+		return fmt.Sprintf("%d%s", bytes, unit)
+	}
+	return fmt.Sprintf("%.2f%s", sz, unit)
+}
+
+func writeFirstBackupStatus(logPath, requestID, status string, sourceSize, compressedSize int64, compression, location, filename, failed string) error {
+	line := buildBackupStatusLine(requestID, status, sourceSize, compressedSize, compression, location, filename, failed)
+	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+	if err != nil {
+		return fmt.Errorf("backup: open log for status write: %w", err)
+	}
+	defer f.Close()
+	if _, err := io.WriteString(f, line+"\n"); err != nil {
+		return fmt.Errorf("backup: write first status line: %w", err)
+	}
+	return nil
+}
+
+func appendBackupStatus(logPath, requestID, status string, sourceSize, compressedSize int64, compression, location, filename, failed string) error {
+	line := buildBackupStatusLine(requestID, status, sourceSize, compressedSize, compression, location, filename, failed)
+	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		return fmt.Errorf("backup: open log for status append: %w", err)
+	}
+	defer f.Close()
+	if _, err := io.WriteString(f, line+"\n"); err != nil {
+		return fmt.Errorf("backup: append status line: %w", err)
 	}
 	return nil
 }

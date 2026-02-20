@@ -31,7 +31,7 @@ $HOME/.vProx/
 │   └── logs/        # Application logs
 │       ├── main.log
 │       ├── rate-limit.jsonl
-│       └── archived/
+│       └── archives/
 └── .env             # Environment variables
 ```
 
@@ -146,7 +146,15 @@ Automated backups are controlled via `.env` (loaded from `$HOME/.vProx/.env`):
 - `VPROX_BACKUP_MAX_BYTES=52428800` (optional)
 - `VPROX_BACKUP_CHECK_MINUTES=10`
 
-Backups create `main.log.<timestamp>.tar.gz` in `$HOME/.vProx/data/logs/archived`.
+Backups create `main.log.<timestamp>.tar.gz` in `$HOME/.vProx/data/logs/archives`.
+
+After backup rotates the log, `main.log` is reset and starts with a structured backup status line including:
+- `requestid`
+- `status=BACKUP STARTED`
+- `result=SUCCESS` or `result=FAILED`
+- source/compressed sizes
+- archive location + filename
+- `failed=<reason>` on failure
 
 ## 🧰 Notes
 
