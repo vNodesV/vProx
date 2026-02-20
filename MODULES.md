@@ -12,7 +12,7 @@ By default, vProx runs out of:
 
 - `$HOME/.vProx/config` — chain configs and `ports.toml`
 - `$HOME/.vProx/data/logs` — `main.log`, `rate-limit.jsonl`, `archives/` backups
-- `$HOME/.vProx/data` — backup state, geo DBs
+- `$HOME/.vProx/data` — backup state, geo DBs, `access-counts.json`
 
 Override base path with:
 
@@ -53,6 +53,7 @@ Location:
 
 - `vProx backup` (shorthand)
 - `vProx --backup`
+- `vProx backup --reset_count` (also accepts `--reset-count`)
 
 ---
 
@@ -62,7 +63,7 @@ Location:
 
 ### Logs
 
-- `$HOME/.vProx/logs/rate-limit.jsonl`
+- `$HOME/.vProx/data/logs/rate-limit.jsonl`
 
 ### Tuning via `.env`
 
@@ -144,15 +145,23 @@ VPROX_BACKUP_CHECK_MINUTES=10
 
 Backups are written to:
 
-- `$HOME/.vProx/logs/archived/main.log.<timestamp>.tar.gz`
+- `$HOME/.vProx/data/logs/archives/main.log.<timestamp>.tar.gz`
 
 ### Backup behavior
 
-1) Copy `main.log` → `main.log.<timestamp>`
+1) Copy `main.log` → `main.log.<timestamp>.copy`
 2) Truncate `main.log`
-3) Create `main.log.<timestamp>.tar.gz`
-4) Delete the copy
-5) Move archive to `logs/archived/`
+3) Emit `BACKUP STARTED` status line
+4) Create `main.log.<timestamp>.tar.gz` in `logs/archives/`
+5) Emit `BACKUP COMPLETE` or `BACKUP FAILED`
+
+Backup status fields include `request_id`, `status`, `filesize`, `compression`, `location`, `filename`, `archivesize`, and `failed` (on failure).
+
+### Access counter persistence
+
+- Request source counters (`src_count`) are persisted at `$HOME/.vProx/data/access-counts.json`.
+- They survive restart and backup by default.
+- Reset only when explicitly requested with `vProx backup --reset_count`.
 
 ---
 

@@ -119,6 +119,8 @@ Run one backup cycle and exit (no proxy server start).
 Also supported:
 - `vProx backup` (mapped internally to `--backup`)
 
+Access source counters are persisted across restarts and backups by default.
+
 ---
 
 ## Rate limiting overrides
@@ -174,6 +176,15 @@ Example:
 
 ## Backup controls
 
+### `--reset_count`
+Reset persisted access counters before backup execution.
+
+Scope:
+- intended for backup mode (`vProx backup --reset_count` or `vProx --backup --reset_count`)
+
+### `--reset-count`
+Alias for `--reset_count`.
+
 ### `--disable-backup`
 Disable automatic backup loop at startup.
 
@@ -224,3 +235,6 @@ Example:
 
 ### Backup-only run
 - `vProx --backup`
+
+### Backup + reset access counters
+- `vProx backup --reset_count`

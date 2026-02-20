@@ -28,6 +28,7 @@ $HOME/.vProx/
 ├── chains/          # Per-chain configurations (*.toml)
 ├── data/
 │   ├── geolocation/ # GeoLocation databases
+│   ├── access-counts.json # persisted source access counters
 │   └── logs/        # Application logs
 │       ├── main.log
 │       ├── rate-limit.jsonl
@@ -98,6 +99,7 @@ To run a manual backup of `main.log`:
 
 - `vProx backup`
 - `vProx --backup`
+- `vProx backup --reset_count` (also accepts `--reset-count`)
 
 ## 🧪 Build
 
@@ -111,6 +113,7 @@ Or, if you prefer raw Go tooling (keeps artifacts out of the repo root):
 
 - Main log: `$HOME/.vProx/data/logs/main.log`
 - Rate limit events: `$HOME/.vProx/data/logs/rate-limit.jsonl`
+- Access counter state: `$HOME/.vProx/data/access-counts.json`
 
 ## 🛡️ Rate limiting
 
@@ -138,6 +141,7 @@ Rate limit tuning (optional, via `$HOME/.vProx/.env`):
 Manual backup of `main.log`:
 
 - `vProx backup`
+- `vProx backup --reset_count` (resets persisted access counters before backup)
 
 Automated backups are controlled via `.env` (loaded from `$HOME/.vProx/.env`):
 
@@ -148,13 +152,14 @@ Automated backups are controlled via `.env` (loaded from `$HOME/.vProx/.env`):
 
 Backups create `main.log.<timestamp>.tar.gz` in `$HOME/.vProx/data/logs/archives`.
 
-After backup rotates the log, `main.log` is reset and starts with a structured backup status line including:
-- `requestid`
-- `status=BACKUP STARTED`
-- `result=SUCCESS` or `result=FAILED`
-- source/compressed sizes
-- archive location + filename
-- `failed=<reason>` on failure
+Backup lifecycle emits structured lines to `main.log`/stdout (when running with `start`) using:
+- message: `BACKUP STARTED`, `BACKUP COMPLETE`, `BACKUP FAILED`
+- `request_id`, `status`, `filesize`, `compression`, `location`, `filename`, `archivesize`
+- `failed=<reason>` on failures
+
+Access source counters are persisted across restarts/backups and are only reset when explicitly requested with:
+- `vProx backup --reset_count`
+- `vProx backup --reset-count`
 
 ## 🧰 Notes
 

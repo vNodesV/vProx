@@ -13,9 +13,10 @@ This file intentionally stays short.
 - `vProx --info --verbose` — print resolved runtime/config summary
 - `vProx --dry-run` — load everything without starting server
 - `vProx --backup` — run one backup cycle and exit
+- `vProx backup --reset_count` — backup and reset persisted access counters
 
 ## Most common overrides
 
 - `--home`, `--config`, `--chains`, `--log-file`, `--addr`
 - `--rps`, `--burst`, `--disable-auto`, `--auto-rps`, `--auto-burst`
-- `--disable-backup`, `--verbose`, `--quiet`, `--version`
+- `--disable-backup`, `--reset_count` (`--reset-count`), `--verbose`, `--quiet`, `--version`

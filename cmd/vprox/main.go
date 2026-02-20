@@ -1219,6 +1219,7 @@ func main() {
 		fmt.Fprintln(out, "  --quiet                 suppress non-error output")
 		fmt.Fprintln(out, "  --rps float             override default RPS (env: VPROX_RPS)")
 		fmt.Fprintln(out, "  --reset_count           reset persisted access counters (backup mode)")
+		fmt.Fprintln(out, "  --reset-count           alias for --reset_count")
 		fmt.Fprintln(out, "  --validate              validate configs and exit")
 		fmt.Fprintln(out, "  --verbose               verbose logging output")
 		fmt.Fprintln(out, "  --version               show version and exit")
