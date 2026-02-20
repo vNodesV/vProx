@@ -245,6 +245,7 @@ func (l *IPLimiter) Middleware(next http.Handler) http.Handler {
 		// STRICT MODE for overrides (manual or auto): use Allow() => 429
 		if l.hasOverride(ip) {
 			if !lim.Allow() {
+				l.logAccessLimited(ip, r, "RATE_LIMIT_EXCEEDED")
 				w.Header().Set("Retry-After", "1")
 				w.Header().Set("X-RateLimit-Policy", l.policyString(ip))
 				w.Header().Set("X-RateLimit-Status", "blocked")
@@ -262,6 +263,7 @@ func (l *IPLimiter) Middleware(next http.Handler) http.Handler {
 		// DEFAULTS: either Allow() (drop) or Wait() (smooth)
 		if l.enforceDefaults {
 			if !lim.Allow() {
+				l.logAccessLimited(ip, r, "RATE_LIMIT_EXCEEDED")
 				w.Header().Set("Retry-After", "1")
 				w.Header().Set("X-RateLimit-Policy", l.policyString(ip))
 				w.Header().Set("X-RateLimit-Status", "blocked")
@@ -279,6 +281,7 @@ func (l *IPLimiter) Middleware(next http.Handler) http.Handler {
 
 		// Smoothing mode (no 429; Wait blocks until token available).
 		if err := lim.Wait(r.Context()); err != nil {
+			l.logAccessLimited(ip, r, "REQUEST_CANCELED")
 			w.Header().Set("X-RateLimit-Status", "blocked")
 			http.Error(w, "request canceled", http.StatusTooManyRequests)
 			l.logEvent(ip, r, "wait-canceled")
@@ -567,6 +570,12 @@ func (l *IPLimiter) logEvent(ip string, r *http.Request, reason string) {
 		country = geo.Country(ip)
 	}
 	asn := geo.ASN(ip)
+	if strings.TrimSpace(country) == "" {
+		country = "--"
+	}
+	if strings.TrimSpace(asn) == "" {
+		asn = "--"
+	}
 
 	spec := l.defaults
 	if o, ok := l.overrides.Load(ip); ok {
@@ -622,8 +631,9 @@ func (l *IPLimiter) logEvent(ip string, r *http.Request, reason string) {
 		if ua == "" {
 			ua = "-"
 		}
-		applog.Print(level, "limiter", reason,
-			applog.F("reason", reason),
+		normReason := limiterReasonLabel(reason)
+		fields := []applog.Field{
+			applog.F("reason", normReason),
 			applog.F("request_id", requestID),
 			applog.F("ip", ip),
 			applog.F("country", country),
@@ -634,6 +644,89 @@ func (l *IPLimiter) logEvent(ip string, r *http.Request, reason string) {
 			applog.F("rps", spec.RPS),
 			applog.F("burst", spec.Burst),
 			applog.F("ua", ua),
+		}
+		if reason == "429" || reason == "wait-canceled" {
+			fields = append(fields, applog.F("status", "limited"))
+		}
+		applog.Print(level, "limiter", reason,
+			fields...,
 		)
+	}
+}
+
+func (l *IPLimiter) logAccessLimited(ip string, r *http.Request, reason string) {
+	requestID := applog.RequestIDFrom(r)
+	if requestID == "" {
+		requestID = applog.EnsureRequestID(r)
+	}
+	country := strings.TrimSpace(r.Header.Get("CF-IPCountry"))
+	if country == "" {
+		country = geo.Country(ip)
+	}
+	if strings.TrimSpace(country) == "" {
+		country = "--"
+	}
+	ua := r.Header.Get("User-Agent")
+	if ua == "" {
+		ua = "-"
+	}
+	host := r.Host
+	route := limiterRouteFromPath(r.URL.Path)
+	applog.Print("INFO", "access", "request",
+		applog.F("request_id", requestID),
+		applog.F("host", host),
+		applog.F("route", route),
+		applog.F("proxied", false),
+		applog.F("request", r.URL.RequestURI()),
+		applog.F("method", r.Method),
+		applog.F("ip", ip),
+		applog.F("ua", ua),
+		applog.F("country", country),
+		applog.F("status", "limited"),
+		applog.F("reason", strings.ToUpper(strings.TrimSpace(reason))),
+	)
+}
+
+func limiterRouteFromPath(path string) string {
+	if strings.HasPrefix(path, "/rpc") {
+		return "rpc"
+	}
+	if strings.HasPrefix(path, "/rest") {
+		return "rest"
+	}
+	if strings.HasPrefix(path, "/api") {
+		return "api"
+	}
+	if strings.HasPrefix(path, "/grpc-web") {
+		return "grpc-web"
+	}
+	if strings.HasPrefix(path, "/grpc") {
+		return "grpc"
+	}
+	if path == "/websocket" {
+		return "websocket"
+	}
+	return "direct"
+}
+
+func limiterReasonLabel(reason string) string {
+	switch strings.TrimSpace(reason) {
+	case "429":
+		return "RATE_LIMIT_EXCEEDED"
+	case "wait-canceled":
+		return "REQUEST_CANCELED"
+	case "auto-override-add":
+		return "AUTO_OVERRIDE_ADD"
+	case "auto-override-expire":
+		return "AUTO_OVERRIDE_EXPIRE"
+	case "allow-sample":
+		return "ALLOW_SAMPLE"
+	default:
+		v := strings.ToUpper(strings.TrimSpace(reason))
+		v = strings.ReplaceAll(v, "-", "_")
+		if v == "" {
+			return "UNKNOWN"
+		}
+		return v
 	}
 }

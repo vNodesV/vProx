@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -89,29 +90,29 @@ func RunOnce(opts Options) error {
 	finalPath := filepath.Join(archiveDir, tarName)
 
 	if err := copyFile(logPath, copyPath, info.Mode()); err != nil {
-		_ = appendBackupStatus(logPath, requestID, "backup_failed", sourceSize, 0, compression, archiveDir, tarName, err.Error())
+		emitBackupLine(buildBackupStatusLine(requestID, "BACKUP FAILED", err.Error(), sourceSize, 0, compression, archiveDir, tarName, ""))
 		return err
 	}
 	if err := os.Truncate(logPath, 0); err != nil {
-		_ = appendBackupStatus(logPath, requestID, "backup_failed", sourceSize, 0, compression, archiveDir, tarName, err.Error())
+		emitBackupLine(buildBackupStatusLine(requestID, "BACKUP FAILED", err.Error(), sourceSize, 0, compression, archiveDir, tarName, ""))
 		return fmt.Errorf("backup: truncate log: %w", err)
 	}
 
+	emitBackupLine(buildBackupStatusLine(requestID, "BACKUP STARTED", "started", sourceSize, 0, compression, archiveDir, tarName, ""))
+
 	if err := writeTarGz(copyPath, copyName, finalPath); err != nil {
-		_ = writeFirstBackupStatus(logPath, requestID, "backup_failed", sourceSize, 0, compression, archiveDir, tarName, err.Error())
+		emitBackupLine(buildBackupStatusLine(requestID, "BACKUP FAILED", err.Error(), sourceSize, 0, compression, archiveDir, tarName, ""))
 		return err
 	}
 	_ = os.Remove(copyPath)
 
 	archiveInfo, err := os.Stat(finalPath)
 	if err != nil {
-		_ = writeFirstBackupStatus(logPath, requestID, "backup_failed", sourceSize, 0, compression, archiveDir, tarName, err.Error())
+		emitBackupLine(buildBackupStatusLine(requestID, "BACKUP FAILED", err.Error(), sourceSize, 0, compression, archiveDir, tarName, ""))
 		return fmt.Errorf("backup: stat archive: %w", err)
 	}
 
-	if err := writeFirstBackupStatus(logPath, requestID, "backup_successfull", sourceSize, archiveInfo.Size(), compression, archiveDir, tarName, ""); err != nil {
-		return err
-	}
+	emitBackupLine(buildBackupStatusLine(requestID, "BACKUP COMPLETE", "success", sourceSize, archiveInfo.Size(), compression, archiveDir, tarName, ""))
 
 	if opts.StatePath != "" {
 		_ = writeLastRun(opts.StatePath, now)
@@ -214,17 +215,18 @@ func copyFile(src, dst string, mode os.FileMode) error {
 	return nil
 }
 
-func buildBackupStatusLine(requestID, status string, sourceSize, compressedSize int64, compression, location, filename, failed string) string {
-	status = normalizeBackupStatus(status)
+func buildBackupStatusLine(requestID, event, status string, sourceSize, compressedSize int64, compression, location, filename, failed string) string {
+	event = strings.ToUpper(strings.TrimSpace(event))
+	if event == "" {
+		event = "BACKUP"
+	}
 	requestID = strings.ToUpper(strings.TrimSpace(requestID))
 	compression = strings.ToUpper(strings.TrimSpace(compression))
 	fields := []applog.Field{
-		applog.F("module", "BACKUP"),
-		applog.F("requestid", requestID),
-		applog.F("status", "BACKUP STARTED"),
+		applog.F("request_id", requestID),
+		applog.F("status", strings.TrimSpace(status)),
 		applog.F("filesize", humanSize(sourceSize)),
 		applog.F("compression", compression),
-		applog.F("result", status),
 		applog.F("location", strings.TrimSpace(location)),
 		applog.F("filename", strings.TrimSpace(filename)),
 		applog.F("archivesize", humanSize(compressedSize)),
@@ -233,25 +235,10 @@ func buildBackupStatusLine(requestID, status string, sourceSize, compressedSize 
 		fields = append(fields, applog.F("failed", strings.TrimSpace(failed)))
 	}
 	level := "INFO"
-	if strings.EqualFold(status, "FAILED") {
+	if strings.EqualFold(event, "BACKUP FAILED") {
 		level = "ERROR"
 	}
-	return applog.Line(level, "BACKUP", "BACKUP", fields...)
-}
-
-func normalizeBackupStatus(v string) string {
-	v = strings.ToLower(strings.TrimSpace(v))
-	switch v {
-	case "backup_successfull", "backup_successful", "backup_success", "success":
-		return "SUCCESS"
-	case "backup_failed", "failed", "failure":
-		return "FAILED"
-	default:
-		if strings.Contains(v, "fail") {
-			return "FAILED"
-		}
-		return "SUCCESS"
-	}
+	return applog.Line(level, "backup", event, fields...)
 }
 
 func humanSize(bytes int64) string {
@@ -271,30 +258,11 @@ func humanSize(bytes int64) string {
 	return fmt.Sprintf("%.2f%s", sz, unit)
 }
 
-func writeFirstBackupStatus(logPath, requestID, status string, sourceSize, compressedSize int64, compression, location, filename, failed string) error {
-	line := buildBackupStatusLine(requestID, status, sourceSize, compressedSize, compression, location, filename, failed)
-	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
-	if err != nil {
-		return fmt.Errorf("backup: open log for status write: %w", err)
+func emitBackupLine(line string) {
+	if strings.TrimSpace(line) == "" {
+		return
 	}
-	defer f.Close()
-	if _, err := io.WriteString(f, line+"\n"); err != nil {
-		return fmt.Errorf("backup: write first status line: %w", err)
-	}
-	return nil
-}
-
-func appendBackupStatus(logPath, requestID, status string, sourceSize, compressedSize int64, compression, location, filename, failed string) error {
-	line := buildBackupStatusLine(requestID, status, sourceSize, compressedSize, compression, location, filename, failed)
-	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
-	if err != nil {
-		return fmt.Errorf("backup: open log for status append: %w", err)
-	}
-	defer f.Close()
-	if _, err := io.WriteString(f, line+"\n"); err != nil {
-		return fmt.Errorf("backup: append status line: %w", err)
-	}
-	return nil
+	log.Println(line)
 }
 
 func writeTarGz(srcPath, srcName, tarPath string) error {

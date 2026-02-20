@@ -146,6 +146,7 @@ const (
 	apiPrefix     = "/api"
 
 	ansiReset   = "\x1b[0m"
+	ansiBold    = "\x1b[1m"
 	ansiDim     = "\x1b[2m"
 	ansiBlue    = "\x1b[34m"
 	ansiCyan    = "\x1b[36m"
@@ -658,7 +659,7 @@ func colorizeLogLine(line string) string {
 			return m
 		}
 		k, v := kv[0], kv[1]
-		return ansiBlue + k + ansiReset + "=" + colorValueForKey(k, v)
+		return ansiBold + ansiBlue + k + ansiReset + "=" + colorValueForKey(k, v)
 	})
 
 	if msg == "" {
