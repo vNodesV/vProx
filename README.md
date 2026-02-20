@@ -176,6 +176,13 @@ The following paths are intentionally local-only and ignored by git:
 
 They are used for session notes/agent coordination and are not part of distributable runtime source.
 
+## 📚 Additional Documentation
+
+- [`CLI_FLAGS_GUIDE.md`](./CLI_FLAGS_GUIDE.md) — complete command-line flag reference and examples.
+- [`FLAGS.md`](./FLAGS.md) — quick flag reference.
+- [`MODULES.md`](./MODULES.md) — module-by-module operations guide.
+- [`MIGRATION.md`](./MIGRATION.md) — migration notes and compatibility guidance.
+
 ## 📄 License
 
 Apache-2.0. See `LICENSE`.
