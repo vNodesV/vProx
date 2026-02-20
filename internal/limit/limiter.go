@@ -648,7 +648,7 @@ func (l *IPLimiter) logEvent(ip string, r *http.Request, reason string) {
 		if reason == "429" || reason == "wait-canceled" {
 			fields = append(fields, applog.F("status", "limited"))
 		}
-		applog.Print(level, "limiter", reason,
+		applog.Print(level, "limiter", limiterEventMessage(reason),
 			fields...,
 		)
 	}
@@ -728,5 +728,26 @@ func limiterReasonLabel(reason string) string {
 			return "UNKNOWN"
 		}
 		return v
+	}
+}
+
+func limiterEventMessage(reason string) string {
+	switch strings.TrimSpace(reason) {
+	case "429":
+		return "rate limit exceeded"
+	case "wait-canceled":
+		return "request canceled by limiter"
+	case "auto-override-add":
+		return "auto override added"
+	case "auto-override-expire":
+		return "auto override expired"
+	case "allow-sample":
+		return "allow sample"
+	default:
+		v := strings.TrimSpace(reason)
+		if v == "" {
+			return "limiter event"
+		}
+		return strings.ReplaceAll(v, "-", " ")
 	}
 }
