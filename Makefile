@@ -196,14 +196,17 @@ systemd:
 	@echo "The next step allows you to easily install the generated service file on a systemd host and sudo permission is required.  If you choose not to do this now, you can manually copy $(SERVICE_PATH) to /etc/systemd/system/ and enable/start the service later."
 	@read -p "Do you want to install the systemd service now? (y/n) " -n 1 -r; echo ""; \
 	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
-		sudo cp "$(SERVICE_PATH)" "/etc/systemd/system/vProx.service"; \
-		sudo systemctl daemon-reload; \
-		sudo systemctl enable vProx.service; \
-		sudo systemctl start vProx.service; \
-		echo "✓ vProx.service installed and started"; \
+		if sudo cp "$(SERVICE_PATH)" "/etc/systemd/system/vProx.service" && \
+		   sudo systemctl daemon-reload && \
+		   sudo systemctl enable vProx.service && \
+		   sudo systemctl start vProx.service; then \
+			echo "✓ vProx.service installed and started"; \
+		else \
+			echo "✗ Failed to install or start vProx.service. Please check 'sudo systemctl status vProx.service' for details."; \
+		fi; \
 	else \
 		echo "✓ Skipped systemd service installation. You can manually copy $(SERVICE_PATH) to /etc/systemd/system/ and enable/start the service later using the commands below."; \
-		echo "  sudo cp $(SERVICE_PATH) /etc/systemd/system/vProx.service"
+		echo "  sudo cp $(SERVICE_PATH) /etc/systemd/system/vProx.service"; \
 		echo "  sudo systemctl daemon-reload"; \
 		echo "  sudo systemctl enable vProx.service"; \
 		echo "  sudo systemctl start vProx.service"; \
