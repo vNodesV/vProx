@@ -9,6 +9,7 @@ agents/ export-ignore
 # Operational notes not required for runtime
 docs/ export-ignore
 scripts/ export-ignore
+scripts/minimal-runtime.lst -export-ignore
 MIGRATION.md export-ignore
 MODULES.md export-ignore
 FLAGS.md export-ignore
