@@ -7,6 +7,13 @@ users:
   - id: jarvis4.0
     role: operator
     agent_file: .github/agents/jarvis4.0.agent.md
+    target: github-copilot
+    github_login: null
+    org: vNodes-Co
+  - id: jarvis4.0_vscode
+    role: operator
+    agent_file: .github/agents/jarvis4.0_vscode.agent.md
+    target: vscode
     github_login: null
     org: vNodes-Co
   - id: jarvisBoss
