@@ -75,6 +75,4 @@ scripts/set_required_checks.sh
 *~
 .DS_Store
 
-# Agent/collab files (local only, not for distribution)
-agents/
 /docs/
