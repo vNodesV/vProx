@@ -150,9 +150,16 @@ install:
 	@echo "Installing $(APP_NAME)..."
 # 	mkdir -p "$(GOPATH_BIN)"
 	go build -o "$(GOPATH_BIN)/$(APP_NAME)" "$(BUILD_SRC)"
-	sudo ln -sf "$(GOPATH_BIN)/$(APP_NAME)" "/usr/local/bin/$(APP_NAME)"
-	@echo "✓ Installed to $(GOPATH_BIN)/$(APP_NAME)"
-	@echo "✓ Symlinked to /usr/local/bin/$(APP_NAME)"
+	@echo ""
+	@echo "The next step will create a symlink to /usr/local/bin/$(APP_NAME) which may require sudo permissions. If you do not have sudo access, you can add $(GOPATH_BIN) to your PATH instead."
+	@read -p "Do you want to create the symlink or skip this step? (y/n) " -n 1 -r; echo ""; \
+	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
+		sudo ln -sf "$(GOPATH_BIN)/$(APP_NAME)" "/usr/local/bin/$(APP_NAME)"; \
+		echo "✓ Symlink created at /usr/local/bin/$(APP_NAME)"; \
+	else \
+		echo "✓ Skipped symlink creation. You can run $(APP_NAME) using $(GOPATH_BIN)/$(APP_NAME) or add $(GOPATH_BIN) to your PATH."; \
+	fi
+	@echo ""
 	@$(MAKE) dirs
 	@$(MAKE) systemd
 
@@ -186,12 +193,19 @@ systemd:
 	fi; \
 	rm -f "$$TMP_RENDERED"
 	@echo ""
-	@echo "To install this unit on a systemd host, run:"
-	@echo "  sudo cp $(SERVICE_PATH) /etc/systemd/system/vProx.service"
-	@echo "  sudo systemctl daemon-reload"
-	@echo "  sudo systemctl enable vProx.service"
-	@echo "  sudo systemctl start vProx.service"
-	@echo ""
-	@echo "To check status:"
-	@echo "  sudo systemctl status vProx.service"
+	@echo "The next step allows you to easily install the generated service file on a systemd host and sudo permission is required.  If you choose not to do this now, you can manually copy $(SERVICE_PATH) to /etc/systemd/system/ and enable/start the service later."
+	@read -p "Do you want to install the systemd service now? (y/n) " -n 1 -r; echo ""; \
+	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
+		sudo cp "$(SERVICE_PATH)" "/etc/systemd/system/vProx.service"; \
+		sudo systemctl daemon-reload; \
+		sudo systemctl enable vProx.service; \
+		sudo systemctl start vProx.service; \
+		echo "✓ vProx.service installed and started"; \
+	else \
+		echo "✓ Skipped systemd service installation. You can manually copy $(SERVICE_PATH) to /etc/systemd/system/ and enable/start the service later using the commands below."; \
+		echo "  sudo cp $(SERVICE_PATH) /etc/systemd/system/vProx.service"
+		echo "  sudo systemctl daemon-reload"; \
+		echo "  sudo systemctl enable vProx.service"; \
+		echo "  sudo systemctl start vProx.service"; \
+	fi
 
