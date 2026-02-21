@@ -1,0 +1,84 @@
+name: Required Reviewer Approval
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize, ready_for_review, review_requested, edited]
+  pull_request_review:
+    types: [submitted, edited, dismissed]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  required-reviewer-approval:
+    name: Required reviewer approved
+    runs-on: ubuntu-latest
+    if: github.base_ref == 'main'
+
+    steps:
+      - name: Verify required reviewer approval
+        uses: actions/github-script@v7
+        env:
+          REQUIRED_REVIEWERS: jarvisBoss
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const pull_number = context.payload.pull_request.number;
+            const requiredReviewers = (process.env.REQUIRED_REVIEWERS || '')
+              .split(',')
+              .map((s) => s.trim())
+              .filter(Boolean);
+
+            let allReviews = [];
+            let page = 1;
+
+            while (true) {
+              const { data: reviews } = await github.rest.pulls.listReviews({
+                owner,
+                repo,
+                pull_number,
+                per_page: 100,
+                page,
+              });
+
+              allReviews = allReviews.concat(reviews);
+
+              if (reviews.length < 100) {
+                break;
+              }
+
+              page += 1;
+            }
+
+            const latestReviewByUser = new Map();
+            for (const review of allReviews) {
+              if (!review.user || !review.user.login || !review.submitted_at) continue;
+              const existing = latestReviewByUser.get(review.user.login);
+              if (!existing || new Date(review.submitted_at) > new Date(existing.submitted_at)) {
+                latestReviewByUser.set(review.user.login, review);
+              }
+            }
+
+            const latestStateByUser = new Map();
+            for (const [login, review] of latestReviewByUser.entries()) {
+              latestStateByUser.set(login, review.state);
+            }
+
+            const approvedReviewer = requiredReviewers.find(
+              (login) => latestStateByUser.get(login) === 'APPROVED'
+            );
+
+            if (!approvedReviewer) {
+              const states = requiredReviewers
+                .map((login) => `${login}:${latestStateByUser.get(login) || 'none'}`)
+                .join(', ');
+              core.setFailed(
+                `PR must have an active APPROVED review from one of: ${requiredReviewers.map((u) => '@' + u).join(', ')}. Current states: ${states}`
+              );
+              return;
+            }
+
+            core.info(`Verified APPROVED review from @${approvedReviewer}.`);

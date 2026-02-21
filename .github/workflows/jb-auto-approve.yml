@@ -1,0 +1,109 @@
+name: JB Auto Review & Approve
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+      - Dependency Review
+      - CodeQL
+    types:
+      - completed
+
+permissions:
+  contents: read
+  checks: read
+  pull-requests: write
+
+jobs:
+  auto-approve:
+    name: Auto-approve via jarvisBoss
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'success'
+
+    steps:
+      - name: Approve PR when all required checks are green
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.JB_REVIEW_TOKEN }}
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            const prs = context.payload.workflow_run.pull_requests || [];
+            if (prs.length === 0) {
+              core.info('No pull request associated with this workflow_run. Skipping.');
+              return;
+            }
+
+            const pull_number = prs[0].number;
+            const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number });
+
+            if (pr.base.ref !== 'main') {
+              core.info(`PR #${pull_number} targets ${pr.base.ref}, not main. Skipping.`);
+              return;
+            }
+
+            if (pr.state !== 'open' || pr.draft) {
+              core.info(`PR #${pull_number} is not open/ready. Skipping.`);
+              return;
+            }
+
+            const requiredChecks = [
+              'Go build/test/lint',
+              'Dependency Review',
+              'Analyze (Go)',
+            ];
+
+            const { data: checkRunsData } = await github.rest.checks.listForRef({
+              owner,
+              repo,
+              ref: pr.head.sha,
+              per_page: 100,
+            });
+
+            const checkConclusion = new Map(
+              (checkRunsData.check_runs || []).map((c) => [c.name, c.conclusion])
+            );
+
+            const pendingOrFailed = requiredChecks.filter((name) => checkConclusion.get(name) !== 'success');
+            if (pendingOrFailed.length > 0) {
+              core.info(`Required checks not all green yet for PR #${pull_number}: ${pendingOrFailed.join(', ')}`);
+              return;
+            }
+
+            const { data: me } = await github.rest.users.getAuthenticated();
+            const reviewerLogin = me.login;
+
+            if (pr.user && pr.user.login === reviewerLogin) {
+              core.info(`PR author is @${reviewerLogin}; skipping self-approval.`);
+              return;
+            }
+
+            const { data: reviews } = await github.rest.pulls.listReviews({
+              owner,
+              repo,
+              pull_number,
+              per_page: 100,
+            });
+
+            const latestMine = [...reviews]
+              .reverse()
+              .find((r) => r.user && r.user.login === reviewerLogin);
+
+            if (latestMine && latestMine.state === 'APPROVED') {
+              core.info(`PR #${pull_number} is already approved by @${reviewerLogin}.`);
+              return;
+            }
+
+            await github.rest.pulls.createReview({
+              owner,
+              repo,
+              pull_number,
+              event: 'APPROVE',
+              body: [
+                'Automated review by JB reviewer agent.',
+                'All required checks are green and PR is policy-compliant for approval.',
+              ].join(' '),
+            });
+
+            core.info(`Approved PR #${pull_number} as @${reviewerLogin}.`);
