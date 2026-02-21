@@ -15,6 +15,7 @@ INTERNAL_DIR := $(VPROX_HOME)/internal
 ARCHIVE_DIR := $(LOG_DIR)/archives
 SERVICE_DIR := $(VPROX_HOME)/service
 SERVICE_PATH := $(SERVICE_DIR)/vProx.service
+DIR_LIST := $(DATA_DIR) $(GEO_DIR) $(LOG_DIR) $(CFG_DIR) $(CHAINS_DIR) $(INTERNAL_DIR) $(ARCHIVE_DIR) $(SERVICE_DIR)
 
 # GeoLocation database
 GEO_DB_SRC := ip2l/ip2location.mmdb
@@ -30,6 +31,7 @@ GOPATH_BIN := $(GOPATH)/bin
 .PHONY: all validate-go dirs geo config build install clean systemd env
 
 all: validate-go dirs geo config env install
+install: validate-go dirs geo config env install
 
 ## Validate Go environment
 
@@ -51,14 +53,15 @@ validate-go:
 
 dirs:
 	@echo "Creating directory structure..."
-	mkdir -p "$(DATA_DIR)"
-	mkdir -p "$(GEO_DIR)"
-	mkdir -p "$(LOG_DIR)"
-	mkdir -p "$(ARCHIVE_DIR)"
-	mkdir -p "$(CFG_DIR)"
-	mkdir -p "$(CHAINS_DIR)"
-	mkdir -p "$(INTERNAL_DIR)"
-	@echo "✓ Directory structure created"
+	@for dir in $(DIR_LIST); do \
+		if [[ ! -d "$$dir" ]]; then \
+			echo "Creating $$dir..."; \
+			@echo "✓ Directory structure created"
+		else \
+			echo "✓ $$dir already exists"; \
+		fi; \
+	done
+	
 
 ## Install GEO DB automatically (GeoLite2 is free to redistribute)
 
@@ -145,11 +148,12 @@ build:
 
 install:
 	@echo "Installing $(APP_NAME)..."
-	mkdir -p "$(GOPATH_BIN)"
+# 	mkdir -p "$(GOPATH_BIN)"
 	go build -o "$(GOPATH_BIN)/$(APP_NAME)" "$(BUILD_SRC)"
 	sudo ln -sf "$(GOPATH_BIN)/$(APP_NAME)" "/usr/local/bin/$(APP_NAME)"
 	@echo "✓ Installed to $(GOPATH_BIN)/$(APP_NAME)"
 	@echo "✓ Symlinked to /usr/local/bin/$(APP_NAME)"
+	@$(MAKE) dirs
 	@$(MAKE) systemd
 
 ## Clean local build artifacts (never touches installed binary)
