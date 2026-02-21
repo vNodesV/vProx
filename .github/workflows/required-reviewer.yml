@@ -29,15 +29,29 @@ jobs:
             const pull_number = context.issue.number;
             const requiredReviewer = process.env.REQUIRED_REVIEWER;
 
-            const { data: reviews } = await github.rest.pulls.listReviews({
-              owner,
-              repo,
-              pull_number,
-              per_page: 100,
-            });
+            let allReviews = [];
+            let page = 1;
+
+            while (true) {
+              const { data: reviews } = await github.rest.pulls.listReviews({
+                owner,
+                repo,
+                pull_number,
+                per_page: 100,
+                page,
+              });
+
+              allReviews = allReviews.concat(reviews);
+
+              if (reviews.length < 100) {
+                break;
+              }
+
+              page += 1;
+            }
 
             const latestStateByUser = new Map();
-            for (const review of reviews) {
+            for (const review of allReviews) {
               if (!review.user || !review.user.login) continue;
               latestStateByUser.set(review.user.login, review.state);
             }
