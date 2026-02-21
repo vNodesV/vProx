@@ -1,0 +1,54 @@
+name: Required Reviewer Approval
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize, ready_for_review, review_requested, edited]
+  pull_request_review:
+    types: [submitted, edited, dismissed]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  required-reviewer-approval:
+    name: Required reviewer approved
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.base.ref == 'main'
+
+    steps:
+      - name: Verify required reviewer approval
+        uses: actions/github-script@v7
+        env:
+          REQUIRED_REVIEWER: vNodesV
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const pull_number = context.payload.pull_request.number;
+            const requiredReviewer = process.env.REQUIRED_REVIEWER;
+
+            const { data: reviews } = await github.rest.pulls.listReviews({
+              owner,
+              repo,
+              pull_number,
+              per_page: 100,
+            });
+
+            const latestStateByUser = new Map();
+            for (const review of reviews) {
+              if (!review.user || !review.user.login) continue;
+              latestStateByUser.set(review.user.login, review.state);
+            }
+
+            const requiredState = latestStateByUser.get(requiredReviewer);
+
+            if (requiredState !== 'APPROVED') {
+              core.setFailed(
+                `PR must have an active APPROVED review from @${requiredReviewer}. Current state: ${requiredState || 'none'}`
+              );
+              return;
+            }
+
+            core.info(`Verified APPROVED review from @${requiredReviewer}.`);
