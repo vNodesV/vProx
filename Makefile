@@ -156,13 +156,13 @@ install:
 	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
 		sudo ln -sf "$(GOPATH_BIN)/$(APP_NAME)" "/usr/local/bin/$(APP_NAME)"; \
 		echo "✓ Symlink created at /usr/local/bin/$(APP_NAME)"; \
+		$(MAKE) dirs; \
+		$(MAKE) systemd; \
 	else \
 		echo "✓ Skipped symlink creation. You can run $(APP_NAME) using $(GOPATH_BIN)/$(APP_NAME) or add $(GOPATH_BIN) to your PATH."; \
+		$(MAKE) dirs; \
 	fi
 	@echo ""
-	@$(MAKE) dirs
-	@$(MAKE) systemd
-
 ## Clean local build artifacts (never touches installed binary)
 
 clean:
