@@ -1,0 +1,20 @@
+# vProx minimal runtime source manifest
+# Purpose: canonical include set for lean build/runtime packaging.
+#
+# Include these files/directories when producing a minimal runtime source bundle.
+# Paths are repo-relative.
+
+.env.example
+LICENSE
+README.md
+Makefile
+go.mod
+go.sum
+vprox.service.template
+
+cmd/
+internal/
+chains/chain.sample.toml
+
+# Optional (include if you want geolocation out-of-the-box):
+# ip2l/ip2location.mmdb
