@@ -19,7 +19,7 @@ jobs:
 
     steps:
       - name: Verify required reviewer approval
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         env:
           REQUIRED_REVIEWERS: jarvisBoss
         with:
