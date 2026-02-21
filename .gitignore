@@ -62,6 +62,10 @@ tmp/
 scripts/harden_repo_settings.sh
 scripts/set_required_checks.sh
 
+# Local collaboration and agent artifacts (private/local-only)
+# Note: `.github/agents/` is repo configuration for Copilot agents and should be tracked.
+/agents/
+
 # Environment files
 .env
 .env.*
@@ -75,6 +79,4 @@ scripts/set_required_checks.sh
 *~
 .DS_Store
 
-# Agent/collab files (local only, not for distribution)
-agents/
 /docs/
