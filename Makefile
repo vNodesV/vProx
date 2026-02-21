@@ -56,7 +56,7 @@ dirs:
 	@for dir in $(DIR_LIST); do \
 		if [[ ! -d "$$dir" ]]; then \
 			echo "Creating $$dir..."; \
-			@echo "✓ Directory structure created"
+			@echo "✓ Directory structure created" \
 		else \
 			echo "✓ $$dir already exists"; \
 		fi; \
