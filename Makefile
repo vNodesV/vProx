@@ -52,11 +52,11 @@ validate-go:
 ## Create required folders under $HOME/.vProx
 
 dirs:
-	@echo "Creating directory structure..."
+	@echo "Inspecting directory structure..."
 	@for dir in $(DIR_LIST); do \
 		if [[ ! -d "$$dir" ]]; then \
-			echo "Creating $$dir..."; \
-			@echo "✓ Directory structure created" \
+			mkdir -p "$$dir"; \
+			echo "✓ $$dir created..."; \
 		else \
 			echo "✓ $$dir already exists"; \
 		fi; \
