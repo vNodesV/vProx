@@ -30,8 +30,8 @@ GOPATH_BIN := $(GOPATH)/bin
 
 .PHONY: all validate-go dirs geo config build install clean systemd env
 
-all: validate-go dirs geo config env install
-install: validate-go dirs geo config env install
+all: install
+install: validate-go dirs geo config env
 
 ## Validate Go environment
 
