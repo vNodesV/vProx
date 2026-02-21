@@ -15,7 +15,7 @@ jobs:
   required-reviewer-approval:
     name: Required reviewer approved
     runs-on: ubuntu-latest
-    if: github.event.pull_request.base.ref == 'main'
+    if: github.base_ref == 'main'
 
     steps:
       - name: Verify required reviewer approval
