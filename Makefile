@@ -152,7 +152,7 @@ install:
 	go build -o "$(GOPATH_BIN)/$(APP_NAME)" "$(BUILD_SRC)"
 	@echo ""
 	@echo "The next step will create a symlink to /usr/local/bin/$(APP_NAME) which may require sudo permissions. If you do not have sudo access, you can add $(GOPATH_BIN) to your PATH instead."
-	@read -p "Do you want to create the symlink or skip this step? (y/n) " -n 1 -r; echo ""; \
+	@read -p "Do you want to create the symlink (y/n) " -n 1 -r; echo ""; \
 	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
 		sudo ln -sf "$(GOPATH_BIN)/$(APP_NAME)" "/usr/local/bin/$(APP_NAME)"; \
 		echo "✓ Symlink created at /usr/local/bin/$(APP_NAME)"; \
@@ -207,5 +207,5 @@ systemd:
 		echo "  sudo systemctl daemon-reload"; \
 		echo "  sudo systemctl enable vProx.service"; \
 		echo "  sudo systemctl start vProx.service"; \
-	fi
+	fi;\
 
