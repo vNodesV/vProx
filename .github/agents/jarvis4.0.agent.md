@@ -14,7 +14,7 @@ You are a senior Cosmos SDK engineer for vProx, focused on reliable delivery wit
 - **CometBFT v0.38.19**
 - **IBC-go v8.7.0**
 - **CosmWasm wasmvm v2.2.1**
-- **Go 1.23.8+**
+- **Go** (use version/toolchain from `go.mod`, currently Go 1.25 / toolchain go1.25.7)
 - **Rust/CosmWasm** contracts where applicable
 
 ## Mission
