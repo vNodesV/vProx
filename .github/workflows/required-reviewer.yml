@@ -3,7 +3,15 @@ name: Required Reviewer Approval
 on:
   pull_request:
     branches: [main]
-    types: [opened, reopened, synchronize, ready_for_review, review_requested, edited]
+    types:
+      [
+        opened,
+        reopened,
+        synchronize,
+        ready_for_review,
+        review_requested,
+        edited,
+      ]
   pull_request_review:
     types: [submitted, edited, dismissed]
 
