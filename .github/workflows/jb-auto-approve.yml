@@ -24,7 +24,7 @@ jobs:
       - name: Approve PR when all required checks are green
         uses: actions/github-script@v8
         with:
-          github-token: ${{ secrets.JB_REVIEW_TOKEN }}
+          github-token: ${{ github.token }}
           script: |
             const owner = context.repo.owner;
             const repo = context.repo.repo;
