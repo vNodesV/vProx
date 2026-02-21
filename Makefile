@@ -15,6 +15,7 @@ INTERNAL_DIR := $(VPROX_HOME)/internal
 ARCHIVE_DIR := $(LOG_DIR)/archives
 SERVICE_DIR := $(VPROX_HOME)/service
 SERVICE_PATH := $(SERVICE_DIR)/vProx.service
+DIR_LIST := $(DATA_DIR) $(GEO_DIR) $(LOG_DIR) $(CFG_DIR) $(CHAINS_DIR) $(INTERNAL_DIR) $(ARCHIVE_DIR) $(SERVICE_DIR)
 
 # GeoLocation database
 GEO_DB_SRC := ip2l/ip2location.mmdb
@@ -29,7 +30,8 @@ GOPATH_BIN := $(GOPATH)/bin
 
 .PHONY: all validate-go dirs geo config build install clean systemd env
 
-all: validate-go dirs geo config env install
+all: install
+install: validate-go dirs geo config env
 
 ## Validate Go environment
 
@@ -50,15 +52,16 @@ validate-go:
 ## Create required folders under $HOME/.vProx
 
 dirs:
-	@echo "Creating directory structure..."
-	mkdir -p "$(DATA_DIR)"
-	mkdir -p "$(GEO_DIR)"
-	mkdir -p "$(LOG_DIR)"
-	mkdir -p "$(ARCHIVE_DIR)"
-	mkdir -p "$(CFG_DIR)"
-	mkdir -p "$(CHAINS_DIR)"
-	mkdir -p "$(INTERNAL_DIR)"
-	@echo "✓ Directory structure created"
+	@echo "Inspecting directory structure..."
+	@for dir in $(DIR_LIST); do \
+		if [[ ! -d "$$dir" ]]; then \
+			mkdir -p "$$dir"; \
+			echo "✓ $$dir created..."; \
+		else \
+			echo "✓ $$dir already exists"; \
+		fi; \
+	done
+	
 
 ## Install GEO DB automatically (GeoLite2 is free to redistribute)
 
@@ -145,13 +148,21 @@ build:
 
 install:
 	@echo "Installing $(APP_NAME)..."
-	mkdir -p "$(GOPATH_BIN)"
+# 	mkdir -p "$(GOPATH_BIN)"
 	go build -o "$(GOPATH_BIN)/$(APP_NAME)" "$(BUILD_SRC)"
-	sudo ln -sf "$(GOPATH_BIN)/$(APP_NAME)" "/usr/local/bin/$(APP_NAME)"
-	@echo "✓ Installed to $(GOPATH_BIN)/$(APP_NAME)"
-	@echo "✓ Symlinked to /usr/local/bin/$(APP_NAME)"
-	@$(MAKE) systemd
-
+	@echo ""
+	@echo "The next step will create a symlink to /usr/local/bin/$(APP_NAME) which may require sudo permissions. If you do not have sudo access, you can add $(GOPATH_BIN) to your PATH instead."
+	@read -p "Do you want to create the symlink (y/n) " -n 1 -r; echo ""; \
+	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
+		sudo ln -sf "$(GOPATH_BIN)/$(APP_NAME)" "/usr/local/bin/$(APP_NAME)"; \
+		echo "✓ Symlink created at /usr/local/bin/$(APP_NAME)"; \
+		$(MAKE) dirs; \
+		$(MAKE) systemd; \
+	else \
+		echo "✓ Skipped symlink creation. You can run $(APP_NAME) using $(GOPATH_BIN)/$(APP_NAME) or add $(GOPATH_BIN) to your PATH."; \
+		$(MAKE) dirs; \
+	fi
+	@echo ""
 ## Clean local build artifacts (never touches installed binary)
 
 clean:
@@ -182,12 +193,22 @@ systemd:
 	fi; \
 	rm -f "$$TMP_RENDERED"
 	@echo ""
-	@echo "To install this unit on a systemd host, run:"
-	@echo "  sudo cp $(SERVICE_PATH) /etc/systemd/system/vProx.service"
-	@echo "  sudo systemctl daemon-reload"
-	@echo "  sudo systemctl enable vProx.service"
-	@echo "  sudo systemctl start vProx.service"
-	@echo ""
-	@echo "To check status:"
-	@echo "  sudo systemctl status vProx.service"
+	@echo "The next step allows you to easily install the generated service file on a systemd host and sudo permission is required.  If you choose not to do this now, you can manually copy $(SERVICE_PATH) to /etc/systemd/system/ and enable/start the service later."
+	@read -p "Do you want to install the systemd service now? (y/n) " -n 1 -r; echo ""; \
+	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
+		if sudo cp "$(SERVICE_PATH)" "/etc/systemd/system/vProx.service" && \
+		   sudo systemctl daemon-reload && \
+		   sudo systemctl enable vProx.service && \
+		   sudo systemctl start vProx.service; then \
+			echo "✓ vProx.service installed and started"; \
+		else \
+			echo "✗ Failed to install or start vProx.service. Please check 'sudo systemctl status vProx.service' for details."; \
+		fi; \
+	else \
+		echo "✓ Skipped systemd service installation. You can manually copy $(SERVICE_PATH) to /etc/systemd/system/ and enable/start the service later using the commands below."; \
+		echo "  sudo cp $(SERVICE_PATH) /etc/systemd/system/vProx.service"; \
+		echo "  sudo systemctl daemon-reload"; \
+		echo "  sudo systemctl enable vProx.service"; \
+		echo "  sudo systemctl start vProx.service"; \
+	fi;\
 
