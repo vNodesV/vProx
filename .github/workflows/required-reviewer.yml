@@ -50,13 +50,16 @@ jobs:
               page += 1;
             }
 
-            const latestStateByUser = new Map();
+            const latestReviewByUser = new Map();
             for (const review of allReviews) {
-              if (!review.user || !review.user.login) continue;
-              latestStateByUser.set(review.user.login, review.state);
+              if (!review.user || !review.user.login || !review.submitted_at) continue;
+              const existing = latestReviewByUser.get(review.user.login);
+              if (!existing || new Date(review.submitted_at) > new Date(existing.submitted_at)) {
+                latestReviewByUser.set(review.user.login, review);
+              }
             }
 
-            const requiredState = latestStateByUser.get(requiredReviewer);
+            const requiredState = latestReviewByUser.get(requiredReviewer)?.state;
 
             if (requiredState !== 'APPROVED') {
               core.setFailed(
