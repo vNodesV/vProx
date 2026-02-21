@@ -60,6 +60,7 @@ tmp/
 
 # Local admin helper scripts (do not commit)
 scripts/harden_repo_settings.sh
+scripts/set_required_checks.sh
 
 # Environment files
 .env
