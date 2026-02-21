@@ -21,13 +21,16 @@ jobs:
       - name: Verify required reviewer approval
         uses: actions/github-script@v7
         env:
-          REQUIRED_REVIEWER: vNodesV
+          REQUIRED_REVIEWERS: jarvisBoss
         with:
           script: |
             const owner = context.repo.owner;
             const repo = context.repo.repo;
-            const pull_number = context.issue.number;
-            const requiredReviewer = process.env.REQUIRED_REVIEWER;
+            const pull_number = context.payload.pull_request.number;
+            const requiredReviewers = (process.env.REQUIRED_REVIEWERS || '')
+              .split(',')
+              .map((s) => s.trim())
+              .filter(Boolean);
 
             let allReviews = [];
             let page = 1;
@@ -59,13 +62,23 @@ jobs:
               }
             }
 
-            const requiredState = latestReviewByUser.get(requiredReviewer)?.state;
+            const latestStateByUser = new Map();
+            for (const [login, review] of latestReviewByUser.entries()) {
+              latestStateByUser.set(login, review.state);
+            }
 
-            if (requiredState !== 'APPROVED') {
+            const approvedReviewer = requiredReviewers.find(
+              (login) => latestStateByUser.get(login) === 'APPROVED'
+            );
+
+            if (!approvedReviewer) {
+              const states = requiredReviewers
+                .map((login) => `${login}:${latestStateByUser.get(login) || 'none'}`)
+                .join(', ');
               core.setFailed(
-                `PR must have an active APPROVED review from @${requiredReviewer}. Current state: ${requiredState || 'none'}`
+                `PR must have an active APPROVED review from one of: ${requiredReviewers.map((u) => '@' + u).join(', ')}. Current states: ${states}`
               );
               return;
             }
 
-            core.info(`Verified APPROVED review from @${requiredReviewer}.`);
+            core.info(`Verified APPROVED review from @${approvedReviewer}.`);
