@@ -3,13 +3,14 @@
 #
 # Include these files/directories when producing a minimal runtime source bundle.
 # Paths are repo-relative.
-#
-# NOTE: Geolocation support is NOT included in the default minimal set.
-# See the optional section at the bottom of this file if you need it.
 
 .env.example
 LICENSE
 README.md
+CLI_FLAGS_GUIDE.md
+FLAGS.md
+MIGRATION.md
+MODULES.md
 Makefile
 go.mod
 go.sum
@@ -19,6 +20,5 @@ cmd/
 internal/
 chains/chain.sample.toml
 
-# Optional – NOT part of the default minimal set.
-# Uncomment to include geolocation support out-of-the-box:
+# Optional (include if you want geolocation out-of-the-box):
 # ip2l/ip2location.mmdb
