@@ -195,6 +195,18 @@ func defaultLogPath() string {
 	return "logs/rate-limit.jsonl"
 }
 
+// maskIP redacts the host-specific portion of an IP for debug/non-audit logs.
+// IPv4: "1.2.3.4" → "1.2.3.x"   IPv6: "2001:db8::1" → "2001:db8::x"
+func maskIP(ip string) string {
+	if i := strings.LastIndex(ip, "."); i != -1 {
+		return ip[:i+1] + "x"
+	}
+	if i := strings.LastIndex(ip, ":"); i != -1 {
+		return ip[:i+1] + "x"
+	}
+	return "[masked]"
+}
+
 // ----- status context plumbing -----
 type ctxKey int
 
@@ -232,7 +244,7 @@ func (l *IPLimiter) Middleware(next http.Handler) http.Handler {
 				"level":        "DEBUG",
 				"event":        "limiter-debug",
 				"request_id":   requestID,
-				"ip":           ip,
+				"ip":           maskIP(ip),
 				"has_override": l.hasOverride(ip),
 				"path":         r.URL.Path,
 				"method":       r.Method,
