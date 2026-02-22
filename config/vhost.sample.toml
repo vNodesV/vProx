@@ -1,0 +1,184 @@
+# vProx WebServer Module — Virtual Host Configuration
+# File: ~/.vProx/config/vhost.toml
+#
+# This file replaces Apache2/nginx as the TLS terminator and web server for
+# vProx-managed endpoints. vProx reads this file at startup; the file is
+# optional — if absent, no HTTPS/static server is started.
+#
+# Listeners
+# ─────────
+# [server] configures the two global listeners:
+#   http_addr  (:80)  — HTTP-only; issues HTTP→HTTPS 301 redirect for all vhosts
+#   https_addr (:443) — TLS; serves all [[vhost]] entries via SNI
+#
+# Each [[vhost]] block is either:
+#   • Reverse proxy   — set backend = "http://..."
+#   • Static files    — set root = "/path/to/webroot"
+#   • Both            — proxy first, static fallback on 404
+#
+# TLS certificates (Let's Encrypt)
+# ─────────────────────────────────
+# Set [vhost.tls] cert and key to the Let's Encrypt paths.
+# vProx selects the right cert per connection using SNI — no port-per-cert needed.
+# Cert hot-reload: send SIGHUP to vProx (planned v1.0.3).
+#
+# Migration from Apache2
+# ──────────────────────
+# Before: Internet → Apache2 (:443 TLS) → vProx (:3000) → Cosmos node
+# After:  Internet → vProx (:443 TLS)              → Cosmos node
+
+# ── Global listener addresses ──────────────────────────────────────────────────
+[server]
+  http_addr  = ":80"   # HTTP redirect listener (→ HTTPS 301)
+  https_addr = ":443"  # HTTPS/TLS listener (SNI, HTTP/2)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PROXY VHOSTS  (backend = vProx chain engine or direct node)
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ── Elys — path-based (srvs subdomain) ────────────────────────────────────────
+[[vhost]]
+  name    = "elys-srvs"
+  host    = "elys.srvs.vnodesv.net"
+  aliases = ["rest.elys.srvs.vnodesv.net", "rpc.elys.srvs.vnodesv.net"]
+  backend = "http://127.0.0.1:3000"   # vProx proxy engine (chain handler)
+  compress = true
+  proxy_timeout_sec = 30
+  http_redirect     = true
+
+  [vhost.tls]
+    cert = "/etc/letsencrypt/live/elys.srvs.vnodesv.net/fullchain.pem"
+    key  = "/etc/letsencrypt/live/elys.srvs.vnodesv.net/privkey.pem"
+
+  [vhost.cors]
+    enabled    = true
+    origins    = ["*"]
+    methods    = ["GET", "POST", "HEAD"]
+    headers    = ["Origin", "Accept", "Content-Type", "X-Requested-With", "X-Server-Time"]
+    max_age_sec = 600
+
+  [vhost.headers]
+    strip  = ["ETag", "Last-Modified", "X-Powered-By", "Server"]
+    inject = { "X-Forwarded-Proto" = "https" }
+
+
+# ── Cheqd — path-based (srvs subdomain) ───────────────────────────────────────
+[[vhost]]
+  name    = "cheqd-srvs"
+  host    = "cheqd.srvs.vnodesv.net"
+  backend = "http://127.0.0.1:3000"
+  compress = true
+  proxy_timeout_sec = 30
+  http_redirect     = true
+
+  [vhost.tls]
+    cert = "/etc/letsencrypt/live/cheqd.srvs.vnodesv.net/fullchain.pem"
+    key  = "/etc/letsencrypt/live/cheqd.srvs.vnodesv.net/privkey.pem"
+
+  [vhost.cors]
+    enabled = true
+    origins = ["*"]
+    methods = ["GET", "POST", "HEAD"]
+    headers = ["Origin", "Accept", "Content-Type", "X-Requested-With", "X-Server-Time"]
+
+  [vhost.headers]
+    strip  = ["ETag"]
+    inject = { "X-Forwarded-Proto" = "https" }
+
+
+# ── Cheqd WebSocket — dedicated WS subdomain ──────────────────────────────────
+[[vhost]]
+  name    = "cheqd-ws"
+  host    = "ws.cheqd.srvs.vnodesv.net"
+  backend = "http://127.0.0.1:3000"
+  compress = false          # WS traffic; compression handled at WS layer
+  proxy_timeout_sec = 3600
+  http_redirect     = true
+
+  [vhost.tls]
+    cert = "/etc/letsencrypt/live/ws.cheqd.srvs.vnodesv.net/fullchain.pem"
+    key  = "/etc/letsencrypt/live/ws.cheqd.srvs.vnodesv.net/privkey.pem"
+
+  [vhost.headers]
+    inject = { "X-Forwarded-Proto" = "https" }
+
+
+# ── Cronos — path-based ────────────────────────────────────────────────────────
+[[vhost]]
+  name    = "cronos-srvs"
+  host    = "cronos.srvs.vnodesv.net"
+  aliases = ["api.cronos.srvs.vnodesv.net", "rpc.cronos.srvs.vnodesv.net"]
+  backend = "http://127.0.0.1:3000"
+  compress = true
+  proxy_timeout_sec = 30
+  http_redirect     = true
+
+  [vhost.tls]
+    cert = "/etc/letsencrypt/live/cronos.srvs.vnodesv.net/fullchain.pem"
+    key  = "/etc/letsencrypt/live/cronos.srvs.vnodesv.net/privkey.pem"
+
+  [vhost.cors]
+    enabled = true
+    origins = ["*"]
+    methods = ["GET", "POST", "HEAD"]
+    headers = ["Origin", "Accept", "Content-Type", "X-Requested-With", "X-Server-Time"]
+    max_age_sec = 600
+
+  [vhost.headers]
+    strip  = ["ETag", "Last-Modified", "X-Powered-By", "Server"]
+    inject = { "X-Forwarded-Proto" = "https" }
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# STATIC VHOST  (serves /var/www/html — the vnodesv.net website)
+# ══════════════════════════════════════════════════════════════════════════════
+
+[[vhost]]
+  name    = "website"
+  host    = "vnodesv.net"
+  aliases = ["www.vnodesv.net"]
+  root    = "/var/www/html"
+  index   = "index.html"
+  compress = true
+  http_redirect = true
+
+  [vhost.tls]
+    cert = "/etc/letsencrypt/live/vnodesv.net/fullchain.pem"
+    key  = "/etc/letsencrypt/live/vnodesv.net/privkey.pem"
+
+  [vhost.security]
+    hsts            = true
+    x_frame_options = "SAMEORIGIN"
+    x_content_type  = true
+    csp             = "default-src 'self'; frame-ancestors 'none';"
+
+  [vhost.headers]
+    strip = ["X-Powered-By", "Server"]
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TEMPLATE  — copy and customise for additional chains
+# ══════════════════════════════════════════════════════════════════════════════
+# [[vhost]]
+#   name    = "my-chain"
+#   host    = "my-chain.srvs.example.com"
+#   aliases = []
+#   backend = "http://127.0.0.1:3000"   # or a direct node: "http://10.0.0.x:26657"
+#   compress = true
+#   proxy_timeout_sec = 30
+#   http_redirect = true
+#
+#   [vhost.tls]
+#     cert = "/etc/letsencrypt/live/my-chain.srvs.example.com/fullchain.pem"
+#     key  = "/etc/letsencrypt/live/my-chain.srvs.example.com/privkey.pem"
+#
+#   [vhost.cors]
+#     enabled = true
+#     origins = ["*"]
+#     methods = ["GET", "POST", "HEAD"]
+#     headers = ["Origin", "Accept", "Content-Type", "X-Requested-With", "X-Server-Time"]
+#
+#   [vhost.headers]
+#     strip  = ["ETag", "Last-Modified", "X-Powered-By", "Server"]
+#     inject = { "X-Forwarded-Proto" = "https" }

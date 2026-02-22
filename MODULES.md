@@ -339,8 +339,39 @@ vProx backup --reset_count            # Backup + reset access counters
 
 **Rate limit overrides (CLI, override .env):**
 
-```bash
---rps 50 --burst 200
---disable-auto
---auto-rps 2 --auto-burst 2
+## 10) Webserver (`internal/webserver`)
+
+Opt-in embedded virtual-host HTTPS server. Enabled by placing `vhost.toml` in the config directory.
+
+### Key capabilities
+
+| Feature | Description |
+|---------|-------------|
+| SNI-based TLS | Single `:443` listener; certificate selected per-hostname via `GetCertificate` |
+| HTTP/2 | Auto-enabled by `net/http` when TLS active |
+| CORS origin reflection | Exact-match origin list; non-wildcard configs add `Vary: Origin` |
+| Gzip | `text/*` + `application/json`; status code buffered to prevent premature header commit |
+| Proxy + static fallback | Backend 404 → serve from `root` static dir; proxy headers cleared before fallback |
+| Graceful shutdown | All listeners (`:80`, `:443`) wired into the 10-second global shutdown |
+
+### Minimal vhost.toml
+
+```toml
+[server]
+http_addr  = ":80"
+https_addr = ":443"
+
+[[vhosts]]
+name    = "www"
+host    = "example.com"
+root    = "/var/www/html"
+compress = true
+
+[vhosts.tls]
+cert = "/etc/ssl/certs/example.com.crt"
+key  = "/etc/ssl/private/example.com.key"
 ```
+
+See `config/vhost.sample.toml` for the full annotated reference and `INSTALLATION.md §10` for the complete vhost.toml guide.
+
+
