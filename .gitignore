@@ -87,3 +87,6 @@ scripts/*.*
 .DS_Store
 
 
+
+# GeoLocation database — keep compressed .gz, ignore uncompressed
+ip2l/ip2location.mmdb

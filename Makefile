@@ -18,7 +18,7 @@ SERVICE_PATH := $(SERVICE_DIR)/vProx.service
 DIR_LIST := $(DATA_DIR) $(GEO_DIR) $(LOG_DIR) $(CFG_DIR) $(CHAINS_DIR) $(INTERNAL_DIR) $(ARCHIVE_DIR) $(SERVICE_DIR)
 
 # GeoLocation database
-GEO_DB_SRC := ip2l/ip2location.mmdb
+GEO_DB_SRC := ip2l/ip2location.mmdb.gz
 GEO_DB_DST := $(GEO_DIR)/ip2location.mmdb
 
 ENV_FILE := $(VPROX_HOME)/.env
@@ -63,7 +63,7 @@ dirs:
 	done
 	
 
-## Install GEO DB automatically (GeoLite2 is free to redistribute)
+## Install GEO DB — decompress from bundled .gz
 
 geo:
 	@echo "Installing GeoLocation database..."
@@ -71,8 +71,8 @@ geo:
 		echo "WARNING: GEO DB not found at $(GEO_DB_SRC)"; \
 		echo "Geolocation features will be disabled until a database is provided."; \
 	else \
-		cp "$(GEO_DB_SRC)" "$(GEO_DB_DST)"; \
-		echo "✓ Copied GEO DB to $(GEO_DB_DST)"; \
+		gunzip -c "$(GEO_DB_SRC)" > "$(GEO_DB_DST)"; \
+		echo "✓ Decompressed GEO DB to $(GEO_DB_DST)"; \
 	fi
 
 ## Create .env if missing
