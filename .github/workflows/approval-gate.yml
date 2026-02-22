@@ -1,0 +1,148 @@
+name: Approval Gate
+
+on:
+  issue_comment:
+    types: [created]
+  workflow_run:
+    workflows:
+      - CI
+      - Dependency Review
+      - CodeQL
+    types:
+      - completed
+
+permissions:
+  contents: read
+  checks: read
+  pull-requests: write
+
+jobs:
+  auto-approve-on-comment:
+    name: Auto-approve on /approve comment
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'issue_comment' &&
+      github.event.issue.pull_request &&
+      contains(github.event.comment.body, '/approve')
+
+    steps:
+      - name: Check if commenter is code owner
+        id: check_owner
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const pull_number = context.issue.number;
+            const commenter = context.actor;
+
+            // Only vNodesV can approve
+            if (commenter !== 'vNodesV') {
+              core.setFailed(`Only @vNodesV can approve PRs. @${commenter} is not authorized.`);
+              return;
+            }
+
+            // Verify all required checks are green
+            const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number });
+
+            const requiredChecks = [
+              'Go build/test/lint',
+              'Dependency Review',
+              'Analyze (Go)',
+            ];
+
+            const { data: checkRunsData } = await github.rest.checks.listForRef({
+              owner,
+              repo,
+              ref: pr.head.sha,
+              per_page: 100,
+            });
+
+            const checkConclusion = new Map(
+              (checkRunsData.check_runs || []).map((c) => [c.name, c.conclusion])
+            );
+
+            const notGreen = requiredChecks.filter((name) => checkConclusion.get(name) !== 'success');
+            if (notGreen.length > 0) {
+              core.setFailed(`Cannot approve: required checks not passing: ${notGreen.join(', ')}`);
+              return;
+            }
+
+            core.setOutput('approved', 'true');
+
+      - name: Submit approval review
+        if: steps.check_owner.outputs.approved == 'true'
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const pull_number = context.issue.number;
+
+            await github.rest.pulls.createReview({
+              owner,
+              repo,
+              pull_number,
+              event: 'APPROVE',
+              body: 'Approved via `/approve` command with all checks passing.',
+            });
+
+            core.info(`Approved PR #${pull_number} on behalf of @vNodesV.`);
+
+  check-approvals-on-workflow-complete:
+    name: Verify approval after checks complete
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success'
+
+    steps:
+      - name: Remind to approve if not yet approved
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            const prs = context.payload.workflow_run.pull_requests || [];
+            if (prs.length === 0) {
+              core.info('No pull request associated with workflow_run.');
+              return;
+            }
+
+            const pull_number = prs[0].number;
+            const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number });
+
+            if (pr.base.ref !== 'main') {
+              core.info(`PR #${pull_number} targets ${pr.base.ref}, not main.`);
+              return;
+            }
+
+            if (pr.state !== 'open' || pr.draft) {
+              core.info(`PR #${pull_number} is not open or is a draft.`);
+              return;
+            }
+
+            // Check if vNodesV has already approved
+            const { data: reviews } = await github.rest.pulls.listReviews({
+              owner,
+              repo,
+              pull_number,
+              per_page: 100,
+            });
+
+            const approved = reviews.some(
+              (r) => r.user && r.user.login === 'vNodesV' && r.state === 'APPROVED'
+            );
+
+            if (!approved) {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: pull_number,
+                body: '@vNodesV All checks passed. Ready for approval. Comment `/approve` to approve and merge.',
+              });
+              core.info(`Reminded @vNodesV to approve PR #${pull_number}.`);
+            }
