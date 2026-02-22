@@ -7,6 +7,10 @@
 .env.example
 LICENSE
 README.md
+CLI_FLAGS_GUIDE.md
+FLAGS.md
+MIGRATION.md
+MODULES.md
 Makefile
 go.mod
 go.sum
