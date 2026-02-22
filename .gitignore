@@ -66,7 +66,7 @@ scripts/set_required_checks.sh
 # Note: `.github/agents/` is repo configuration for Copilot agents and should be tracked.
 agents/*.*
 agents/projects/*.*
-docs/*.*
+docs/
 .github/agents/*.*
 .github/CODEOWNERS
 .github/dependabot.yml
