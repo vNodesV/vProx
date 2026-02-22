@@ -13,7 +13,6 @@ scripts/minimal-runtime.lst -export-ignore
 MIGRATION.md export-ignore
 MODULES.md export-ignore
 FLAGS.md export-ignore
-CLI_FLAGS_GUIDE.md export-ignore
 
 # CI / repository governance metadata
 .github/workflows/ export-ignore
