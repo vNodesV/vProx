@@ -1,4 +1,4 @@
-# vProx Migration Notes - Directory Structure Update
+# Upgrade Guide: v0.x → v1.x
 
 ## Summary of Changes
 

@@ -67,6 +67,7 @@ scripts/set_required_checks.sh
 agents/*.*
 agents/projects/*.*
 docs/
+!docs/UPGRADE.md
 .github/agents/*.*
 .github/CODEOWNERS
 .github/dependabot.yml
