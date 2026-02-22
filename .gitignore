@@ -64,11 +64,18 @@ scripts/set_required_checks.sh
 
 # Local collaboration and agent artifacts (private/local-only)
 # Note: `.github/agents/` is repo configuration for Copilot agents and should be tracked.
-/agents/
+agents/*.*
+agents/projects/*.*
+docs/*.*
+.github/agents/*.*
+.github/CODEOWNERS
+.github/dependabot.yml
+AGENT_DIRECTIVE.md
+doc.go
+scripts/*.*
 
 # Environment files
 .env
-.env.*
 !.env.example
 
 # IDE and editor files
@@ -79,4 +86,4 @@ scripts/set_required_checks.sh
 *~
 .DS_Store
 
-/docs/
+
