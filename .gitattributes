@@ -1,0 +1,23 @@
+# vProx archive export policy
+# Files marked export-ignore are excluded from `git archive` outputs.
+
+# Local/agent collaboration artifacts
+AGENT_DIRECTIVE.md export-ignore
+agents/ export-ignore
+.github/agents/ export-ignore
+
+# Operational notes not required for runtime
+docs/ export-ignore
+scripts/ export-ignore
+scripts/minimal-runtime.lst -export-ignore
+MIGRATION.md export-ignore
+MODULES.md export-ignore
+FLAGS.md export-ignore
+
+# CI / repository governance metadata
+.github/workflows/ export-ignore
+.github/dependabot.yml export-ignore
+.github/CODEOWNERS export-ignore
+
+# Local editor metadata
+.vscode/ export-ignore
