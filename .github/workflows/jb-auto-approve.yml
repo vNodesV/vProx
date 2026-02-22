@@ -9,6 +9,8 @@ on:
     types:
       - completed
 
+env:
+  REQUIRED_REVIEWERS: jarvisBoss,github-actions[bot],vNodesV
 permissions:
   contents: read
   checks: read
