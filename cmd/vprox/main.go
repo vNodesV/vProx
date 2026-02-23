@@ -1614,7 +1614,7 @@ func main() {
 			for _, m := range wsMounts {
 				for _, host := range m.Hosts {
 					h := m.Handler
-					wsMux.Handle(host+"/", http.StripPrefix("", h))
+					wsMux.Handle(host+"/", h)
 				}
 			}
 			httpsSrv := &http.Server{
