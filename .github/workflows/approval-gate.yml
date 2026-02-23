@@ -36,9 +36,10 @@ jobs:
             const pull_number = context.issue.number;
             const commenter = context.actor;
 
-            // Only vNodesV can approve
-            if (commenter !== 'vNodesV') {
-              core.setFailed(`Only @vNodesV can approve PRs. @${commenter} is not authorized.`);
+            // Only authorised users can approve
+            const authorisedApprovers = ['vNodesV', 'copilot'];
+            if (!authorisedApprovers.includes(commenter)) {
+              core.setFailed(`Only ${authorisedApprovers.map(u => '@' + u).join(', ')} can approve PRs. @${commenter} is not authorized.`);
               return;
             }
 
