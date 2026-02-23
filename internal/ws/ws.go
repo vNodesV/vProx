@@ -106,22 +106,13 @@ func HandleWS(d Deps) http.HandlerFunc {
 			return nil
 		})
 
-		// Hard lifetime (optional)
-		var hardTimer *time.Timer
+		// Hard lifetime (optional): signal via channel instead of closing
+		// connections directly from the timer goroutine (gorilla WS is not
+		// concurrent-safe for Close).
+		hardDone := make(chan struct{})
 		if hard > 0 {
-			hardTimer = time.AfterFunc(hard, func() {
-				_ = cConn.WriteControl(
-					websocket.CloseMessage,
-					websocket.FormatCloseMessage(websocket.CloseNormalClosure, "max lifetime reached"),
-					time.Now().Add(2*time.Second),
-				)
-				_ = bConn.WriteControl(
-					websocket.CloseMessage,
-					websocket.FormatCloseMessage(websocket.CloseNormalClosure, "max lifetime reached"),
-					time.Now().Add(2*time.Second),
-				)
-				_ = cConn.Close()
-				_ = bConn.Close()
+			hardTimer := time.AfterFunc(hard, func() {
+				close(hardDone)
 			})
 			defer hardTimer.Stop()
 		}
@@ -182,7 +173,7 @@ func HandleWS(d Deps) http.HandlerFunc {
 			select {
 			case finalErr = <-errc:
 				cause = classifyWSCause(finalErr)
-			case <-time.After(hard):
+			case <-hardDone:
 				cause = "hard_timeout"
 			}
 		} else {
@@ -190,6 +181,10 @@ func HandleWS(d Deps) http.HandlerFunc {
 			cause = classifyWSCause(finalErr)
 		}
 
+		// Send close frames before closing (best-effort, non-blocking).
+		closeMsg := websocket.FormatCloseMessage(websocket.CloseNormalClosure, cause)
+		_ = cConn.WriteControl(websocket.CloseMessage, closeMsg, time.Now().Add(2*time.Second))
+		_ = bConn.WriteControl(websocket.CloseMessage, closeMsg, time.Now().Add(2*time.Second))
 		_ = cConn.Close()
 		_ = bConn.Close()
 		wg.Wait()

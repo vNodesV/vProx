@@ -133,6 +133,7 @@ var (
 	// logger state
 	srcCounter   = make(map[string]int64)
 	counterMutex sync.Mutex
+	counterDirty bool // true when in-memory counts differ from disk
 
 	chainLoggerMu sync.Mutex
 	chainLoggers  = make(map[string]*log.Logger)
@@ -426,32 +427,57 @@ func loadChains(dir string) error {
 
 // --------------------- LINK REWRITE & BANNERS ---------------------
 
+// rewriteRegexes holds pre-compiled patterns for a given (IP, host) pair.
+type rewriteRegexes struct {
+	rpcIP, rpcHost   *regexp.Regexp
+	restIP, restHost *regexp.Regexp
+}
+
+var (
+	rewriteCacheMu sync.RWMutex
+	rewriteCache   = make(map[string]*rewriteRegexes) // key: "ip|host"
+)
+
+func getRewriteRegexes(internalIP, baseHost string) *rewriteRegexes {
+	key := internalIP + "|" + baseHost
+	rewriteCacheMu.RLock()
+	if r, ok := rewriteCache[key]; ok {
+		rewriteCacheMu.RUnlock()
+		return r
+	}
+	rewriteCacheMu.RUnlock()
+
+	r := &rewriteRegexes{
+		rpcIP:    regexp.MustCompile(`(?i)(https?:)?//` + regexp.QuoteMeta(internalIP) + `:26657/?`),
+		rpcHost:  regexp.MustCompile(`(?i)(https?:)?//` + regexp.QuoteMeta(baseHost) + `:26657/?`),
+		restIP:   regexp.MustCompile(`(?i)(https?:)?//` + regexp.QuoteMeta(internalIP) + `:1317/?`),
+		restHost: regexp.MustCompile(`(?i)(https?:)?//` + regexp.QuoteMeta(baseHost) + `:1317/?`),
+	}
+	rewriteCacheMu.Lock()
+	rewriteCache[key] = r
+	rewriteCacheMu.Unlock()
+	return r
+}
+
 func rewriteLinks(html, routePrefix, internalIP, baseHost, absoluteHost string, rpcVHost bool) string {
+	re := getRewriteRegexes(internalIP, baseHost)
 	switch routePrefix {
 	case rpcPrefix:
-		// Tendermint RPC runs on 26657
 		repl := "/rpc/"
 		if rpcVHost {
-			// On rpc.<base>, links should be root (e.g. /status)
 			repl = "/"
 		}
-		ipPattern := regexp.MustCompile(`(?i)(https?:)?//` + regexp.QuoteMeta(internalIP) + `:26657/?`)
-		hostPattern := regexp.MustCompile(`(?i)(https?:)?//` + regexp.QuoteMeta(baseHost) + `:26657/?`)
-		html = ipPattern.ReplaceAllString(html, repl)
-		html = hostPattern.ReplaceAllString(html, repl)
+		html = re.rpcIP.ReplaceAllString(html, repl)
+		html = re.rpcHost.ReplaceAllString(html, repl)
 
-		// If we’re on an RPC vhost, make sure any stray /rpc/ prefixes are collapsed to /
 		if rpcVHost {
 			html = strings.ReplaceAll(html, `href="/rpc/`, `href="/`)
 			html = strings.ReplaceAll(html, `src="/rpc/`, `src="/`)
 		}
 
 	case restPrefix, apiPrefix:
-		// Cosmos REST typically on 1317
-		ipPattern := regexp.MustCompile(`(?i)(https?:)?//` + regexp.QuoteMeta(internalIP) + `:1317/?`)
-		hostPattern := regexp.MustCompile(`(?i)(https?:)?//` + regexp.QuoteMeta(baseHost) + `:1317/?`)
-		html = ipPattern.ReplaceAllString(html, "/")
-		html = hostPattern.ReplaceAllString(html, "/")
+		html = re.restIP.ReplaceAllString(html, "/")
+		html = re.restHost.ReplaceAllString(html, "/")
 	}
 
 	// Absolute-link policy
@@ -508,15 +534,27 @@ func bannerPath(chain, routePrefix string) string {
 
 func clientIP(r *http.Request) string {
 	if v := strings.TrimSpace(r.Header.Get("CF-Connecting-IP")); v != "" {
-		return v
+		if ip := sanitizeIP(v); ip != "" {
+			return ip
+		}
 	}
 	if v := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); v != "" {
-		return strings.Split(v, ",")[0]
+		if ip := sanitizeIP(strings.TrimSpace(strings.Split(v, ",")[0])); ip != "" {
+			return ip
+		}
 	}
 	if h, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
 		return h
 	}
 	return r.RemoteAddr
+}
+
+// sanitizeIP validates that s is a well-formed IP address to prevent log injection.
+func sanitizeIP(s string) string {
+	if net.ParseIP(s) != nil {
+		return s
+	}
+	return ""
 }
 
 func logRequestSummary(r *http.Request, proxied bool, route string, host string, start time.Time) {
@@ -528,7 +566,7 @@ func logRequestSummary(r *http.Request, proxied bool, route string, host string,
 	counterMutex.Lock()
 	srcCounter[src]++
 	srcQty := srcCounter[src]
-	_ = saveAccessCountsLocked(accessCountsPath)
+	counterDirty = true
 	counterMutex.Unlock()
 
 	// timing + fields
@@ -638,6 +676,43 @@ func resetAccessCounts(path string) error {
 	err := saveAccessCountsLocked(path)
 	counterMutex.Unlock()
 	return err
+}
+
+// accessCountSaveInterval controls how often dirty counters are flushed to disk.
+const accessCountSaveInterval = 1 * time.Second
+
+// startAccessCountTicker runs a background goroutine that flushes dirty
+// counters to disk every accessCountSaveInterval. Returns a stop function
+// that flushes once more and stops the ticker.
+func startAccessCountTicker(path string) func() {
+	ticker := time.NewTicker(accessCountSaveInterval)
+	done := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-ticker.C:
+				counterMutex.Lock()
+				if counterDirty {
+					_ = saveAccessCountsLocked(path)
+					counterDirty = false
+				}
+				counterMutex.Unlock()
+			case <-done:
+				return
+			}
+		}
+	}()
+	return func() {
+		ticker.Stop()
+		close(done)
+		// Final flush
+		counterMutex.Lock()
+		if counterDirty {
+			_ = saveAccessCountsLocked(path)
+			counterDirty = false
+		}
+		counterMutex.Unlock()
+	}
 }
 
 // --------------------- UTILS ---------------------
@@ -1097,16 +1172,16 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			w.Header().Add(k, vv)
 		}
 	}
-	w.WriteHeader(resp.StatusCode)
-
 	// If not modifying, stream raw (keep original encoding)
 	if !willModify {
+		w.WriteHeader(resp.StatusCode)
 		_, _ = io.Copy(w, resp.Body)
 		logRequestSummary(r, true, route, host, start)
 		return
 	}
 
-	// If modifying HTML, transparently handle gzip
+	// If modifying HTML, transparently handle gzip — set up reader
+	// before committing the status code so error paths can still send 500.
 	var reader io.Reader = resp.Body
 	if strings.Contains(resp.Header.Get("Content-Encoding"), "gzip") {
 		gzReader, err := gzip.NewReader(resp.Body)
@@ -1118,6 +1193,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		defer gzReader.Close()
 		reader = gzReader
 	}
+	w.WriteHeader(resp.StatusCode)
 
 	// Decide absolute link policy
 	var absoluteHost string
@@ -1134,8 +1210,8 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Read, rewrite, inject, respond
-	rawHTML, _ := io.ReadAll(reader)
+	// Read, rewrite, inject, respond (limit to 10 MB to prevent OOM)
+	rawHTML, _ := io.ReadAll(io.LimitReader(reader, 10<<20))
 	html := string(rawHTML)
 
 	html = rewriteLinks(html, routePrefix, chain.IP, chain.Host, absoluteHost, isRPCvhost)
@@ -1329,6 +1405,7 @@ func main() {
 	// Geo status line
 	applog.Print("INFO", "geo", "status", applog.F("message", geo.Info()))
 	loadAccessCounts(accessCountsPath)
+	stopCounterTicker := startAccessCountTicker(accessCountsPath)
 
 	// Load configs (TOML only)
 	var loadErr error
@@ -1581,28 +1658,39 @@ func main() {
 	}
 	// wsServers holds webserver listeners so they can be gracefully shut down.
 	var wsServers []*http.Server
+	var wsServer *webserver.WebServer
 	if len(wsCfg.VHosts) > 0 {
-		wsServer := webserver.New(wsCfg)
+		wsServer = webserver.New(wsCfg)
 		wsMounts := wsServer.Mounts()
 
 		// Collect webserver listeners for graceful shutdown alongside the main server.
 
 		// HTTP→HTTPS redirect listener (:80 by default).
-		redirectSrv := &http.Server{
-			Addr:              wsCfg.Server.HTTPAddr,
-			Handler:           webserver.NewRedirectHandler(),
-			ReadHeaderTimeout: 5 * time.Second,
-			ReadTimeout:       10 * time.Second,
-			WriteTimeout:      10 * time.Second,
-			IdleTimeout:       60 * time.Second,
-		}
-		go func() {
-			applog.Print("INFO", "webserver", "redirect_started", applog.F("addr", wsCfg.Server.HTTPAddr))
-			if err := redirectSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				applog.Print("WARN", "webserver", "redirect_error", applog.F("error", err.Error()))
+		// Only start if at least one vhost has HTTP redirect enabled.
+		needsRedirect := false
+		for _, m := range wsMounts {
+			if m.VHost.WantsHTTPRedirect() {
+				needsRedirect = true
+				break
 			}
-		}()
-		wsServers = append(wsServers, redirectSrv)
+		}
+		if needsRedirect {
+			redirectSrv := &http.Server{
+				Addr:              wsCfg.Server.HTTPAddr,
+				Handler:           webserver.NewRedirectHandler(),
+				ReadHeaderTimeout: 5 * time.Second,
+				ReadTimeout:       10 * time.Second,
+				WriteTimeout:      10 * time.Second,
+				IdleTimeout:       60 * time.Second,
+			}
+			go func() {
+				applog.Print("INFO", "webserver", "redirect_started", applog.F("addr", wsCfg.Server.HTTPAddr))
+				if err := redirectSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+					applog.Print("WARN", "webserver", "redirect_error", applog.F("error", err.Error()))
+				}
+			}()
+			wsServers = append(wsServers, redirectSrv)
+		}
 
 		// TLS HTTPS listener (:443 by default).
 		tlsCfg, certStore, tlsErr := webserver.BuildTLSConfig(wsMounts)
@@ -1659,9 +1747,7 @@ func main() {
 	}
 
 	cleanup := func() {
-		if err := saveAccessCounts(accessCountsPath); err != nil {
-			applog.Print("WARN", "access", "counter_save_failed", applog.F("error", err.Error()))
-		}
+		stopCounterTicker() // final flush of dirty counters
 		if stopBackup != nil {
 			stopBackup()
 		}
@@ -1698,6 +1784,9 @@ func main() {
 			if err := ws.Shutdown(ctxTimeout); err != nil {
 				applog.Print("WARN", "webserver", "shutdown_error", applog.F("error", err.Error()))
 			}
+		}
+		if wsServer != nil {
+			wsServer.Shutdown()
 		}
 		cleanup()
 	}

@@ -26,8 +26,31 @@ Versions follow [Semantic Versioning](https://semver.org/).
 ### Fixed
 - **P0** `gzipResponseWriter.WriteHeader()` committed response headers before `Content-Encoding: gzip` was set; status code is now buffered and forwarded after headers are finalized
 - **P0** `corsMiddleware` emitted comma-joined `Access-Control-Allow-Origin` value for multi-origin configs; browsers reject non-single-value ACAO; now reflects matching request origin
+- **P0** Proxy handler double `WriteHeader`: `w.WriteHeader(resp.StatusCode)` committed before gzip reader setup; error path wrote second header. Status now deferred until after gzip init
+- **P0** Per-request disk I/O: `saveAccessCountsLocked()` did JSON marshal + atomic write on every request while holding mutex. Moved to 1-second background ticker with dirty flag
 - **P1** `proxyWithStaticFallback` leaked upstream proxy headers (e.g. `Set-Cookie`, `X-Upstream-*`) into static fallback responses; cleared before handoff
 - **P1** Webserver listeners excluded from graceful shutdown; fixed via `var wsServers []*http.Server` collected before goroutine launch
+- **P1** `intToBytes` produced empty output for negative integers (`for i > 0` loop); replaced with `strconv.Itoa`
+- **P1** `Forwarded` header parser split on `;` before `,`; failed for multi-hop proxy chains. Now splits by comma (hops) first, then semicolon (params) per RFC 7239
+- **P1** Rate limiter `sync.Map` entries (`pool`, `autoState`, `lastAllowLog`) never evicted; ~270 bytes/IP unbounded growth. Added 5-minute sweeper goroutine
+- **P1** `io.ReadAll` on upstream HTML response with no size limit; OOM risk. Wrapped with `io.LimitReader(reader, 10<<20)`
+- **P1** `VHostConfig.HTTPRedirect` forced `true` when TLS present, overriding user's explicit `false`. Changed to `*bool` to distinguish omission from explicit false
+- **P2** `rewriteLinks` compiled regexes per request on hot path; now cached per (IP, host) pair
+- **P2** `geo.Close()` did not reset `sync.Once`; geo permanently disabled after close. Now resets init guard for hot-reload
+- **P2** WebSocket `hardTimer` called `cConn.Close()`/`bConn.Close()` from timer goroutine while pump goroutines still running (gorilla/websocket not concurrent-safe). Replaced with done-channel coordination
+- **P2** Per-vhost `http.Transport` never closed on shutdown; idle connections leaked. Transports now tracked and cleaned up in `WebServer.Shutdown()`
+- **P3** `clientIP()` returned raw header values without validation; log injection risk. Added `net.ParseIP` validation
+- **P3** `ip2lPaths` evaluated `os.Getenv("HOME")` at package init; missed later `VPROX_HOME` override. Moved to `initDB()` resolution
+- **P3** Geo cache entries only evicted on re-access; slow unbounded growth. Added periodic 5-minute sweep
+
+### Planned (P4 — feature improvements)
+- Move `access-counts.json` to `data/logs/` + include in backup tar.gz
+- Webserver CLI subcommands: `vProx webserver new|list|validate|remove`
+- Makefile: "Install vProx WebServer? {y/N}" prompt + `make install webserver`
+- `.env` `[WebServer]` section with `AUTO_START` boolean
+- Config architecture: `vprox.toml` (proxy), `webserver.toml` (webserver module), per-host `~/.vProx/vhosts/*.toml`
+- Analyze separate systemd service for webserver module
+- Explore web GUI for vProx/vProxWeb management
 
 ---
 

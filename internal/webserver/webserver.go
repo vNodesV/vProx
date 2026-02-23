@@ -12,7 +12,8 @@ import (
 
 // WebServer builds and owns the HTTP handlers derived from a Config.
 type WebServer struct {
-	cfg Config
+	cfg        Config
+	transports []*http.Transport // tracked for shutdown cleanup
 }
 
 // New creates a WebServer from cfg.
@@ -46,6 +47,13 @@ func (ws *WebServer) Mounts() []Mount {
 		})
 	}
 	return mounts
+}
+
+// Shutdown closes all per-vhost transports, releasing idle connections.
+func (ws *WebServer) Shutdown() {
+	for _, tr := range ws.transports {
+		tr.CloseIdleConnections()
+	}
 }
 
 // buildHandler composes the middleware stack for a single vhost.
@@ -93,10 +101,12 @@ func (ws *WebServer) proxyHandler(v VHostConfig) http.Handler {
 	rp.FlushInterval = -1 // streaming-friendly
 
 	timeout := time.Duration(v.ProxyTimeoutSec) * time.Second
-	rp.Transport = &http.Transport{
+	tr := &http.Transport{
 		ResponseHeaderTimeout: timeout,
 		ForceAttemptHTTP2:     false, // h2c handled separately in Phase 2
 	}
+	rp.Transport = tr
+	ws.transports = append(ws.transports, tr)
 
 	// Rewrite director: strip path prefix if backend has a path, forward Host.
 	orig := rp.Director

@@ -62,8 +62,9 @@ type VHostConfig struct {
 	// ProxyTimeoutSec overrides the default upstream proxy timeout (default: 30).
 	ProxyTimeoutSec int `toml:"proxy_timeout_sec"`
 
-	// HTTPRedirect forces HTTP→HTTPS redirect for this vhost (default: true when TLS configured).
-	HTTPRedirect bool `toml:"http_redirect"`
+	// HTTPRedirect forces HTTP→HTTPS redirect for this vhost.
+	// nil = default (true when TLS configured), false = disable, true = enable.
+	HTTPRedirect *bool `toml:"http_redirect"`
 
 	// TLS holds the certificate and key paths for this vhost.
 	TLS TLSConfig `toml:"tls"`
@@ -181,13 +182,11 @@ func applyDefaults(cfg *Config) {
 				v.CORS.Methods = []string{"GET", "POST", "HEAD"}
 			}
 		}
-		// HTTPRedirect defaults to true when TLS is configured
-		if v.TLS.Cert != "" && v.TLS.Key != "" {
-			// Only flip to true if user has not explicitly set it to false via
-			// a pointer — TOML booleans default to false, so we cannot
-			// distinguish "user wrote false" from "user omitted it". We treat
-			// omission as "yes, redirect" whenever TLS is present.
-			v.HTTPRedirect = true
+		// HTTPRedirect defaults to true when TLS is configured and user
+		// has not explicitly set it.
+		if v.TLS.Cert != "" && v.TLS.Key != "" && v.HTTPRedirect == nil {
+			t := true
+			v.HTTPRedirect = &t
 		}
 	}
 	if cfg.Server.HTTPAddr == "" {
@@ -225,4 +224,12 @@ func validate(cfg Config) error {
 		}
 	}
 	return nil
+}
+
+// WantsHTTPRedirect returns true if the vhost has HTTP→HTTPS redirect enabled.
+func (v VHostConfig) WantsHTTPRedirect() bool {
+	if v.HTTPRedirect != nil {
+		return *v.HTTPRedirect
+	}
+	return false
 }

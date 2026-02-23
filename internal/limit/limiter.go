@@ -51,6 +51,9 @@ type IPLimiter struct {
 	allowLogEvery time.Duration
 	lastAllowLog  sync.Map // ip -> time.Time
 
+	// sweeper
+	sweepDone chan struct{} // closed to stop sweeper goroutine
+
 	// logging
 	logger     *log.Logger
 	logFile    *os.File
@@ -170,6 +173,7 @@ func New(defaults RateSpec, overrides map[string]RateSpec, opts ...Option) *IPLi
 		trustProxy: false,
 		ipHeader:   "",
 		now:        time.Now,
+		sweepDone:  make(chan struct{}),
 	}
 	// default logger to stderr; replaced by WithLogPath below
 	l.logger = log.New(os.Stderr, "", 0)
@@ -182,6 +186,7 @@ func New(defaults RateSpec, overrides map[string]RateSpec, opts ...Option) *IPLi
 	for _, opt := range opts {
 		opt(l)
 	}
+	go l.sweepLoop()
 	return l
 }
 
@@ -324,10 +329,68 @@ func (l *IPLimiter) DeleteOverride(ip string) {
 
 // Close releases resources (e.g., log file).
 func (l *IPLimiter) Close() error {
+	close(l.sweepDone)
 	if l.logFile != nil {
 		return l.logFile.Close()
 	}
 	return nil
+}
+
+// sweepLoop periodically evicts stale entries from sync.Maps to prevent
+// unbounded memory growth (~5 min interval).
+func (l *IPLimiter) sweepLoop() {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			l.sweep()
+		case <-l.sweepDone:
+			return
+		}
+	}
+}
+
+func (l *IPLimiter) sweep() {
+	now := l.now()
+	staleThreshold := now.Add(-10 * time.Minute)
+
+	// Evict expired auto-overrides and their state
+	l.autoExpiry.Range(func(key, val any) bool {
+		ip := key.(string)
+		exp := val.(time.Time)
+		if now.After(exp) {
+			l.autoExpiry.Delete(ip)
+			l.autoState.Delete(ip)
+			l.overrides.Delete(ip)
+			l.pool.Delete(ip) // force fresh limiter on next request
+		}
+		return true
+	})
+
+	// Evict stale allow-log timestamps
+	l.lastAllowLog.Range(func(key, val any) bool {
+		ts := val.(time.Time)
+		if ts.Before(staleThreshold) {
+			l.lastAllowLog.Delete(key)
+		}
+		return true
+	})
+
+	// Evict idle pool entries (IPs with no override and no recent activity).
+	// We can't track "last used" without adding overhead, so we evict entries
+	// that have no override and no auto-state — they'll be recreated on demand.
+	l.pool.Range(func(key, val any) bool {
+		ip := key.(string)
+		if _, hasOverride := l.overrides.Load(ip); hasOverride {
+			return true // keep: has override
+		}
+		if _, hasAuto := l.autoState.Load(ip); hasAuto {
+			return true // keep: has auto state
+		}
+		l.pool.Delete(ip)
+		return true
+	})
 }
 
 // --- internals ---
@@ -399,20 +462,25 @@ func (l *IPLimiter) clientIP(r *http.Request) string {
 }
 
 func forwardedForIP(h string) string {
-	semi := strings.Split(h, ";")
-	for _, seg := range semi {
-		kv := strings.SplitN(strings.TrimSpace(seg), "=", 2)
-		if len(kv) != 2 || !strings.EqualFold(kv[0], "for") {
-			continue
-		}
-		val := strings.Trim(kv[1], `"`)
-		val = strings.TrimPrefix(val, "[")
-		val = strings.TrimSuffix(val, "]")
-		if host, _, err := net.SplitHostPort(val); err == nil {
-			val = host
-		}
-		if p := parseFirstIP(val); p != "" {
-			return p
+	// RFC 7239: Forwarded header has comma-separated hops, each with
+	// semicolon-separated parameters. Take the first hop, then extract "for=".
+	hops := strings.Split(h, ",")
+	for _, hop := range hops {
+		params := strings.Split(strings.TrimSpace(hop), ";")
+		for _, seg := range params {
+			kv := strings.SplitN(strings.TrimSpace(seg), "=", 2)
+			if len(kv) != 2 || !strings.EqualFold(kv[0], "for") {
+				continue
+			}
+			val := strings.Trim(kv[1], `"`)
+			val = strings.TrimPrefix(val, "[")
+			val = strings.TrimSuffix(val, "]")
+			if host, _, err := net.SplitHostPort(val); err == nil {
+				val = host
+			}
+			if p := parseFirstIP(val); p != "" {
+				return p
+			}
 		}
 	}
 	return ""
@@ -474,17 +542,7 @@ func strconvFormatFloat(f float64, fmt byte, prec, bitSize int) string {
 }
 
 func intToBytes(i int) []byte {
-	if i == 0 {
-		return []byte{'0'}
-	}
-	var b [20]byte
-	n := len(b)
-	for i > 0 {
-		n--
-		b[n] = byte('0' + i%10)
-		i /= 10
-	}
-	return b[n:]
+	return []byte(strconv.Itoa(i))
 }
 
 // --------- Auto-quarantine ----------
