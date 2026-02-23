@@ -374,33 +374,48 @@ func TestRedirectHandler_HTTP_to_HTTPS(t *testing.T) {
 // TestGzipMiddleware_StatusCodeForwarded verifies that an explicit WriteHeader call
 // (e.g. 201 Created) is forwarded to the client *after* Content-Encoding is set,
 // not committed prematurely before gzip headers can be applied.
+//
+// The backend calls WriteHeader(201) on the gzipResponseWriter directly (via the
+// proxy path), so this test exercises the buffering fix end-to-end.
 func TestGzipMiddleware_StatusCodeForwarded(t *testing.T) {
-	dir := t.TempDir()
-	writeFile(t, filepath.Join(dir, "data.json"), `{"ok":true}`)
+	// Backend returns 201 Created with a JSON body so the gzip middleware will
+	// compress it — the custom status code must survive the buffering round-trip.
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"created":true}`))
+	}))
+	defer backend.Close()
 
 	cfg := webserver.Config{
 		VHosts: []webserver.VHostConfig{
-			{Name: "gz-code", Host: "localhost", Root: dir, Compress: true},
+			{Name: "gz-code", Host: "localhost", Backend: backend.URL, Compress: true},
 		},
 	}
 	srv := webserver.New(cfg)
 	mounts := srv.Mounts()
 
-	// Use a real httptest.Server so that header-commit behaviour matches production.
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Simulate a handler that calls WriteHeader before writing body.
-		w.WriteHeader(http.StatusCreated)
-		mounts[0].Handler.ServeHTTP(w, r)
-	}))
+	ts := httptest.NewServer(mounts[0].Handler)
 	defer ts.Close()
 
-	resp, err := http.Get(ts.URL + "/data.json")
+	req, _ := http.NewRequest(http.MethodGet, ts.URL+"/", nil)
+	req.Header.Set("Accept-Encoding", "gzip")
+
+	// Disable automatic decompression so we can inspect Content-Encoding.
+	client := &http.Client{Transport: &http.Transport{DisableCompression: true}}
+	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode >= 500 {
-		t.Errorf("unexpected server error: %d", resp.StatusCode)
+
+	// The custom status code (201) must be preserved through the gzip middleware.
+	if resp.StatusCode != http.StatusCreated {
+		t.Errorf("expected 201 Created, got %d", resp.StatusCode)
+	}
+	// Content-Encoding must be gzip, proving headers were finalized before WriteHeader.
+	if ce := resp.Header.Get("Content-Encoding"); ce != "gzip" {
+		t.Errorf("expected Content-Encoding: gzip, got %q", ce)
 	}
 }
 
