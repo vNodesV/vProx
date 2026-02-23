@@ -103,7 +103,7 @@ func (ws *WebServer) proxyHandler(v VHostConfig) http.Handler {
 	rp.Director = func(req *http.Request) {
 		orig(req)
 		req.Host = target.Host
-		// Preserve X-Forwarded-For already set by upstream (Apache or direct).
+		// Ensure X-Forwarded-Proto is set; X-Forwarded-For is handled by ReverseProxy.
 		if req.Header.Get("X-Forwarded-Proto") == "" {
 			req.Header.Set("X-Forwarded-Proto", "https")
 		}
