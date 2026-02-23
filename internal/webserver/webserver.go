@@ -2,29 +2,22 @@ package webserver
 
 import (
 	"compress/gzip"
-	"crypto/tls"
 	"fmt"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"strings"
-	"sync"
 	"time"
 )
 
 // WebServer builds and owns the HTTP handlers derived from a Config.
 type WebServer struct {
-	cfg      Config
-	certMu   sync.RWMutex
-	certCache map[string]*tls.Certificate // host → loaded cert
+	cfg Config
 }
 
 // New creates a WebServer from cfg.
 func New(cfg Config) *WebServer {
-	return &WebServer{
-		cfg:      cfg,
-		certCache: make(map[string]*tls.Certificate),
-	}
+	return &WebServer{cfg: cfg}
 }
 
 // Mount describes a registered handler and the host(s) it matches.
@@ -57,7 +50,8 @@ func (ws *WebServer) Mounts() []Mount {
 
 // buildHandler composes the middleware stack for a single vhost.
 // Stack (outermost → innermost):
-//   securityHeaders → cors → headerManip → compress → (proxy | static)
+//
+//	securityHeaders → cors → headerManip → compress → (proxy | static)
 func (ws *WebServer) buildHandler(v VHostConfig) http.Handler {
 	var core http.Handler
 

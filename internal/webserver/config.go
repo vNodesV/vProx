@@ -88,11 +88,11 @@ type TLSConfig struct {
 
 // CORSConfig configures Access-Control-* response headers.
 type CORSConfig struct {
-	Enabled    bool     `toml:"enabled"`
-	Origins    []string `toml:"origins"`     // e.g. ["*"]
-	Methods    []string `toml:"methods"`     // e.g. ["GET", "POST", "HEAD"]
-	Headers    []string `toml:"headers"`     // allowed request headers
-	MaxAgeSec  int      `toml:"max_age_sec"` // Access-Control-Max-Age
+	Enabled   bool     `toml:"enabled"`
+	Origins   []string `toml:"origins"`     // e.g. ["*"]
+	Methods   []string `toml:"methods"`     // e.g. ["GET", "POST", "HEAD"]
+	Headers   []string `toml:"headers"`     // allowed request headers
+	MaxAgeSec int      `toml:"max_age_sec"` // Access-Control-Max-Age
 }
 
 // HeaderConfig controls response header manipulation.
