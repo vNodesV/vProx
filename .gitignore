@@ -69,7 +69,6 @@ agents/projects/*.*
 docs/
 !docs/UPGRADE.md
 .github/agents/*.*
-.github/CODEOWNERS
 .github/dependabot.yml
 AGENT_DIRECTIVE.md
 doc.go
