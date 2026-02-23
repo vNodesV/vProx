@@ -259,6 +259,10 @@ func (r *statusRecorder) Write(b []byte) (int, error) {
 	return r.ResponseWriter.Write(b)
 }
 
+// Unwrap returns the underlying ResponseWriter so http.ResponseController
+// can find Flusher/Hijacker interfaces for streaming and WebSocket upgrades.
+func (r *statusRecorder) Unwrap() http.ResponseWriter { return r.ResponseWriter }
+
 // headerManipWriter wraps ResponseWriter to strip/inject headers before
 // the first Write or WriteHeader call.
 type headerManipWriter struct {
@@ -291,6 +295,10 @@ func (h *headerManipWriter) Write(b []byte) (int, error) {
 	h.applyOnce()
 	return h.ResponseWriter.Write(b)
 }
+
+// Unwrap returns the underlying ResponseWriter so http.ResponseController
+// can find Flusher/Hijacker interfaces for streaming and WebSocket upgrades.
+func (h *headerManipWriter) Unwrap() http.ResponseWriter { return h.ResponseWriter }
 
 // gzipResponseWriter lazily starts gzip compression once the content-type
 // is known (on first Write). Text and JSON types are compressed; others pass through.
@@ -366,3 +374,8 @@ func (g *gzipResponseWriter) Flush() {
 		f.Flush()
 	}
 }
+
+// Unwrap returns the underlying ResponseWriter so http.ResponseController
+// can find Hijacker for WebSocket upgrades. Flush is handled by the explicit
+// Flush method above (ResponseController checks interfaces before unwrapping).
+func (g *gzipResponseWriter) Unwrap() http.ResponseWriter { return g.ResponseWriter }

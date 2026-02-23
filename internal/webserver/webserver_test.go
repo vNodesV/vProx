@@ -77,6 +77,23 @@ func TestLoadConfig_ProxyVHost(t *testing.T) {
 	}
 }
 
+func TestLoadConfig_AllowsTabSpacing(t *testing.T) {
+	dir := t.TempDir()
+	content := "[server]\n\thttp_addr\t=\t\":80\"\n\thttps_addr\t=\t\":443\"\n\n[[vhost]]\n\tname\t=\t\"tabbed\"\n\thost\t=\t\"tabbed.example.com\"\n\tbackend\t=\t\"http://127.0.0.1:3000\"\n\n\t[vhost.tls]\n\t\tcert\t=\t\"/etc/ssl/tabbed/fullchain.pem\"\n\t\tkey\t=\t\"/etc/ssl/tabbed/privkey.pem\"\n"
+	writeFile(t, filepath.Join(dir, "vhost.toml"), content)
+
+	cfg, err := webserver.LoadConfig(filepath.Join(dir, "vhost.toml"))
+	if err != nil {
+		t.Fatalf("tab-spaced TOML should load, got error: %v", err)
+	}
+	if len(cfg.VHosts) != 1 {
+		t.Fatalf("expected 1 vhost, got %d", len(cfg.VHosts))
+	}
+	if cfg.VHosts[0].Host != "tabbed.example.com" {
+		t.Fatalf("expected host tabbed.example.com, got %q", cfg.VHosts[0].Host)
+	}
+}
+
 func TestLoadConfig_InvalidTOML(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "vhost.toml"), "[[vhost\n  bad toml ===")
@@ -84,6 +101,22 @@ func TestLoadConfig_InvalidTOML(t *testing.T) {
 	_, err := webserver.LoadConfig(filepath.Join(dir, "vhost.toml"))
 	if err == nil {
 		t.Fatal("expected error for invalid TOML, got nil")
+	}
+}
+
+func TestLoadConfig_SampleFileParses(t *testing.T) {
+	path := filepath.Clean(filepath.Join("..", "..", "config", "vhost.sample.toml"))
+
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("sample config not found at %s: %v", path, err)
+	}
+
+	cfg, err := webserver.LoadConfig(path)
+	if err != nil {
+		t.Fatalf("sample config should parse, got error: %v", err)
+	}
+	if len(cfg.VHosts) == 0 {
+		t.Fatal("sample config should include at least one vhost")
 	}
 }
 
@@ -451,6 +484,75 @@ func TestProxyStaticFallback_NoHeaderLeak(t *testing.T) {
 
 	if leaked := rec.Header().Get("X-Upstream-Secret"); leaked != "" {
 		t.Errorf("upstream header leaked to static response: X-Upstream-Secret=%q", leaked)
+	}
+}
+
+// ── Regression: P3 WebSocket upgrade through middleware chain ──────────────────
+
+// TestProxyHandler_WebSocketUpgrade verifies that a 101 Switching Protocols
+// response from an upstream correctly hijacks through the middleware wrappers
+// (headerManipWriter → gzipResponseWriter) via the Unwrap() protocol.
+func TestProxyHandler_WebSocketUpgrade(t *testing.T) {
+	// Upstream that returns 101 Switching Protocols.
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Upgrade") != "websocket" {
+			http.Error(w, "not a websocket request", http.StatusBadRequest)
+			return
+		}
+		// Hijack to simulate WebSocket upgrade.
+		rc := http.NewResponseController(w)
+		conn, buf, err := rc.Hijack()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer conn.Close()
+		_, _ = buf.WriteString("HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n")
+		_ = buf.Flush()
+		_, _ = buf.WriteString("hello from ws")
+		_ = buf.Flush()
+	}))
+	defer upstream.Close()
+
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "index.html"), "static")
+	cfg := webserver.Config{
+		VHosts: []webserver.VHostConfig{
+			{
+				Name: "ws-test", Host: "localhost", Root: dir, Backend: upstream.URL,
+				Compress: true, // gzip wrapper active — tests full chain
+				Headers: webserver.HeaderConfig{
+					Inject: map[string]string{"X-Via": "vProxWeb"},
+				},
+			},
+		},
+	}
+	srv := webserver.New(cfg)
+	mounts := srv.Mounts()
+
+	// Use a real HTTP server to get real Hijacker support.
+	ts := httptest.NewServer(mounts[0].Handler)
+	defer ts.Close()
+
+	// Send a WebSocket-like upgrade request.
+	req, _ := http.NewRequest(http.MethodGet, ts.URL+"/ws", nil)
+	req.Header.Set("Connection", "Upgrade")
+	req.Header.Set("Upgrade", "websocket")
+
+	// Use a raw transport to preserve 101 handling.
+	resp, err := http.DefaultTransport.RoundTrip(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// 101 = upgrade succeeded through the middleware chain.
+	// 502 = Hijack failed (the bug we're regressing against).
+	if resp.StatusCode == http.StatusBadGateway {
+		t.Fatal("502 Bad Gateway — Hijack failed; Unwrap() chain is broken")
+	}
+	if resp.StatusCode != http.StatusSwitchingProtocols {
+		t.Errorf("expected 101 Switching Protocols, got %d", resp.StatusCode)
 	}
 }
 
