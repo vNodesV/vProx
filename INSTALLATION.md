@@ -407,8 +407,78 @@ Ensure `$GOPATH/bin` is in your PATH:
 export PATH="$PATH:$(go env GOPATH)/bin"
 ```
 
-Or use the symlink if you accepted it during `make install`:
+## 10) Webserver Module (`internal/webserver`)
 
-```bash
-which vProx     # Should return /usr/local/bin/vProx
+The optional embedded webserver lets vProx act as a production-grade virtual-host HTTPS server alongside the proxy.  It is **opt-in**: if `vhost.toml` is absent or contains no `[[vhosts]]` entries the module is silently disabled.
+
+### Prerequisites
+
+- One TLS certificate + key pair per hostname (self-signed or ACME-issued).
+- DNS records pointing each hostname to the machine running vProx.
+- Ports 80 (HTTP redirect) and 443 (HTTPS) must be available (or configure alternate ports in `[server]`).
+
+### vhost.toml
+
+Place `vhost.toml` in the same directory as `vprox.toml` (default: `/etc/vprox/`).
+
+```toml
+[server]
+http_addr  = ":80"
+https_addr = ":443"
+
+[[vhosts]]
+name    = "www"
+host    = "example.com"
+root    = "/var/www/html"     # static files
+backend = ""                  # leave empty for pure static serving
+compress = true
+
+[vhosts.tls]
+cert = "/etc/ssl/certs/example.com.crt"
+key  = "/etc/ssl/private/example.com.key"
+
+[vhost.cors]
+enabled = true
+origins = ["https://app.example.com"]   # exact origins; reflects matching Origin header
+methods = ["GET", "HEAD", "POST"]
+headers = ["Content-Type", "Authorization"]
+max_age_sec = 86400
+
+[vhost.security]
+hsts = true
+
+[[vhost]]
+name    = "api"
+host    = "api.example.com"
+backend = "http://127.0.0.1:8080"   # reverse-proxy target
+
+[vhost.tls]
+cert = "/etc/ssl/certs/api.example.com.crt"
+key  = "/etc/ssl/private/api.example.com.key"
 ```
+
+### Middleware chain
+
+```
+Request → securityHeaders → cors → headerManip → gzip → (proxy | static)
+```
+
+- **securityHeaders**: adds `Strict-Transport-Security` (when `hsts = true`), `X-Frame-Options`, `X-Content-Type-Options`.
+- **cors**: reflects the incoming `Origin` if it matches the allow-list; wildcard `"*"` bypasses per-origin matching.  Adds `Vary: Origin` for non-wildcard configs so caches don't serve the wrong ACAO header.
+- **headerManip**: strips upstream response headers listed in `strip`; injects fixed headers from the `inject` map.
+- **gzip**: compresses `text/*` and `application/json` responses. Status code is buffered until after `Content-Encoding` is set to avoid committing headers early.
+- **proxy / static**: reverse-proxy to `backend`; falls back to `root` static files on upstream 404 (proxy headers are cleared before the static response is written).
+
+### Graceful shutdown
+
+`redirectSrv` (`:80`) and `httpsSrv` (`:443`) are included in the global shutdown sequence.  All listeners drain within the configured 10-second timeout on `SIGINT`/`SIGTERM`.
+
+### Troubleshooting
+
+| Symptom | Likely cause | Fix |
+|---------|-------------|-----|
+| `https_error: listen tcp :443: bind: permission denied` | Port 443 requires elevated privileges | `sudo setcap cap_net_bind_service=+ep /usr/local/bin/vProx` |
+| CORS preflight returns 200 instead of 204 | OPTIONS not included in `methods` | Add `"OPTIONS"` to `methods` list |
+| Gzip response body garbled | `Content-Encoding: gzip` missing on client | Check `Accept-Encoding: gzip` is sent; ensure `compress = true` |
+| Static file not served on upstream 404 | `root` not set alongside `backend` | Set both `root` and `backend` for proxy+static fallback |
+

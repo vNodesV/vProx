@@ -26,6 +26,7 @@ import (
 	"github.com/vNodesV/vProx/internal/geo"
 	"github.com/vNodesV/vProx/internal/limit"
 	applog "github.com/vNodesV/vProx/internal/logging"
+	"github.com/vNodesV/vProx/internal/webserver"
 	ws "github.com/vNodesV/vProx/internal/ws"
 )
 
@@ -1570,6 +1571,76 @@ func main() {
 	}
 	mux.HandleFunc("/", handler) // catch-all
 
+	// ---- Embedded WebServer (vhost.toml) ----------------------------------------
+	// Load optional vhost.toml. Absent file → module disabled (backward compatible).
+	vhostTOMLPath := filepath.Join(configDir, "vhost.toml")
+	wsCfg, wsErr := webserver.LoadConfig(vhostTOMLPath)
+	if wsErr != nil {
+		applog.Print("WARN", "webserver", "config_load_failed",
+			applog.F("path", vhostTOMLPath), applog.F("error", wsErr.Error()))
+	}
+	// wsServers holds webserver listeners so they can be gracefully shut down.
+	var wsServers []*http.Server
+	if len(wsCfg.VHosts) > 0 {
+		wsServer := webserver.New(wsCfg)
+		wsMounts := wsServer.Mounts()
+
+		// Collect webserver listeners for graceful shutdown alongside the main server.
+
+		// HTTP→HTTPS redirect listener (:80 by default).
+		redirectSrv := &http.Server{
+			Addr:              wsCfg.Server.HTTPAddr,
+			Handler:           webserver.NewRedirectHandler(),
+			ReadHeaderTimeout: 5 * time.Second,
+			ReadTimeout:       10 * time.Second,
+			WriteTimeout:      10 * time.Second,
+			IdleTimeout:       60 * time.Second,
+		}
+		go func() {
+			applog.Print("INFO", "webserver", "redirect_started", applog.F("addr", wsCfg.Server.HTTPAddr))
+			if err := redirectSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				applog.Print("WARN", "webserver", "redirect_error", applog.F("error", err.Error()))
+			}
+		}()
+		wsServers = append(wsServers, redirectSrv)
+
+		// TLS HTTPS listener (:443 by default).
+		tlsCfg, certStore, tlsErr := webserver.BuildTLSConfig(wsMounts)
+		if tlsErr != nil {
+			applog.Print("WARN", "webserver", "tls_build_failed", applog.F("error", tlsErr.Error()))
+		} else if tlsCfg != nil && certStore != nil {
+			// Build host-dispatching mux for HTTPS.
+			wsMux := http.NewServeMux()
+			for _, m := range wsMounts {
+				for _, host := range m.Hosts {
+					h := m.Handler
+					wsMux.Handle(host+"/", h)
+				}
+			}
+			httpsSrv := &http.Server{
+				Addr:              wsCfg.Server.HTTPSAddr,
+				Handler:           lim.Middleware(wsMux),
+				TLSConfig:         tlsCfg,
+				ReadHeaderTimeout: 5 * time.Second,
+				ReadTimeout:       15 * time.Second,
+				WriteTimeout:      30 * time.Second,
+				IdleTimeout:       120 * time.Second,
+			}
+			go func() {
+				applog.Print("INFO", "webserver", "https_started", applog.F("addr", wsCfg.Server.HTTPSAddr))
+				// Empty cert/key strings — certs served via TLSConfig.GetCertificate (SNI).
+				if err := httpsSrv.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
+					applog.Print("WARN", "webserver", "https_error", applog.F("error", err.Error()))
+				}
+			}()
+			wsServers = append(wsServers, httpsSrv)
+		} else {
+			applog.Print("INFO", "webserver", "no_tls",
+				applog.F("note", "no TLS certs configured, HTTPS listener not started"))
+		}
+	}
+	// -----------------------------------------------------------------------------
+
 	addr := ":3000"
 	if v := strings.TrimSpace(os.Getenv("VPROX_ADDR")); v != "" {
 		addr = v
@@ -1622,6 +1693,11 @@ func main() {
 		defer cancel()
 		if err := server.Shutdown(ctxTimeout); err != nil {
 			applog.Print("ERROR", "server", "shutdown_error", applog.F("error", err.Error()))
+		}
+		for _, ws := range wsServers {
+			if err := ws.Shutdown(ctxTimeout); err != nil {
+				applog.Print("WARN", "webserver", "shutdown_error", applog.F("error", err.Error()))
+			}
 		}
 		cleanup()
 	}

@@ -132,6 +132,16 @@ config: dirs
 	else \
 		echo "✓ $(CFG_DIR)/ports.toml already exists"; \
 	fi
+	@if [[ ! -f "$(CFG_DIR)/vhost.toml" ]]; then \
+		if [[ -f "config/vhost.sample.toml" ]]; then \
+			cp "config/vhost.sample.toml" "$(CFG_DIR)/vhost.toml"; \
+			echo "✓ Copied vhost.sample.toml to $(CFG_DIR)/vhost.toml"; \
+		else \
+			echo "NOTE: config/vhost.sample.toml not found; skipping vhost.toml install"; \
+		fi \
+	else \
+		echo "✓ $(CFG_DIR)/vhost.toml already exists"; \
+	fi
 
 ## Build binary
 

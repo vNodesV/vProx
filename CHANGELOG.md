@@ -7,6 +7,30 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [v1.0.2] — unreleased
+
+### Added
+- `internal/webserver` — opt-in embedded virtual-host HTTPS server
+  - SNI-based TLS (single `:443` listener, `GetCertificate`)
+  - HTTP/2 auto-enabled via `net/http`
+  - Middleware chain: `securityHeaders → cors → headerManip → gzip → (proxy | static)`
+  - Gzip middleware with buffered status-code to prevent premature header commit (P0 fix)
+  - CORS origin reflection — exact-match list; `Vary: Origin` added for non-wildcard configs (P0 fix)
+  - Proxy+static fallback with proxy-header clear before static response (P1 fix)
+  - `redirectSrv` (`:80`) and `httpsSrv` (`:443`) wired into graceful shutdown (P1 fix)
+- `config/vhost.sample.toml` — annotated reference configuration
+- `MODULES.md §10` — webserver module reference
+- `INSTALLATION.md §10` — vhost.toml migration guide and troubleshooting table
+- `webserver_test.go` — 3 regression tests: gzip WriteHeader ordering, CORS multi-origin reflection, proxy→static header leak
+
+### Fixed
+- **P0** `gzipResponseWriter.WriteHeader()` committed response headers before `Content-Encoding: gzip` was set; status code is now buffered and forwarded after headers are finalized
+- **P0** `corsMiddleware` emitted comma-joined `Access-Control-Allow-Origin` value for multi-origin configs; browsers reject non-single-value ACAO; now reflects matching request origin
+- **P1** `proxyWithStaticFallback` leaked upstream proxy headers (e.g. `Set-Cookie`, `X-Upstream-*`) into static fallback responses; cleared before handoff
+- **P1** Webserver listeners excluded from graceful shutdown; fixed via `var wsServers []*http.Server` collected before goroutine launch
+
+---
+
 ## [v1.0.1-beta] — 2026-02-22
 
 ### Added
