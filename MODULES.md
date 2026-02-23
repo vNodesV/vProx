@@ -361,13 +361,13 @@ Opt-in embedded virtual-host HTTPS server. Enabled by placing `vhost.toml` in th
 http_addr  = ":80"
 https_addr = ":443"
 
-[[vhosts]]
+[[vhost]]
 name    = "www"
 host    = "example.com"
 root    = "/var/www/html"
 compress = true
 
-[vhosts.tls]
+[vhost.tls]
 cert = "/etc/ssl/certs/example.com.crt"
 key  = "/etc/ssl/private/example.com.key"
 ```
