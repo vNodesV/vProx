@@ -437,22 +437,22 @@ compress = true
 cert = "/etc/ssl/certs/example.com.crt"
 key  = "/etc/ssl/private/example.com.key"
 
-[vhosts.cors]
+[vhost.cors]
 enabled = true
 origins = ["https://app.example.com"]   # exact origins; reflects matching Origin header
 methods = ["GET", "HEAD", "POST"]
 headers = ["Content-Type", "Authorization"]
 max_age_sec = 86400
 
-[vhosts.security]
+[vhost.security]
 hsts = true
 
-[[vhosts]]
+[[vhost]]
 name    = "api"
 host    = "api.example.com"
 backend = "http://127.0.0.1:8080"   # reverse-proxy target
 
-[vhosts.tls]
+[vhost.tls]
 cert = "/etc/ssl/certs/api.example.com.crt"
 key  = "/etc/ssl/private/api.example.com.key"
 ```
