@@ -142,7 +142,10 @@ func RunOnce(opts Options) error {
 			_ = cleanupTemps(tmpPaths)
 			return fmt.Errorf("backup: snapshot %s: %w", filepath.Base(src), err)
 		}
-		entries = append(entries, archiveEntry{SrcPath: copyPath, Name: filepath.Base(src)})
+		// Use a stable relative path inside the archive to preserve directory
+		// context and avoid collisions between same-named files in different dirs.
+		archName := archiveName(src, sourceDir)
+		entries = append(entries, archiveEntry{SrcPath: copyPath, Name: archName})
 		tmpPaths = append(tmpPaths, copyPath)
 	}
 
@@ -221,6 +224,17 @@ func containsPath(paths []string, target string) bool {
 		}
 	}
 	return false
+}
+
+// archiveName returns a stable, slash-separated relative path for use as the
+// archive entry name. If src cannot be made relative to baseDir (e.g. it lives
+// outside the base tree), filepath.Base(src) is used as a safe fallback.
+func archiveName(src, baseDir string) string {
+	rel, err := filepath.Rel(baseDir, src)
+	if err == nil && rel != "." && !strings.HasPrefix(rel, "..") {
+		return filepath.ToSlash(rel)
+	}
+	return filepath.Base(src)
 }
 
 // StartAuto starts an automated backup loop based on interval and/or size.
