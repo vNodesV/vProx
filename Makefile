@@ -15,7 +15,7 @@ INTERNAL_DIR := $(VPROX_HOME)/internal
 ARCHIVE_DIR := $(LOG_DIR)/archives
 SERVICE_DIR := $(VPROX_HOME)/service
 SERVICE_PATH := $(SERVICE_DIR)/vProx.service
-DIR_LIST := $(DATA_DIR) $(GEO_DIR) $(LOG_DIR) $(CFG_DIR) $(CHAINS_DIR) $(INTERNAL_DIR) $(ARCHIVE_DIR) $(SERVICE_DIR)
+DIR_LIST := $(DATA_DIR) $(GEO_DIR) $(LOG_DIR) $(CFG_DIR) $(CFG_DIR)/chains $(CFG_DIR)/backup $(INTERNAL_DIR) $(ARCHIVE_DIR) $(SERVICE_DIR)
 
 # GeoLocation database
 GEO_DB_SRC := ip2l/ip2location.mmdb.gz
@@ -85,12 +85,6 @@ env:
 		echo "GEOLITE2_COUNTRY_DB=" >> "$(ENV_FILE)"; \
 		echo "GEOLITE2_ASN_DB=" >> "$(ENV_FILE)"; \
 		echo "" >> "$(ENV_FILE)"; \
-		echo "# Backup automation" >> "$(ENV_FILE)"; \
-		echo "VPROX_BACKUP_ENABLED=false" >> "$(ENV_FILE)"; \
-		echo "VPROX_BACKUP_INTERVAL_DAYS=0" >> "$(ENV_FILE)"; \
-		echo "VPROX_BACKUP_MAX_BYTES=0" >> "$(ENV_FILE)"; \
-		echo "VPROX_BACKUP_CHECK_MINUTES=10" >> "$(ENV_FILE)"; \
-		echo "" >> "$(ENV_FILE)"; \
 		echo "# Rate limiting" >> "$(ENV_FILE)"; \
 		echo "VPROX_RPS=25" >> "$(ENV_FILE)"; \
 		echo "VPROX_BURST=100" >> "$(ENV_FILE)"; \
@@ -112,11 +106,11 @@ env:
 
 config: dirs
 	@echo "Installing sample chain configuration..."
-	@if [[ -f "chains/chain.sample.toml" ]]; then \
-		cp "chains/chain.sample.toml" "$(CHAINS_DIR)/chain.sample.toml"; \
-		echo "✓ Copied chain.sample.toml to $(CHAINS_DIR)/"; \
+	@if [[ -f "config/chains/chain.sample.toml" ]]; then \
+		cp "config/chains/chain.sample.toml" "$(CFG_DIR)/chains/chain.sample.toml"; \
+		echo "✓ Copied chain.sample.toml to $(CFG_DIR)/chains/"; \
 	else \
-		echo "WARNING: chains/chain.sample.toml not found in repo"; \
+		echo "WARNING: config/chains/chain.sample.toml not found in repo"; \
 	fi
 	@if [[ ! -f "$(CFG_DIR)/ports.toml" ]]; then \
 		echo "Creating default ports.toml..."; \
@@ -131,6 +125,16 @@ config: dirs
 		echo "✓ Created $(CFG_DIR)/ports.toml"; \
 	else \
 		echo "✓ $(CFG_DIR)/ports.toml already exists"; \
+	fi
+	@if [[ ! -f "$(CFG_DIR)/backup/backup.toml" ]]; then \
+		if [[ -f "config/backup.sample.toml" ]]; then \
+			cp "config/backup.sample.toml" "$(CFG_DIR)/backup/backup.toml"; \
+			echo "✓ Copied backup.sample.toml to $(CFG_DIR)/backup/backup.toml"; \
+		else \
+			echo "NOTE: config/backup.sample.toml not found; skipping backup.toml install"; \
+		fi \
+	else \
+		echo "✓ $(CFG_DIR)/backup/backup.toml already exists"; \
 	fi
 
 ## Build binary
@@ -193,22 +197,54 @@ systemd:
 	fi; \
 	rm -f "$$TMP_RENDERED"
 	@echo ""
-	@echo "The next step allows you to easily install the generated service file on a systemd host and sudo permission is required.  If you choose not to do this now, you can manually copy $(SERVICE_PATH) to /etc/systemd/system/ and enable/start the service later."
+	@echo "The next step installs the generated service in /etc/systemd/system and requires sudo."
 	@read -p "Do you want to install the systemd service now? (y/n) " -n 1 -r; echo ""; \
 	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
 		if sudo cp "$(SERVICE_PATH)" "/etc/systemd/system/vProx.service" && \
 		   sudo systemctl daemon-reload && \
-		   sudo systemctl enable vProx.service && \
-		   sudo systemctl start vProx.service; then \
-			echo "✓ vProx.service installed and started"; \
+		   sudo systemctl enable vProx.service; \
+		then \
+			echo "✓ vProx.service installed."; \
+			echo "  Start with: vProx start -d  (or: sudo service vProx start)"; \
 		else \
-			echo "✗ Failed to install or start vProx.service. Please check 'sudo systemctl status vProx.service' for details."; \
+			echo "✗ Failed to install vProx.service. Check 'sudo systemctl status vProx.service'."; \
 		fi; \
 	else \
-		echo "✓ Skipped systemd service installation. You can manually copy $(SERVICE_PATH) to /etc/systemd/system/ and enable/start the service later using the commands below."; \
+		echo "✓ Skipped systemd service installation. You can install manually with:"; \
 		echo "  sudo cp $(SERVICE_PATH) /etc/systemd/system/vProx.service"; \
 		echo "  sudo systemctl daemon-reload"; \
 		echo "  sudo systemctl enable vProx.service"; \
-		echo "  sudo systemctl start vProx.service"; \
-	fi;\
-
+	fi;
+	@echo ""
+	@SUDOERS_FILE="/etc/sudoers.d/vprox"; \
+	SUDOERS_LINE="$(USER) ALL=(ALL) NOPASSWD: /usr/sbin/service vProx start, /usr/sbin/service vProx stop, /usr/sbin/service vProx restart"; \
+	if [[ -f "$$SUDOERS_FILE" ]]; then \
+		if grep -qF "$$SUDOERS_LINE" "$$SUDOERS_FILE"; then \
+			echo "✓ Sudoers rule already configured ($$SUDOERS_FILE)"; \
+		else \
+			echo "⚠ $$SUDOERS_FILE exists but differs. Current content:"; \
+			sudo cat "$$SUDOERS_FILE"; \
+			echo ""; \
+			read -p "Overwrite with updated rule? (y/n) " -n 1 -r; echo ""; \
+			if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
+				echo "$$SUDOERS_LINE" | sudo tee "$$SUDOERS_FILE" > /dev/null; \
+				sudo chmod 0440 "$$SUDOERS_FILE"; \
+				echo "✓ Updated $$SUDOERS_FILE"; \
+			else \
+				echo "✓ Skipped sudoers update"; \
+			fi; \
+		fi; \
+	else \
+		echo "Setting up passwordless service management for $(USER)..."; \
+		echo "  This allows 'vProx start -d', 'vProx stop', and 'vProx restart' without a password prompt."; \
+		read -p "Create sudoers rule? (y/n) " -n 1 -r; echo ""; \
+		if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
+			echo "$$SUDOERS_LINE" | sudo tee "$$SUDOERS_FILE" > /dev/null; \
+			sudo chmod 0440 "$$SUDOERS_FILE"; \
+			echo "✓ Created $$SUDOERS_FILE"; \
+		else \
+			echo "✓ Skipped. You can create it manually:"; \
+			echo "  echo '$$SUDOERS_LINE' | sudo tee $$SUDOERS_FILE"; \
+			echo "  sudo chmod 0440 $$SUDOERS_FILE"; \
+		fi; \
+	fi
