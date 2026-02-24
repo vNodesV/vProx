@@ -16,8 +16,8 @@ type BackupConfig struct {
 type BackupSection struct {
 	// Automation enables scheduled (automatic) backup runs.
 	// true  → vProx starts the background scheduler on startup (equivalent to old method="auto").
-	// false → backups only run when `vprox --backup` is invoked manually.
-	// The --backup CLI flag always triggers a backup regardless of this setting.
+	// false → backups only run when `vprox --new-backup` is invoked manually.
+	// The --new-backup CLI flag always triggers a backup regardless of this setting.
 	Automation bool `toml:"automation"`
 
 	// Compression archive format. Only "tar.gz" is currently supported.

@@ -4,7 +4,7 @@
 [backup]
 
 # automation: when true, backups run automatically based on interval_days and/or max_size_mb.
-# Set to false to disable automatic backups (manual `vprox --backup` always works regardless).
+# Set to false to disable automatic backups (manual `vprox --new-backup` always works regardless).
 automation = true
 
 # compression: archive format. Only "tar.gz" is currently supported.

@@ -1081,7 +1081,18 @@ func disableBackupInConfig(path string) error {
 	if strings.Contains(content, "automation = true") {
 		content = strings.ReplaceAll(content, "automation = true", "automation = false")
 	} else if !strings.Contains(content, "automation") {
-		content += "\nautomation = false\n"
+		// Insert under [backup] header so the key doesn't land in a sub-table.
+		if idx := strings.Index(content, "[backup]"); idx >= 0 {
+			eol := strings.Index(content[idx:], "\n")
+			if eol >= 0 {
+				insert := idx + eol + 1
+				content = content[:insert] + "automation = false\n" + content[insert:]
+			} else {
+				content += "\nautomation = false\n"
+			}
+		} else {
+			content += "\n[backup]\nautomation = false\n"
+		}
 	}
 	return os.WriteFile(path, []byte(content), 0o644)
 }

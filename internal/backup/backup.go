@@ -146,11 +146,13 @@ func RunOnce(opts Options) error {
 		tmpPaths = append(tmpPaths, copyPath)
 	}
 
-	// Truncate only the primary log file.
-	if err := os.Truncate(logPath, 0); err != nil {
-		_ = cleanupTemps(tmpPaths)
-		emitFailed(id, method, err.Error())
-		return fmt.Errorf("backup: truncate log: %w", err)
+	// Truncate only the primary log file (if it was part of the snapshot).
+	if containsPath(presentSources, logPath) {
+		if err := os.Truncate(logPath, 0); err != nil {
+			_ = cleanupTemps(tmpPaths)
+			emitFailed(id, method, err.Error())
+			return fmt.Errorf("backup: truncate log: %w", err)
+		}
 	}
 
 	// Emit NEW STARTED line.
@@ -209,6 +211,16 @@ func cleanupTemps(paths []string) error {
 		_ = os.Remove(p)
 	}
 	return nil
+}
+
+func containsPath(paths []string, target string) bool {
+	target = filepath.Clean(target)
+	for _, p := range paths {
+		if filepath.Clean(p) == target {
+			return true
+		}
+	}
+	return false
 }
 
 // StartAuto starts an automated backup loop based on interval and/or size.
