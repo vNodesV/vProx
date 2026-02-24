@@ -357,4 +357,11 @@ vProx --backup-status                 # Show scheduler status
 
 **Rate limit overrides (CLI, override .env):**
 
+```bash
+vProx --rps 50                        # Override default RPS (env: VPROX_RPS)
+vProx --burst 250                     # Override default burst (env: VPROX_BURST)
+vProx --disable-auto                  # Disable auto-quarantine
+vProx --auto-rps 0.5                  # Override quarantine penalty RPS
+vProx --auto-burst 2                  # Override quarantine penalty burst
+```
 

@@ -142,7 +142,14 @@ func RunOnce(opts Options) error {
 			_ = cleanupTemps(tmpPaths)
 			return fmt.Errorf("backup: snapshot %s: %w", filepath.Base(src), err)
 		}
-		entries = append(entries, archiveEntry{SrcPath: copyPath, Name: filepath.Base(src)})
+		// Derive a stable archive name: files under sourceDir get a relative path;
+		// others fall back to their basename to avoid path traversal in the archive.
+		relName, err := filepath.Rel(sourceDir, src)
+		if err != nil || relName == "." || strings.HasPrefix(relName, "..") {
+			relName = filepath.Base(src)
+		}
+		relName = filepath.ToSlash(relName)
+		entries = append(entries, archiveEntry{SrcPath: copyPath, Name: relName})
 		tmpPaths = append(tmpPaths, copyPath)
 	}
 

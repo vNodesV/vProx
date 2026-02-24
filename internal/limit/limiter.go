@@ -53,6 +53,7 @@ type IPLimiter struct {
 
 	// sweeper
 	sweepDone chan struct{} // closed to stop sweeper goroutine
+	closeOnce sync.Once     // ensures Close is idempotent
 
 	// logging
 	logger     *log.Logger
@@ -327,9 +328,9 @@ func (l *IPLimiter) DeleteOverride(ip string) {
 	l.pool.Delete(ip)
 }
 
-// Close releases resources (e.g., log file).
+// Close releases resources (e.g., log file). It is safe to call more than once.
 func (l *IPLimiter) Close() error {
-	close(l.sweepDone)
+	l.closeOnce.Do(func() { close(l.sweepDone) })
 	if l.logFile != nil {
 		return l.logFile.Close()
 	}

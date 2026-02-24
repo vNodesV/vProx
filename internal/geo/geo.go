@@ -26,6 +26,10 @@ var (
 	geoASN     *geoip2.Reader
 
 	lastIP2LErr string
+
+	// cache sweeper shutdown
+	sweepStop     = make(chan struct{})
+	sweepStopOnce sync.Once
 )
 
 // Preferred MMDB location(s) — system-wide paths only. User home paths are
@@ -173,15 +177,22 @@ const cacheTTL = 10 * time.Minute
 
 func init() {
 	// Periodic cache sweep to evict expired entries and bound memory.
+	ticker := time.NewTicker(5 * time.Minute)
 	go func() {
-		for range time.Tick(5 * time.Minute) {
-			now := time.Now()
-			cache.Range(func(key, val any) bool {
-				if e := val.(cacheEntry); now.After(e.exp) {
-					cache.Delete(key)
-				}
-				return true
-			})
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				now := time.Now()
+				cache.Range(func(key, val any) bool {
+					if e := val.(cacheEntry); now.After(e.exp) {
+						cache.Delete(key)
+					}
+					return true
+				})
+			case <-sweepStop:
+				return
+			}
 		}
 	}()
 }
@@ -317,7 +328,11 @@ func Info() string {
 
 // Close releases DB resources (useful on shutdown / hot-reload).
 // Resets the init guard so a subsequent Lookup() re-opens the databases.
+// Also stops the background cache sweeper goroutine. Note: the sweeper is
+// not restarted if the package is re-initialized after Close(); cached
+// entries will still expire naturally via TTL checks in cacheGet.
 func Close() {
+	sweepStopOnce.Do(func() { close(sweepStop) })
 	if ip2lDB != nil {
 		_ = ip2lDB.Close()
 		ip2lDB = nil
