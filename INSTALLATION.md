@@ -89,10 +89,10 @@ This runs the following steps in order:
 1. **validate-go** — Confirms `GOROOT` and `GOPATH` are set and prints the Go version.
 2. **dirs** — Creates the runtime directory tree under `$HOME/.vProx/` (idempotent).
 3. **geo** — Decompresses `ip2l/ip2location.mmdb.gz` → `$HOME/.vProx/data/geolocation/ip2location.mmdb`.
-4. **config** — Copies `chains/chain.sample.toml` and creates `config/ports.toml` if missing.
+4. **config** — Copies `config/chains/chain.sample.toml` and creates `config/ports.toml` if missing; installs `backup.sample.toml`.
 5. **env** — Creates `$HOME/.vProx/.env` with default values if missing.
 6. **binary** — Builds and installs to `$GOPATH/bin/vProx`. Prompts (y/n) to create a symlink at `/usr/local/bin/vProx`.
-7. **systemd** — Renders `vProx.service` from `vprox.service.template` to `$HOME/.vProx/service/vProx.service`.
+7. **systemd** — Renders `vProx.service` from `vprox.service.template` to `$HOME/.vProx/service/vProx.service`. Optionally installs to `/etc/systemd/system/` and creates `/etc/sudoers.d/vprox` for passwordless service management.
 
 > **Note**: If you do not want a symlink, answer `n` at the prompt. You can then run `vProx` via `$GOPATH/bin/vProx` or add `$GOPATH/bin` to `PATH`.
 
@@ -115,12 +115,14 @@ After `make install`, vProx uses the following layout under `$HOME/.vProx/`:
 
 ```
 $HOME/.vProx/
-├── .env                         # Environment variables (rate limits, backup, geo paths)
+├── .env                         # Environment variables (rate limits, geo paths)
 ├── config/
-│   └── ports.toml               # Default service ports for all chains
-├── chains/
-│   ├── chain.sample.toml        # Sample chain configuration (reference only)
-│   └── *.toml                   # Your chain configs (create one per chain)
+│   ├── ports.toml               # Default service ports for all chains
+│   ├── chains/
+│   │   ├── chain.sample.toml    # Sample chain configuration (reference only)
+│   │   └── *.toml               # Your chain configs (create one per chain)
+│   └── backup/
+│       └── backup.toml          # Backup automation config
 ├── data/
 │   ├── geolocation/
 │   │   └── ip2location.mmdb     # IP geo database (decompressed by make geo)
@@ -172,13 +174,9 @@ VPROX_AUTO_WINDOW_SEC=10
 VPROX_AUTO_RPS=1
 VPROX_AUTO_BURST=1
 VPROX_AUTO_TTL_SEC=900
-
-# Backup automation
-VPROX_BACKUP_ENABLED=false
-VPROX_BACKUP_INTERVAL_DAYS=0
-VPROX_BACKUP_MAX_BYTES=0
-VPROX_BACKUP_CHECK_MINUTES=10
 ```
+
+> **Note**: Backup automation is configured via `config/backup/backup.toml`, not `.env`.
 
 ### Default Ports (ports.toml)
 
@@ -194,9 +192,9 @@ api      = 1317
 
 ### Per-Chain Config
 
-Create one `.toml` file per chain in `$HOME/.vProx/chains/`. A fully commented template is at [`chains/chain.sample.toml`](./chains/chain.sample.toml).
+Create one `.toml` file per chain in `$HOME/.vProx/config/chains/`. A fully commented template is at [`config/chains/chain.sample.toml`](./config/chains/chain.sample.toml).
 
-Minimal example (`$HOME/.vProx/chains/my-chain.toml`):
+Minimal example (`$HOME/.vProx/config/chains/my-chain.toml`):
 
 ```toml
 chain_name = "my-chain"
@@ -278,7 +276,15 @@ Follow live logs in CosmosSDK-style line format:
 journalctl -u vProx.service -f --output=cat
 ```
 
-Stop / restart:
+Start / stop / restart (via vProx CLI — passwordless with sudoers rule):
+
+```bash
+vProx start -d     # start as daemon
+vProx stop         # stop the service
+vProx restart      # restart the service
+```
+
+Or directly with systemctl:
 
 ```bash
 sudo systemctl stop vProx.service
@@ -301,12 +307,17 @@ go run ./cmd/vprox --dry-run   # Load config without starting server
 **After install:**
 
 ```bash
-vProx start                    # Start server (default :3000)
+vProx start                    # Start server foreground (default :3000)
+vProx start -d                 # Start as daemon (systemd service)
+vProx stop                     # Stop the service
+vProx restart                  # Restart the service
 vProx --addr :4000             # Override listen address
 vProx --validate               # Validate config files
 vProx --info --verbose         # Full runtime/config summary
-vProx backup                   # Run one log backup cycle
-vProx backup --reset_count     # Backup + reset access counters
+vProx --new-backup             # Run one log backup cycle
+vProx --new-backup --reset_count  # Backup + reset access counters
+vProx --list-backup            # List backup archives
+vProx --backup-status          # Show scheduler status
 ```
 
 For the complete flag reference, see [`CLI_FLAGS_GUIDE.md`](./CLI_FLAGS_GUIDE.md).
@@ -347,8 +358,7 @@ For migration guidance when upgrading between major versions, see [`docs/UPGRADE
 Ensure at least one chain config exists:
 
 ```bash
-ls $HOME/.vProx/chains/*.toml
-ls $HOME/.vProx/config/*.toml
+ls $HOME/.vProx/config/chains/*.toml
 ```
 
 Ports config must also be present:
@@ -407,8 +417,3 @@ Ensure `$GOPATH/bin` is in your PATH:
 export PATH="$PATH:$(go env GOPATH)/bin"
 ```
 
-Or use the symlink if you accepted it during `make install`:
-
-```bash
-which vProx     # Should return /usr/local/bin/vProx
-```

@@ -9,8 +9,9 @@ Production-grade reverse proxy for Cosmos SDK node services — RPC, REST, gRPC,
 - **Rate limiting** — per-IP token bucket with optional auto-quarantine and JSONL audit log.
 - **Geo enrichment** — country and ASN logged per request via MMDB lookup (optional).
 - **HTML banner injection** — custom banners on RPC index and REST swagger pages.
-- **Log management** — structured logs + automated compressed backup rotation.
-- **Systemd-ready** — `make install` renders and optionally installs the service unit.
+- **Backup automation** — TOML-configured scheduled backups with multi-file archive support.
+- **Service management** — `start -d`, `stop`, `restart` with passwordless sudoers integration.
+- **Systemd-ready** — `make install` renders and optionally installs the service unit + sudoers rule.
 
 ## 📦 Requirements
 
@@ -28,14 +29,17 @@ make install
 Then create a chain config:
 
 ```bash
-cp $HOME/.vProx/chains/chain.sample.toml $HOME/.vProx/chains/my-chain.toml
-$EDITOR $HOME/.vProx/chains/my-chain.toml
+cp $HOME/.vProx/config/chains/chain.sample.toml $HOME/.vProx/config/chains/my-chain.toml
+$EDITOR $HOME/.vProx/config/chains/my-chain.toml
 ```
 
 Start the proxy:
 
 ```bash
-vProx start        # listens on :3000 by default
+vProx start           # foreground, listens on :3000 by default
+vProx start -d        # start as systemd service (daemon)
+vProx stop            # stop the service
+vProx restart         # restart the service
 ```
 
 ## 📚 Documentation

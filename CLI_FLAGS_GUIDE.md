@@ -1,6 +1,22 @@
 # vProx CLI Flags Guide
 
-Authoritative guide for all vProx command-line flags.
+Authoritative guide for all vProx commands and command-line flags.
+
+## Commands
+
+### `vProx start`
+Start the proxy server in the foreground. Logs to stdout and `main.log`.
+
+### `vProx start -d` / `vProx start --daemon`
+Start via systemd service (`sudo service vProx start`). Requires sudoers rule (created by `make systemd`).
+
+### `vProx stop`
+Stop the running service (`sudo service vProx stop`).
+
+### `vProx restart`
+Restart the running service (`sudo service vProx restart`).
+
+---
 
 ## Invocation style
 
@@ -113,14 +129,6 @@ Prints effective runtime summary, including:
 Use when:
 - validating startup behavior safely
 
-### `--backup`
-Run one backup cycle and exit (no proxy server start).
-
-Also supported:
-- `vProx backup` (mapped internally to `--backup`)
-
-Access source counters are persisted across restarts and backups by default.
-
 ---
 
 ## Rate limiting overrides
@@ -176,19 +184,29 @@ Example:
 
 ## Backup controls
 
-### `--reset_count`
-Reset persisted access counters before backup execution.
+### `--new-backup`
+Run one backup cycle and exit (no proxy server start).
 
-Scope:
-- intended for backup mode (`vProx backup --reset_count` or `vProx --backup --reset_count`)
+Examples:
+- `vProx --new-backup`
+- `vProx --new-backup --reset_count`
 
-### `--reset-count`
-Alias for `--reset_count`.
+### `--list-backup`
+List existing backup archives and exit.
+
+### `--backup-status`
+Show backup scheduler status (automation state, next ETA, archive count) and exit.
 
 ### `--disable-backup`
 Disable automatic backup loop at startup.
 
-Does not affect manual one-shot backups via `--backup`.
+Does not affect manual one-shot backups via `--new-backup`.
+
+### `--reset_count`
+Reset persisted access counters before backup execution.
+
+### `--reset-count`
+Alias for `--reset_count`.
 
 ---
 
@@ -223,6 +241,12 @@ Example:
 
 ## Practical command sets
 
+### Service management
+- `vProx start` — foreground
+- `vProx start -d` — daemon (systemd service)
+- `vProx stop` — stop service
+- `vProx restart` — restart service
+
 ### Pre-deploy check
 - `vProx --validate`
 - `vProx --dry-run --verbose`
@@ -233,8 +257,8 @@ Example:
 ### Temporary hardening
 - `vProx --rps 10 --burst 20 --auto-rps 0.5 --auto-burst 1`
 
-### Backup-only run
-- `vProx --backup`
-
-### Backup + reset access counters
-- `vProx backup --reset_count`
+### Backup operations
+- `vProx --new-backup` — run one backup cycle
+- `vProx --new-backup --reset_count` — backup + reset counters
+- `vProx --list-backup` — list archives
+- `vProx --backup-status` — show scheduler status

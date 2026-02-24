@@ -24,7 +24,7 @@ Override base path with:
 
 ### Chain configs
 
-Chain configs live in `$HOME/.vProx/chains/*.toml`. For backward compatibility, configs in `$HOME/.vProx/config/*.toml` are also loaded.
+Chain configs live in `$HOME/.vProx/config/chains/*.toml`. For backward compatibility, configs in `$HOME/.vProx/chains/*.toml` and `$HOME/.vProx/config/*.toml` are also scanned.
 
 **Required fields:**
 
@@ -52,7 +52,7 @@ Chain configs live in `$HOME/.vProx/chains/*.toml`. For backward compatibility, 
 - `mode = "path"` (default): `host/rpc/...` → `ip:26657`, `host/rest/...` → `ip:1317`, etc.
 - `mode = "vhost"`: `rpc.<host>` → `ip:26657`, `rest.<host>` → `ip:1317`, etc. (requires DNS/nginx for subdomains)
 
-A fully annotated example is at [`chains/chain.sample.toml`](./chains/chain.sample.toml).
+A fully annotated example is at [`config/chains/chain.sample.toml`](./config/chains/chain.sample.toml).
 
 > Changes to chain configs require a server restart: `sudo systemctl restart vProx.service`
 
@@ -70,14 +70,18 @@ api      = 1317
 
 ### Run
 
-- `vProx` — start server (default `:3000`)
+- `vProx start` — start server foreground (default `:3000`)
+- `vProx start -d` — start as daemon (systemd service)
+- `vProx stop` — stop the service
+- `vProx restart` — restart the service
 - `vProx --addr :4000` — override listen address
 
 ### Manual backup
 
-- `vProx backup` (shorthand)
-- `vProx --backup`
-- `vProx backup --reset_count` (also accepts `--reset-count`)
+- `vProx --new-backup`
+- `vProx --new-backup --reset_count` (also accepts `--reset-count`)
+- `vProx --list-backup` — list existing archives
+- `vProx --backup-status` — show scheduler status
 
 ---
 
@@ -191,33 +195,41 @@ If no database is found, geo enrichment is silently disabled. All proxy function
 
 ## 5) Backup (`internal/backup`)
 
-**Purpose**: Archive and rotate `main.log` with atomic copy-truncate semantics and gzip compression.
+**Purpose**: Multi-file archive and rotation with atomic copy-truncate semantics and gzip compression.
 
 ### Manual backup
 
 ```bash
-vProx backup             # Run one backup cycle
-vProx --backup           # Equivalent
-vProx backup --reset_count   # Backup + reset access counters
+vProx --new-backup                # Run one backup cycle
+vProx --new-backup --reset_count  # Backup + reset access counters
+vProx --list-backup               # List existing archives
+vProx --backup-status             # Show scheduler status
 ```
 
 ### Automated backups
 
-Enable and tune via `$HOME/.vProx/.env`:
+Configure via `$HOME/.vProx/config/backup/backup.toml` (see [`config/backup.sample.toml`](./config/backup.sample.toml)):
 
-```ini
-VPROX_BACKUP_ENABLED=true
-VPROX_BACKUP_INTERVAL_DAYS=7        # Rotate every N days (0 = disable timer)
-VPROX_BACKUP_MAX_BYTES=52428800     # Rotate when log exceeds N bytes (50 MB)
-VPROX_BACKUP_CHECK_MINUTES=10       # How often to check conditions
+```toml
+[backup]
+automation = true           # Enable automatic backup scheduler
+compression = "tar.gz"
+interval_days = 7           # Rotate every N days (0 = disable timer)
+max_size_mb = 100           # Rotate when main.log exceeds N MB (0 = disable)
+check_interval_min = 10     # How often to check conditions
+
+[backup.files]
+logs   = ["main.log", "rate-limit.jsonl"]
+data   = ["access-counts.json"]
+config = ["ports.toml", "chains/your_chain.toml"]
 ```
 
-Trigger logic: backup fires when **either** `INTERVAL_DAYS` or `MAX_BYTES` threshold is met (whichever comes first).
+Trigger logic: backup fires when **either** `interval_days` or `max_size_mb` threshold is met (whichever comes first).
 
 Backups are written to:
 
 ```
-$HOME/.vProx/data/logs/archives/main.log.<timestamp>.tar.gz
+$HOME/.vProx/data/logs/archives/backup.YYYYMMDD_HHMMSS.tar.gz
 ```
 
 ### Backup lifecycle
@@ -298,7 +310,7 @@ make build      # Build binary only → .build/vProx
 make dirs       # Create runtime directories
 make geo        # Decompress MMDB (ip2l/ip2location.mmdb.gz → $HOME/.vProx/data/geolocation/)
 make config     # Install sample configs
-make systemd    # Render (and optionally install) systemd unit file
+make systemd    # Render (and optionally install) systemd unit file + sudoers rule
 make clean      # Remove .build/
 ```
 
@@ -307,7 +319,7 @@ make clean      # Remove .build/
 ## 8) Troubleshooting
 
 - **Unknown host / 404 on all requests**: the `host` field in chain config must match the incoming `Host` header exactly. Test with `curl -H "Host: <chain-host>" http://localhost:3000/rpc/status`.
-- **No configs found**: confirm `$HOME/.vProx/chains/*.toml` (or `config/*.toml`) exists and `ports.toml` is present.
+- **No configs found**: confirm `$HOME/.vProx/config/chains/*.toml` exists and `ports.toml` is present.
 - **Geo not loading**: verify `IP2LOCATION_MMDB` path and run `make geo` to re-decompress.
 - **Rate limit too strict**: increase `VPROX_RPS` and `VPROX_BURST` in `.env`, restart.
 - **WebSocket drops immediately**: check `[ws] idle_timeout_sec` in chain config; default is 3600.
@@ -324,6 +336,10 @@ For the full flag reference with examples, see [`CLI_FLAGS_GUIDE.md`](./CLI_FLAG
 ```bash
 vProx --help                          # Built-in help
 vProx --version                       # Print version
+vProx start                           # Start server foreground (default :3000)
+vProx start -d                        # Start as daemon (systemd service)
+vProx stop                            # Stop the service
+vProx restart                         # Restart the service
 vProx --validate                      # Validate config and exit
 vProx --info --verbose                # Print resolved runtime/config summary
 vProx --dry-run                       # Load everything, don't start server
@@ -333,14 +349,12 @@ vProx --config /path/to/config        # Override config dir
 vProx --chains /path/to/chains        # Override chains dir
 vProx --log-file /path/to/main.log    # Override log file path
 vProx --quiet                         # Suppress non-error output
-vProx backup                          # Run one backup cycle
-vProx backup --reset_count            # Backup + reset access counters
+vProx --new-backup                    # Run one backup cycle
+vProx --new-backup --reset_count      # Backup + reset access counters
+vProx --list-backup                   # List backup archives
+vProx --backup-status                 # Show scheduler status
 ```
 
 **Rate limit overrides (CLI, override .env):**
 
-```bash
---rps 50 --burst 200
---disable-auto
---auto-rps 2 --auto-burst 2
-```
+
