@@ -36,9 +36,36 @@ jobs:
             const pull_number = context.issue.number;
             const commenter = context.actor;
 
-            // Only vNodesV can approve
-            if (commenter !== 'vNodesV') {
-              core.setFailed(`Only @vNodesV can approve PRs. @${commenter} is not authorized.`);
+            // vNodesV can approve directly.
+            // copilot can only approve when vNodesV explicitly asked it to
+            // (i.e. a recent comment from vNodesV mentions @copilot and "approve").
+            if (commenter === 'copilot') {
+              const { data: comments } = await github.rest.issues.listComments({
+                owner,
+                repo,
+                issue_number: pull_number,
+                per_page: 20,
+              });
+
+              // Walk comments newest-first; stop at the copilot /approve comment itself.
+              const currentCommentId = context.payload.comment.id;
+              const priorComments = comments
+                .filter(c => c.id !== currentCommentId)
+                .reverse();
+
+              const delegated = priorComments.some(
+                c =>
+                  c.user.login === 'vNodesV' &&
+                  /@copilot/i.test(c.body) &&
+                  /approve/i.test(c.body)
+              );
+
+              if (!delegated) {
+                core.setFailed('copilot can only approve when @vNodesV explicitly asks it to.');
+                return;
+              }
+            } else if (commenter !== 'vNodesV') {
+              core.setFailed(`Only @vNodesV (or @copilot when delegated by @vNodesV) can approve PRs. @${commenter} is not authorized.`);
               return;
             }
 
