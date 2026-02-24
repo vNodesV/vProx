@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"regexp"
@@ -118,6 +119,10 @@ var (
 	logsDir    string
 	archiveDir string
 
+	// Subdirectories under configDir for the new structured layout.
+	chainsConfigDir string // $configDir/chains
+	backupConfigDir string // $configDir/backup
+
 	accessCountsPath string
 
 	httpClient = &http.Client{
@@ -132,6 +137,7 @@ var (
 	// logger state
 	srcCounter   = make(map[string]int64)
 	counterMutex sync.Mutex
+	counterDirty bool // true when in-memory counts differ from disk
 
 	chainLoggerMu sync.Mutex
 	chainLoggers  = make(map[string]*log.Logger)
@@ -343,10 +349,7 @@ func loadChains(dir string) error {
 	}
 	for _, entry := range entries {
 		name := entry.Name()
-		if entry.IsDir() || !strings.HasSuffix(name, ".toml") {
-			continue
-		}
-		if strings.EqualFold(name, "ports.toml") {
+		if entry.IsDir() || !isChainTOML(name) {
 			continue
 		}
 		fpath := filepath.Join(dir, name)
@@ -425,32 +428,57 @@ func loadChains(dir string) error {
 
 // --------------------- LINK REWRITE & BANNERS ---------------------
 
+// rewriteRegexes holds pre-compiled patterns for a given (IP, host) pair.
+type rewriteRegexes struct {
+	rpcIP, rpcHost   *regexp.Regexp
+	restIP, restHost *regexp.Regexp
+}
+
+var (
+	rewriteCacheMu sync.RWMutex
+	rewriteCache   = make(map[string]*rewriteRegexes) // key: "ip|host"
+)
+
+func getRewriteRegexes(internalIP, baseHost string) *rewriteRegexes {
+	key := internalIP + "|" + baseHost
+	rewriteCacheMu.RLock()
+	if r, ok := rewriteCache[key]; ok {
+		rewriteCacheMu.RUnlock()
+		return r
+	}
+	rewriteCacheMu.RUnlock()
+
+	r := &rewriteRegexes{
+		rpcIP:    regexp.MustCompile(`(?i)(https?:)?//` + regexp.QuoteMeta(internalIP) + `:26657/?`),
+		rpcHost:  regexp.MustCompile(`(?i)(https?:)?//` + regexp.QuoteMeta(baseHost) + `:26657/?`),
+		restIP:   regexp.MustCompile(`(?i)(https?:)?//` + regexp.QuoteMeta(internalIP) + `:1317/?`),
+		restHost: regexp.MustCompile(`(?i)(https?:)?//` + regexp.QuoteMeta(baseHost) + `:1317/?`),
+	}
+	rewriteCacheMu.Lock()
+	rewriteCache[key] = r
+	rewriteCacheMu.Unlock()
+	return r
+}
+
 func rewriteLinks(html, routePrefix, internalIP, baseHost, absoluteHost string, rpcVHost bool) string {
+	re := getRewriteRegexes(internalIP, baseHost)
 	switch routePrefix {
 	case rpcPrefix:
-		// Tendermint RPC runs on 26657
 		repl := "/rpc/"
 		if rpcVHost {
-			// On rpc.<base>, links should be root (e.g. /status)
 			repl = "/"
 		}
-		ipPattern := regexp.MustCompile(`(?i)(https?:)?//` + regexp.QuoteMeta(internalIP) + `:26657/?`)
-		hostPattern := regexp.MustCompile(`(?i)(https?:)?//` + regexp.QuoteMeta(baseHost) + `:26657/?`)
-		html = ipPattern.ReplaceAllString(html, repl)
-		html = hostPattern.ReplaceAllString(html, repl)
+		html = re.rpcIP.ReplaceAllString(html, repl)
+		html = re.rpcHost.ReplaceAllString(html, repl)
 
-		// If we’re on an RPC vhost, make sure any stray /rpc/ prefixes are collapsed to /
 		if rpcVHost {
 			html = strings.ReplaceAll(html, `href="/rpc/`, `href="/`)
 			html = strings.ReplaceAll(html, `src="/rpc/`, `src="/`)
 		}
 
 	case restPrefix, apiPrefix:
-		// Cosmos REST typically on 1317
-		ipPattern := regexp.MustCompile(`(?i)(https?:)?//` + regexp.QuoteMeta(internalIP) + `:1317/?`)
-		hostPattern := regexp.MustCompile(`(?i)(https?:)?//` + regexp.QuoteMeta(baseHost) + `:1317/?`)
-		html = ipPattern.ReplaceAllString(html, "/")
-		html = hostPattern.ReplaceAllString(html, "/")
+		html = re.restIP.ReplaceAllString(html, "/")
+		html = re.restHost.ReplaceAllString(html, "/")
 	}
 
 	// Absolute-link policy
@@ -507,10 +535,14 @@ func bannerPath(chain, routePrefix string) string {
 
 func clientIP(r *http.Request) string {
 	if v := strings.TrimSpace(r.Header.Get("CF-Connecting-IP")); v != "" {
-		return v
+		if ip := sanitizeIP(v); ip != "" {
+			return ip
+		}
 	}
 	if v := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); v != "" {
-		return strings.Split(v, ",")[0]
+		if ip := sanitizeIP(strings.TrimSpace(strings.Split(v, ",")[0])); ip != "" {
+			return ip
+		}
 	}
 	if h, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
 		return h
@@ -518,54 +550,95 @@ func clientIP(r *http.Request) string {
 	return r.RemoteAddr
 }
 
+// sanitizeIP validates that s is a well-formed IP address to prevent log injection.
+func sanitizeIP(s string) string {
+	if net.ParseIP(s) != nil {
+		return s
+	}
+	return ""
+}
+
 func logRequestSummary(r *http.Request, proxied bool, route string, host string, start time.Time) {
 	src := clientIP(r)
 	hostNorm := normalizeHost(host)
-	requestID := applog.EnsureRequestID(r)
 
 	// counter
 	counterMutex.Lock()
 	srcCounter[src]++
 	srcQty := srcCounter[src]
-	_ = saveAccessCountsLocked(accessCountsPath)
+	counterDirty = true
 	counterMutex.Unlock()
 
-	// timing + fields
-	durMS := time.Since(start).Seconds() * 1000
+	durMS := time.Since(start).Milliseconds()
 	dst := r.URL.RequestURI()
 	ua := r.Header.Get("User-Agent")
 
-	// Country (CF hint then local db)
 	country := strings.TrimSpace(r.Header.Get("CF-IPCountry"))
 	if country == "" {
 		country = geo.Country(clientIP(r))
 	}
-
-	// Status from limiter (defaults ok, overrides limited, 429 blocked doesn't reach here)
-	status := limit.StatusOf(r)
-
 	if country == "" {
 		country = "--"
 	}
-	line := applog.Line("INFO", "access", "request",
-		applog.F("request_id", requestID),
-		applog.F("host", hostNorm),
-		applog.F("route", route),
-		applog.F("proxied", proxied),
-		applog.F("request", dst),
-		applog.F("method", r.Method),
-		applog.F("ip", src),
-		applog.F("src_count", srcQty),
-		applog.F("latency_ms", durMS),
-		applog.F("ua", ua),
-		applog.F("country", country),
+
+	// For WS routes, reuse the WSS-prefixed ID already set on the request.
+	// For all others, generate a typed log ID based on path prefix.
+	var logID string
+	switch {
+	case strings.HasPrefix(route, "ws") || strings.HasPrefix(route, "websocket"):
+		logID = applog.EnsureRequestID(r) // WSS{hex} set by ws.go
+	default:
+		logID = applog.NewTypedID(pathPrefix(dst))
+	}
+
+	// status: map limiter status to lifecycle token
+	limStatus := strings.ToUpper(limit.StatusOf(r))
+	status := "COMPLETED"
+	if limStatus != "" && limStatus != "OK" {
+		status = limStatus
+	}
+	// WS failure routes get their own status
+	switch route {
+	case "websocket":
+		status = "CONNECTED"
+	case "ws-deny":
+		status = "DENIED"
+	case "ws-upgrade-fail", "ws-backend-fail":
+		status = "FAILED"
+	}
+
+	line := applog.LineLifecycle("NEW", "vProx",
+		applog.F("ID", logID),
 		applog.F("status", status),
+		applog.F("method", r.Method),
+		applog.F("from", src),
+		applog.F("count", srcQty),
+		applog.F("to", strings.ToUpper(hostNorm)),
+		applog.F("endpoint", dst),
+		applog.F("latency", fmt.Sprintf("%dms", durMS)),
+		applog.F("userAgent", ua),
+		applog.F("country", country),
 	)
 	log.Println(line)
 	if ch, ok := chains[hostNorm]; ok {
 		if cl := getChainLogger(ch); cl != nil {
 			cl.Println(line)
 		}
+	}
+}
+
+// pathPrefix returns a 3-letter log ID prefix based on the request path.
+func pathPrefix(dst string) string {
+	p := strings.ToUpper(dst)
+	switch {
+	case strings.HasPrefix(p, "/RPC"):
+		return "RPC"
+	case strings.HasPrefix(p, "/REST"), strings.HasPrefix(p, "/API"):
+		return "API"
+	case strings.HasPrefix(p, "/WEBSOCKET"), strings.HasPrefix(p, "/WS"):
+		return "WSS"
+	default:
+		return "REQ"
 	}
 }
 
@@ -637,6 +710,43 @@ func resetAccessCounts(path string) error {
 	err := saveAccessCountsLocked(path)
 	counterMutex.Unlock()
 	return err
+}
+
+// accessCountSaveInterval controls how often dirty counters are flushed to disk.
+const accessCountSaveInterval = 1 * time.Second
+
+// startAccessCountTicker runs a background goroutine that flushes dirty
+// counters to disk every accessCountSaveInterval. Returns a stop function
+// that flushes once more and stops the ticker.
+func startAccessCountTicker(path string) func() {
+	ticker := time.NewTicker(accessCountSaveInterval)
+	done := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-ticker.C:
+				counterMutex.Lock()
+				if counterDirty {
+					_ = saveAccessCountsLocked(path)
+					counterDirty = false
+				}
+				counterMutex.Unlock()
+			case <-done:
+				return
+			}
+		}
+	}()
+	return func() {
+		ticker.Stop()
+		close(done)
+		// Final flush
+		counterMutex.Lock()
+		if counterDirty {
+			_ = saveAccessCountsLocked(path)
+			counterDirty = false
+		}
+		counterMutex.Unlock()
+	}
 }
 
 // --------------------- UTILS ---------------------
@@ -890,6 +1000,229 @@ func parseBytes(s string) int64 {
 	return 0
 }
 
+// runServiceCommand executes "service vProx <action>" and uses sudo when available.
+// This supports interactive password prompts and sudoers NOPASSWD setups.
+func runServiceCommand(action string) error {
+	bin := "sudo"
+	args := []string{"service", "vProx", action}
+	if _, err := exec.LookPath("sudo"); err != nil {
+		bin = "service"
+		args = []string{"vProx", action}
+	}
+	cmd := exec.Command(bin, args...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
+// resolveBackupConfigPath returns the effective path for backup.toml.
+// Checks $configDir/backup/backup.toml (new layout) first, then
+// $configDir/backup.toml (backward compat).
+func resolveBackupConfigPath(configDir string) string {
+	newPath := filepath.Join(configDir, "backup", "backup.toml")
+	if _, err := os.Stat(newPath); err == nil {
+		return newPath
+	}
+	return filepath.Join(configDir, "backup.toml")
+}
+
+// listBackupArchives prints all .tar.gz archives in archiveDir to stdout.
+func listBackupArchives(archiveDir string) error {
+	entries, err := os.ReadDir(archiveDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			fmt.Println("No backup archives found.")
+			return nil
+		}
+		return err
+	}
+	count := 0
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".tar.gz") {
+			continue
+		}
+		info, _ := e.Info()
+		size := ""
+		if info != nil {
+			b := info.Size()
+			switch {
+			case b >= 1<<20:
+				size = fmt.Sprintf("%.1fMB", float64(b)/(1<<20))
+			case b >= 1<<10:
+				size = fmt.Sprintf("%.1fKB", float64(b)/(1<<10))
+			default:
+				size = fmt.Sprintf("%dB", b)
+			}
+		}
+		fmt.Printf("  %s  (%s)\n", e.Name(), size)
+		count++
+	}
+	if count == 0 {
+		fmt.Println("No backup archives found.")
+	} else {
+		fmt.Printf("\n  Total: %d archive(s)\n", count)
+	}
+	return nil
+}
+
+// disableBackupInConfig sets automation=false in backup.toml.
+// Uses a simple string replacement to preserve the rest of the file.
+func disableBackupInConfig(path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// Write minimal file with automation=false
+			return os.WriteFile(path, []byte("[backup]\nautomation = false\n"), 0o644)
+		}
+		return err
+	}
+	content := string(data)
+	if strings.Contains(content, "automation = true") {
+		content = strings.ReplaceAll(content, "automation = true", "automation = false")
+	} else if !strings.Contains(content, "automation") {
+		// Insert under [backup] header so the key doesn't land in a sub-table.
+		if idx := strings.Index(content, "[backup]"); idx >= 0 {
+			eol := strings.Index(content[idx:], "\n")
+			if eol >= 0 {
+				insert := idx + eol + 1
+				content = content[:insert] + "automation = false\n" + content[insert:]
+			} else {
+				content += "\nautomation = false\n"
+			}
+		} else {
+			content += "\n[backup]\nautomation = false\n"
+		}
+	}
+	return os.WriteFile(path, []byte(content), 0o644)
+}
+
+// printBackupStatus prints backup automation state, trigger conditions, and
+// the ETA until the next scheduled backup.
+func printBackupStatus(cfgPath, statePath, archiveDir string) {
+	cfg, loaded, _ := backup.LoadConfig(cfgPath)
+	b := cfg.Backup
+
+	fmt.Println("vProx Backup Status")
+	fmt.Println("")
+
+	automationLabel := "disabled"
+	if b.Automation {
+		automationLabel = "enabled"
+	}
+	effectivelyActive := b.Automation
+	activeLabel := "inactive"
+	if effectivelyActive {
+		activeLabel = "active"
+	}
+
+	cfgSource := "defaults"
+	if loaded {
+		cfgSource = cfgPath
+	}
+	fmt.Printf("  Automation:       %s  (source: %s)\n", automationLabel, cfgSource)
+	fmt.Printf("  Scheduler:        %s\n", activeLabel)
+	fmt.Println("")
+
+	if b.IntervalDays > 0 {
+		fmt.Printf("  Trigger interval: every %d day(s)\n", b.IntervalDays)
+	} else {
+		fmt.Println("  Trigger interval: disabled (interval_days = 0)")
+	}
+	if b.MaxSizeMB > 0 {
+		fmt.Printf("  Trigger max size: %d MB\n", b.MaxSizeMB)
+	} else {
+		fmt.Println("  Trigger max size: disabled (max_size_mb = 0)")
+	}
+	fmt.Printf("  Check interval:   every %d min\n", b.CheckIntervalMin)
+	fmt.Println("")
+
+	// Read last run time from state file.
+	var lastRun time.Time
+	if data, err := os.ReadFile(statePath); err == nil {
+		if sec, err := strconv.ParseInt(strings.TrimSpace(string(data)), 10, 64); err == nil {
+			lastRun = time.Unix(sec, 0).UTC()
+		}
+	}
+
+	if lastRun.IsZero() {
+		fmt.Println("  Last backup:      never")
+	} else {
+		ago := time.Since(lastRun).Truncate(time.Minute)
+		fmt.Printf("  Last backup:      %s  (%s ago)\n", lastRun.Format("2006-01-02 15:04:05 UTC"), ago)
+	}
+
+	if !effectivelyActive {
+		fmt.Println("  Next backup ETA:  n/a (scheduler is inactive)")
+	} else if b.IntervalDays > 0 && !lastRun.IsZero() {
+		nextRun := lastRun.Add(time.Duration(b.IntervalDays) * 24 * time.Hour)
+		eta := time.Until(nextRun).Truncate(time.Minute)
+		if eta <= 0 {
+			fmt.Println("  Next backup ETA:  due now (trigger condition met)")
+		} else {
+			fmt.Printf("  Next backup ETA:  %s  (in %s)\n", nextRun.Format("2006-01-02 15:04:05 UTC"), eta)
+		}
+	} else if b.IntervalDays > 0 && lastRun.IsZero() {
+		fmt.Println("  Next backup ETA:  due now (no previous backup recorded)")
+	} else {
+		fmt.Println("  Next backup ETA:  n/a (interval trigger disabled)")
+	}
+	fmt.Println("")
+
+	// Count archives.
+	entries, err := os.ReadDir(archiveDir)
+	if err == nil {
+		count := 0
+		for _, e := range entries {
+			if !e.IsDir() && strings.HasSuffix(e.Name(), ".tar.gz") {
+				count++
+			}
+		}
+		fmt.Printf("  Archive dir:      %s\n", archiveDir)
+		fmt.Printf("  Archives:         %d file(s)\n", count)
+	}
+
+	if !b.Automation {
+		fmt.Println("")
+		fmt.Println("  Automation is disabled. Use 'vProx --new-backup' to create a backup manually.")
+	}
+}
+
+// resolveBackupExtraFiles builds the list of additional (non-LogPath) absolute
+// paths to include in a backup archive from backup.toml config.
+// main.log is always handled via Options.LogPath; it is excluded here.
+// Each config entry may contain comma-separated filenames as a convenience
+// for users who write ["file1,file2"] instead of ["file1","file2"].
+func resolveBackupExtraFiles(cfg backup.BackupConfig, dataDir, logsDir, configDir, mainLogPath string) []string {
+	splitNames := func(entries []string) []string {
+		var out []string
+		for _, entry := range entries {
+			for _, name := range strings.Split(entry, ",") {
+				name = strings.TrimSpace(name)
+				if name != "" {
+					out = append(out, name)
+				}
+			}
+		}
+		return out
+	}
+
+	var files []string
+	for _, name := range splitNames(cfg.Backup.Files.Logs) {
+		p := filepath.Join(logsDir, name)
+		if p != filepath.Clean(mainLogPath) {
+			files = append(files, p)
+		}
+	}
+	for _, name := range splitNames(cfg.Backup.Files.Data) {
+		files = append(files, filepath.Join(dataDir, name))
+	}
+	for _, name := range splitNames(cfg.Backup.Files.Config) {
+		files = append(files, filepath.Join(configDir, name))
+	}
+	return files
+}
+
 func hasChainConfigs(dir string) bool {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -899,12 +1232,29 @@ func hasChainConfigs(dir string) bool {
 		if entry.IsDir() {
 			continue
 		}
-		name := entry.Name()
-		if strings.HasSuffix(name, ".toml") && !strings.EqualFold(name, "ports.toml") {
+		if isChainTOML(entry.Name()) {
 			return true
 		}
 	}
 	return false
+}
+
+// isChainTOML returns true only for files that are chain config TOMLs.
+// Excludes known non-chain system files and all *.sample.toml files.
+func isChainTOML(name string) bool {
+	if !strings.HasSuffix(name, ".toml") {
+		return false
+	}
+	if strings.HasSuffix(name, ".sample.toml") {
+		return false
+	}
+	skip := []string{"ports.toml", "backup.toml"}
+	for _, s := range skip {
+		if strings.EqualFold(name, s) {
+			return false
+		}
+	}
+	return true
 }
 
 func inList(list []string, needle string) bool {
@@ -1096,16 +1446,16 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			w.Header().Add(k, vv)
 		}
 	}
-	w.WriteHeader(resp.StatusCode)
-
 	// If not modifying, stream raw (keep original encoding)
 	if !willModify {
+		w.WriteHeader(resp.StatusCode)
 		_, _ = io.Copy(w, resp.Body)
 		logRequestSummary(r, true, route, host, start)
 		return
 	}
 
-	// If modifying HTML, transparently handle gzip
+	// If modifying HTML, transparently handle gzip — set up reader
+	// before committing the status code so error paths can still send 500.
 	var reader io.Reader = resp.Body
 	if strings.Contains(resp.Header.Get("Content-Encoding"), "gzip") {
 		gzReader, err := gzip.NewReader(resp.Body)
@@ -1117,6 +1467,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		defer gzReader.Close()
 		reader = gzReader
 	}
+	w.WriteHeader(resp.StatusCode)
 
 	// Decide absolute link policy
 	var absoluteHost string
@@ -1133,8 +1484,8 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Read, rewrite, inject, respond
-	rawHTML, _ := io.ReadAll(reader)
+	// Read, rewrite, inject, respond (limit to 10 MB to prevent OOM)
+	rawHTML, _ := io.ReadAll(io.LimitReader(reader, 10<<20))
 	html := string(rawHTML)
 
 	html = rewriteLinks(html, routePrefix, chain.IP, chain.Host, absoluteHost, isRPCvhost)
@@ -1159,19 +1510,82 @@ func handler(w http.ResponseWriter, r *http.Request) {
 func main() {
 	rawArgs := os.Args[1:]
 	startMode := false
-	if len(rawArgs) > 0 {
-		switch rawArgs[0] {
-		case "start":
-			startMode = true
-			rawArgs = rawArgs[1:]
-		case "backup":
-			rawArgs[0] = "--backup"
+	restartSubcmd := false
+	stopSubcmd := false
+
+	// printHelp is defined early so it can be used before flag.Parse().
+	printHelp := func() {
+		out := flag.CommandLine.Output()
+		fmt.Fprintln(out, "Usage: vProx <command> [--flags]")
+		fmt.Fprintln(out, "")
+		fmt.Fprintln(out, "Commands:")
+		fmt.Fprintln(out, "  start                   run in foreground, emit logs to stdout (journalctl friendly)")
+		fmt.Fprintln(out, "  stop                    stop the vProx.service daemon")
+		fmt.Fprintln(out, "  restart                 restart the vProx.service daemon")
+		fmt.Fprintln(out, "")
+		fmt.Fprintln(out, "Flags:")
+		fmt.Fprintln(out, "  --addr string           listen address (default :3000)")
+		fmt.Fprintln(out, "  --auto-burst int        override auto-quarantine burst (env: VPROX_AUTO_BURST)")
+		fmt.Fprintln(out, "  --auto-rps float        override auto-quarantine RPS (env: VPROX_AUTO_RPS)")
+		fmt.Fprintln(out, "  --burst int             override default burst (env: VPROX_BURST)")
+		fmt.Fprintln(out, "  --chains string         override chains directory")
+		fmt.Fprintln(out, "  --config string         override config directory")
+		fmt.Fprintln(out, "  -d, --daemon            start as background daemon (sudo service vProx start)")
+		fmt.Fprintln(out, "  --disable-auto          disable auto-quarantine")
+		fmt.Fprintln(out, "  --disable-backup        disable automatic backup loop and persist to backup.toml")
+		fmt.Fprintln(out, "  --dry-run               load everything but don't start server")
+		fmt.Fprintln(out, "  --help                  show this help")
+		fmt.Fprintln(out, "  --home string           override VPROX_HOME")
+		fmt.Fprintln(out, "  --info                  show loaded config summary and exit")
+		fmt.Fprintln(out, "  --list-backup           list available backup archives and exit")
+		fmt.Fprintln(out, "  --log-file string       override main log file path")
+		fmt.Fprintln(out, "  --new-backup            create a new backup archive and exit")
+		fmt.Fprintln(out, "  --quiet                 suppress non-error output")
+		fmt.Fprintln(out, "  --reset-count           reset persisted access counters (backup)")
+		fmt.Fprintln(out, "  --rps float             override default RPS (env: VPROX_RPS)")
+		fmt.Fprintln(out, "  --backup-status         show backup automation status and next-run ETA")
+		fmt.Fprintln(out, "  --validate              validate configs and exit")
+		fmt.Fprintln(out, "  --verbose               verbose logging output")
+		fmt.Fprintln(out, "  --version               show version and exit")
+		fmt.Fprintln(out, "")
+		fmt.Fprintln(out, "Backup output goes to terminal + main.log. When run standalone (not via systemd),")
+		fmt.Fprintln(out, "use 'journalctl -t vProx' to see backup entries in the journal.")
+	}
+
+	// No args → print help
+	if len(rawArgs) == 0 {
+		printHelp()
+		os.Exit(0)
+	}
+
+	switch rawArgs[0] {
+	case "start":
+		startMode = true
+		rawArgs = rawArgs[1:]
+	case "restart":
+		restartSubcmd = true
+		rawArgs = rawArgs[1:]
+	case "stop":
+		stopSubcmd = true
+		rawArgs = rawArgs[1:]
+	default:
+		// Unknown bare word (not a flag) → error
+		if !strings.HasPrefix(rawArgs[0], "-") {
+			fmt.Fprintf(os.Stderr, "vProx: unknown command %q\n\n", rawArgs[0])
+			printHelp()
+			os.Exit(1)
 		}
 	}
 	os.Args = append([]string{os.Args[0]}, rawArgs...)
 
 	// Parse flags
-	backupFlag := flag.Bool("backup", false, "run backup and exit")
+	newBackupFlag := flag.Bool("new-backup", false, "create a new backup archive and exit")
+	listBackupFlag := flag.Bool("list-backup", false, "list available backup archives and exit")
+	statusFlag := flag.Bool("backup-status", false, "show backup automation status and next-run ETA")
+	daemonFlag := flag.Bool("daemon", false, "start as background daemon (sudo service vProx start)")
+	daemonShortFlag := flag.Bool("d", false, "alias for --daemon")
+	// --backup kept as hidden alias for --new-backup (backward compatibility)
+	backupFlagAlias := flag.Bool("backup", false, "")
 	var resetCount bool
 	flag.BoolVar(&resetCount, "reset_count", false, "reset persisted access counters (for backup mode)")
 	flag.BoolVar(&resetCount, "reset-count", false, "reset persisted access counters (for backup mode)")
@@ -1193,39 +1607,7 @@ func main() {
 	disableAutoFlag := flag.Bool("disable-auto", false, "disable auto-quarantine")
 	disableBackupFlag := flag.Bool("disable-backup", false, "disable automatic backup loop")
 
-	flag.Usage = func() {
-		out := flag.CommandLine.Output()
-		fmt.Fprintln(out, "Usage: vProx [start] [--flags]")
-		fmt.Fprintln(out, "")
-		fmt.Fprintln(out, "Commands:")
-		fmt.Fprintln(out, "  start                   run in foreground and emit logs to stdout (journalctl friendly)")
-		fmt.Fprintln(out, "  backup                  shorthand for --backup")
-		fmt.Fprintln(out, "")
-		fmt.Fprintln(out, "Flags:")
-		fmt.Fprintln(out, "  --addr string           listen address (default :3000)")
-		fmt.Fprintln(out, "  --auto-burst int        override auto-quarantine burst (env: VPROX_AUTO_BURST)")
-		fmt.Fprintln(out, "  --auto-rps float        override auto-quarantine RPS (env: VPROX_AUTO_RPS)")
-		fmt.Fprintln(out, "  --backup                run backup and exit")
-		fmt.Fprintln(out, "  --burst int             override default burst (env: VPROX_BURST)")
-		fmt.Fprintln(out, "  --chains string         override chains directory")
-		fmt.Fprintln(out, "  --config string         override config directory")
-		fmt.Fprintln(out, "  --disable-auto          disable auto-quarantine")
-		fmt.Fprintln(out, "  --disable-backup        disable automatic backup loop")
-		fmt.Fprintln(out, "  --dry-run               load everything but don't start server")
-		fmt.Fprintln(out, "  --help                  show this help")
-		fmt.Fprintln(out, "  --home string           override VPROX_HOME")
-		fmt.Fprintln(out, "  --info                  show loaded config summary and exit")
-		fmt.Fprintln(out, "  --log-file string       override main log file path")
-		fmt.Fprintln(out, "  --quiet                 suppress non-error output")
-		fmt.Fprintln(out, "  --rps float             override default RPS (env: VPROX_RPS)")
-		fmt.Fprintln(out, "  --reset_count           reset persisted access counters (backup mode)")
-		fmt.Fprintln(out, "  --reset-count           alias for --reset_count")
-		fmt.Fprintln(out, "  --validate              validate configs and exit")
-		fmt.Fprintln(out, "  --verbose               verbose logging output")
-		fmt.Fprintln(out, "  --version               show version and exit")
-		fmt.Fprintln(out, "")
-		fmt.Fprintln(out, "Note: Go's flag parser accepts both --flag and -flag; use --flag as the documented style.")
-	}
+	flag.Usage = printHelp
 
 	flag.Parse()
 
@@ -1235,6 +1617,33 @@ func main() {
 		fmt.Println("Version: 1.0.0")
 		// TODO: Build with ldflags for version: go build -ldflags \"-X main.BuildVersion=...\"
 		os.Exit(0)
+	}
+
+	// restart command: delegate to service command
+	if restartSubcmd {
+		if err := runServiceCommand("restart"); err != nil {
+			fmt.Fprintf(os.Stderr, "restart failed: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	// stop command: delegate to service command
+	if stopSubcmd {
+		if err := runServiceCommand("stop"); err != nil {
+			fmt.Fprintf(os.Stderr, "stop failed: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	// --daemon / -d: start service via service command
+	if *daemonFlag || *daemonShortFlag {
+		if err := runServiceCommand("start"); err != nil {
+			fmt.Fprintf(os.Stderr, "daemon start failed: %v\n", err)
+			os.Exit(1)
+		}
+		return
 	}
 
 	// Resolve home directory
@@ -1270,8 +1679,11 @@ func main() {
 	archiveDir = filepath.Join(logsDir, "archives")
 	accessCountsPath = filepath.Join(dataDir, "access-counts.json")
 
+	chainsConfigDir = filepath.Join(configDir, "chains")
+	backupConfigDir = filepath.Join(configDir, "backup")
+
 	// Create directories
-	for _, dir := range []string{configDir, chainsDir, dataDir, logsDir, archiveDir} {
+	for _, dir := range []string{configDir, chainsConfigDir, backupConfigDir, dataDir, logsDir, archiveDir} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			log.Fatalf("Could not create directory %s: %v", dir, err)
 		}
@@ -1299,7 +1711,12 @@ func main() {
 	}
 	defer f.Close()
 
-	if startMode && !*quietFlag {
+	// Consolidate backup mode: --new-backup or legacy --backup alias
+	doBackup := *newBackupFlag || *backupFlagAlias
+	doListBackup := *listBackupFlag
+	doStatus := *statusFlag
+
+	if (startMode && !*quietFlag) || doBackup {
 		log.SetOutput(&splitLogWriter{stdout: os.Stdout, file: f, colorize: true})
 	} else {
 		// In non-start mode we keep file-only behavior.
@@ -1308,17 +1725,39 @@ func main() {
 	}
 	log.SetFlags(0) // no default date/time; our logger prints its own header
 
-	if *backupFlag {
+	if doListBackup {
+		if err := listBackupArchives(archiveDir); err != nil {
+			fmt.Fprintf(os.Stderr, "list-backup failed: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	if doStatus {
+		printBackupStatus(resolveBackupConfigPath(configDir), filepath.Join(dataDir, "backup.last"), archiveDir)
+		return
+	}
+
+	if doBackup {
 		if resetCount {
 			if err := resetAccessCounts(accessCountsPath); err != nil {
 				log.Fatalf("Failed to reset access counters: %v", err)
 			}
 			applog.Print("INFO", "access", "counter_reset", applog.F("path", accessCountsPath))
 		}
+		bupCfg, bupLoaded, _ := backup.LoadConfig(resolveBackupConfigPath(configDir))
+		listSrc := "default"
+		if bupLoaded {
+			listSrc = "loaded"
+		}
+		extraFiles := resolveBackupExtraFiles(bupCfg, dataDir, logsDir, configDir, mainLogPath)
 		if err := backup.RunOnce(backup.Options{
 			LogPath:    mainLogPath,
 			ArchiveDir: archiveDir,
 			StatePath:  filepath.Join(dataDir, "backup.last"),
+			Method:     "MANUAL",
+			ExtraFiles: extraFiles,
+			ListSource: listSrc,
 		}); err != nil {
 			log.Fatalf("Backup failed: %v", err)
 		}
@@ -1328,6 +1767,7 @@ func main() {
 	// Geo status line
 	applog.Print("INFO", "geo", "status", applog.F("message", geo.Info()))
 	loadAccessCounts(accessCountsPath)
+	stopCounterTicker := startAccessCountTicker(accessCountsPath)
 
 	// Load configs (TOML only)
 	var loadErr error
@@ -1340,39 +1780,34 @@ func main() {
 		log.Fatalf("Could not load default ports: %v", loadErr)
 	}
 
-	// Load chain configs from both chains/ (preferred) and config/ (backward compatibility)
+	// Load chain configs — scan order:
+	//   1. $configDir/chains/ (new structured layout, primary)
+	//   2. $chainsDir (~/.vProx/chains/, legacy primary)
+	//   3. $configDir (flat layout, backward compat — filtered by isChainTOML)
 	foundChains := false
-	if hasChainConfigs(chainsDir) {
-		if err := loadChains(chainsDir); err != nil {
+	for _, scanDir := range []string{chainsConfigDir, chainsDir, configDir} {
+		if !hasChainConfigs(scanDir) {
+			continue
+		}
+		if err := loadChains(scanDir); err != nil {
 			if *validateFlag {
-				log.Printf("[VALIDATE] Error loading chains from %s: %v", chainsDir, err)
+				log.Printf("[VALIDATE] Error loading chains from %s: %v", scanDir, err)
 				os.Exit(1)
 			}
-			log.Fatalf("Could not load chain configs from %s: %v", chainsDir, err)
+			log.Fatalf("Could not load chain configs from %s: %v", scanDir, err)
 		}
 		foundChains = true
-		applog.Print("INFO", "config", "chains_loaded", applog.F("dir", chainsDir))
-	}
-	if hasChainConfigs(configDir) {
-		if err := loadChains(configDir); err != nil {
-			if *validateFlag {
-				log.Printf("[VALIDATE] Error loading chains from %s: %v", configDir, err)
-				os.Exit(1)
-			}
-			log.Fatalf("Could not load chain configs from %s: %v", configDir, err)
-		}
-		foundChains = true
-		applog.Print("INFO", "config", "chains_loaded", applog.F("dir", configDir))
+		applog.Print("INFO", "config", "chains_loaded", applog.F("dir", scanDir))
 	}
 	if !foundChains {
-		log.Fatalf("no chain configs found in %s or %s", chainsDir, configDir)
+		log.Fatalf("no chain configs found in %s, %s, or %s", chainsConfigDir, chainsDir, configDir)
 	}
 
 	// Handle --validate flag: print config summary and exit
 	if *validateFlag {
 		log.Println("")
 		log.Println("CONFIG VALIDATION SUCCESSFUL #############################")
-		log.Printf("[VALIDATE] Loaded %d chains from %s and %s", len(chains), chainsDir, configDir)
+		log.Printf("[VALIDATE] Loaded %d chains from %s, %s, %s", len(chains), chainsConfigDir, chainsDir, configDir)
 		for host := range chains {
 			log.Printf("  • %s", host)
 		}
@@ -1458,12 +1893,20 @@ func main() {
 		}
 	}
 
-	// Determine backup enabled status (before limiter setup for dry-run flag)
-	backupEnabled := envBool("VPROX_BACKUP_ENABLED")
+	// Load backup config; automation bool is the sole switch for the scheduler.
+	bupCfg, bupLoaded, bupErr := backup.LoadConfig(resolveBackupConfigPath(configDir))
+	if bupErr != nil {
+		applog.Print("WARN", "backup", "config_load_failed", applog.F("error", bupErr.Error()))
+	}
+	backupEnabled := bupCfg.Backup.Automation
 	if *disableBackupFlag {
 		backupEnabled = false
+		// Persist automation=false to backup.toml so the change survives restarts
+		if err := disableBackupInConfig(resolveBackupConfigPath(configDir)); err != nil {
+			applog.Print("WARN", "backup", "config_persist_failed", applog.F("error", err.Error()))
+		}
 		if *verboseFlag {
-			log.Println("[CLI] Automatic backup disabled")
+			log.Println("[CLI] Automatic backup disabled and persisted to backup.toml")
 		}
 	}
 
@@ -1523,9 +1966,20 @@ func main() {
 
 	var stopBackup func()
 	if backupEnabled {
-		intervalDays := envInt("VPROX_BACKUP_INTERVAL_DAYS", 0)
+		listSrc := "default"
+		if bupLoaded {
+			listSrc = "loaded"
+		}
+		extraFiles := resolveBackupExtraFiles(bupCfg, dataDir, logsDir, configDir, mainLogPath)
+
+		// Env vars override backup.toml for interval/size (backward compat).
+		intervalDays := envInt("VPROX_BACKUP_INTERVAL_DAYS", bupCfg.Backup.IntervalDays)
 		maxBytes := envBytes("VPROX_BACKUP_MAX_BYTES")
-		checkMin := envInt("VPROX_BACKUP_CHECK_MINUTES", 10)
+		if maxBytes == 0 && bupCfg.Backup.MaxSizeMB > 0 {
+			maxBytes = bupCfg.Backup.MaxSizeMB * 1024 * 1024
+		}
+		checkMin := envInt("VPROX_BACKUP_CHECK_MINUTES", bupCfg.Backup.CheckIntervalMin)
+
 		var err error
 		stopBackup, err = backup.StartAuto(backup.Options{
 			LogPath:       mainLogPath,
@@ -1534,6 +1988,8 @@ func main() {
 			IntervalDays:  intervalDays,
 			MaxBytes:      maxBytes,
 			CheckInterval: time.Duration(checkMin) * time.Minute,
+			ExtraFiles:    extraFiles,
+			ListSource:    listSrc,
 		})
 		if err != nil {
 			applog.Print("ERROR", "backup", "auto_start_failed", applog.F("error", err.Error()))
@@ -1588,9 +2044,7 @@ func main() {
 	}
 
 	cleanup := func() {
-		if err := saveAccessCounts(accessCountsPath); err != nil {
-			applog.Print("WARN", "access", "counter_save_failed", applog.F("error", err.Error()))
-		}
+		stopCounterTicker() // final flush of dirty counters
 		if stopBackup != nil {
 			stopBackup()
 		}

@@ -39,7 +39,12 @@ func HandleWS(d Deps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		host := strings.ToLower(r.Host)
-		requestID := applog.EnsureRequestID(r)
+
+		// Generate WSS-prefixed log ID now so both NEW (connect) and UPD (close)
+		// share the same correlation ID via the request header.
+		wssID := applog.NewTypedID("WSS")
+		r.Header.Set(applog.RequestIDHeader, wssID)
+		requestID := wssID
 		applog.SetResponseRequestID(w, requestID)
 
 		backendURL, idle, hard, ok := d.BackendWSParams(host)
@@ -81,6 +86,9 @@ func HandleWS(d Deps) http.HandlerFunc {
 		}
 		defer bConn.Close()
 
+		// Emit CONNECTED log now that both sides are up.
+		d.LogRequestSummary(r, true, "websocket", host, start)
+
 		// Defaults
 		if idle <= 0 {
 			idle = 3600 * time.Second
@@ -106,22 +114,13 @@ func HandleWS(d Deps) http.HandlerFunc {
 			return nil
 		})
 
-		// Hard lifetime (optional)
-		var hardTimer *time.Timer
+		// Hard lifetime (optional): signal via channel instead of closing
+		// connections directly from the timer goroutine (gorilla WS is not
+		// concurrent-safe for Close).
+		hardDone := make(chan struct{})
 		if hard > 0 {
-			hardTimer = time.AfterFunc(hard, func() {
-				_ = cConn.WriteControl(
-					websocket.CloseMessage,
-					websocket.FormatCloseMessage(websocket.CloseNormalClosure, "max lifetime reached"),
-					time.Now().Add(2*time.Second),
-				)
-				_ = bConn.WriteControl(
-					websocket.CloseMessage,
-					websocket.FormatCloseMessage(websocket.CloseNormalClosure, "max lifetime reached"),
-					time.Now().Add(2*time.Second),
-				)
-				_ = cConn.Close()
-				_ = bConn.Close()
+			hardTimer := time.AfterFunc(hard, func() {
+				close(hardDone)
 			})
 			defer hardTimer.Stop()
 		}
@@ -182,7 +181,7 @@ func HandleWS(d Deps) http.HandlerFunc {
 			select {
 			case finalErr = <-errc:
 				cause = classifyWSCause(finalErr)
-			case <-time.After(hard):
+			case <-hardDone:
 				cause = "hard_timeout"
 			}
 		} else {
@@ -190,32 +189,30 @@ func HandleWS(d Deps) http.HandlerFunc {
 			cause = classifyWSCause(finalErr)
 		}
 
+		// Send close frames before closing (best-effort, non-blocking).
+		closeMsg := websocket.FormatCloseMessage(websocket.CloseNormalClosure, cause)
+		_ = cConn.WriteControl(websocket.CloseMessage, closeMsg, time.Now().Add(2*time.Second))
+		_ = bConn.WriteControl(websocket.CloseMessage, closeMsg, time.Now().Add(2*time.Second))
 		_ = cConn.Close()
 		_ = bConn.Close()
 		wg.Wait()
 
 		// Your usual 3-line summary
-		d.LogRequestSummary(r, true, "ws", host, start)
+		// (removed — CONNECTED was already emitted at connect time above)
 
-		// Data transfer quantities + avg throughput
+		// Emit UPD with session stats.
 		dur := time.Since(start)
 		up := atomic.LoadInt64(&upBytes)
 		down := atomic.LoadInt64(&downBytes)
 		total := up + down
-		applog.Print("INFO", "ws", "session_closed",
-			applog.F("request_id", requestID),
-			applog.F("backend", backendURL),
-			applog.F("idle_sec", idle.Seconds()),
-			applog.F("max_sec", hard.Seconds()),
-			applog.F("duration", dur.Truncate(time.Millisecond).String()),
-			applog.F("up_bytes", up),
-			applog.F("down_bytes", down),
-			applog.F("total_bytes", total),
-			applog.F("up_human", humanBytes(up)),
-			applog.F("down_human", humanBytes(down)),
-			applog.F("total_human", humanBytes(total)),
-			applog.F("avg", humanRate(total, dur)),
-			applog.F("cause", cause),
+		applog.PrintLifecycle("UPD", "ws",
+			applog.F("ID", requestID),
+			applog.F("status", "CLOSED"),
+			applog.F("reason", strings.ToUpper(cause)),
+			applog.F("duration", dur.Truncate(time.Second).String()),
+			applog.F("upload", humanBytes(up)),
+			applog.F("download", humanBytes(down)),
+			applog.F("averageRate", humanRate(total, dur)),
 		)
 	}
 }

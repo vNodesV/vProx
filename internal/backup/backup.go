@@ -3,10 +3,11 @@ package backup
 import (
 	"archive/tar"
 	"compress/gzip"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -20,28 +21,58 @@ const defaultCompression = "tar.gz"
 
 // Options controls backup behavior.
 type Options struct {
-	LogPath       string
-	ArchiveDir    string
-	StatePath     string
+	// LogPath is the primary log file (main.log). It is snapshotted and truncated.
+	LogPath string
+
+	// ArchiveDir is the output directory for archives.
+	ArchiveDir string
+
+	// StatePath stores the last-run timestamp for interval-based triggering.
+	StatePath string
+
 	IntervalDays  int
 	MaxBytes      int64
 	CheckInterval time.Duration
 	Now           func() time.Time
+
+	// Method is "AUTO" or "MANUAL" — written to the log line.
+	Method string
+
+	// ExtraFiles is a list of absolute paths to include in the archive
+	// (snapshotted but NOT truncated — e.g. access-counts.json).
+	ExtraFiles []string
+
+	// ListSource is "loaded" (from backup.toml) or "default" (built-in).
+	ListSource string
 }
 
-func nowOrDefault(f func() time.Time) func() time.Time {
-	if f != nil {
-		return f
+// newBupID generates a BUP-prefixed correlation ID matching the log format.
+// Format: BUP + 24 uppercase hex chars (e.g. BUP70B489B8891A01531C223422).
+func newBupID() string {
+	buf := make([]byte, 12)
+	if _, err := rand.Read(buf); err != nil {
+		return fmt.Sprintf("BUP%d", time.Now().UTC().UnixNano())
 	}
-	return time.Now
+	return "BUP" + strings.ToUpper(hex.EncodeToString(buf))
 }
 
-// RunOnce performs a single backup for main.log.
-// Expected behavior:
-// 1) copy main.log -> temporary copy
-// 2) truncate main.log
-// 3) compress copy to ArchiveDir as tar.gz
-// 4) write first line to main.log with backup status and metadata
+// archiveEntry pairs a source path with its name inside the archive.
+type archiveEntry struct {
+	SrcPath string
+	Name    string
+}
+
+// RunOnce performs a single backup run.
+//
+// Behavior:
+//  1. Collect all source files (LogPath + ExtraFiles that exist)
+//  2. Compute total pre-compressed size
+//  3. Snapshot all files to temp copies
+//  4. Truncate LogPath only (preserves ExtraFiles intact)
+//  5. Emit NEW STARTED log line
+//  6. Compress all snapshots into a single tar.gz archive
+//  7. Remove temp copies
+//  8. Emit UPD COMPLETED (or UPD FAILED) log line
 func RunOnce(opts Options) error {
 	if strings.TrimSpace(opts.LogPath) == "" {
 		return errors.New("backup: LogPath is required")
@@ -52,12 +83,21 @@ func RunOnce(opts Options) error {
 
 	nowFn := nowOrDefault(opts.Now)
 	now := nowFn()
-	requestID := applog.NewRequestID()
+	id := newBupID()
 	compression := defaultCompression
+	method := strings.ToUpper(strings.TrimSpace(opts.Method))
+	if method == "" {
+		method = "MANUAL"
+	}
+	listSource := strings.TrimSpace(opts.ListSource)
+	if listSource == "" {
+		listSource = "default"
+	}
 
 	logPath := filepath.Clean(opts.LogPath)
 	logDir := filepath.Dir(logPath)
 	archiveDir := filepath.Clean(opts.ArchiveDir)
+	sourceDir := logDir // primary source dir shown in the log
 
 	if err := os.MkdirAll(logDir, 0o755); err != nil {
 		return fmt.Errorf("backup: create log dir: %w", err)
@@ -66,58 +106,121 @@ func RunOnce(opts Options) error {
 		return fmt.Errorf("backup: create archive dir: %w", err)
 	}
 
-	info, err := os.Stat(logPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			f, createErr := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY, 0o644)
-			if createErr == nil {
-				_ = f.Close()
-			}
-			return nil
+	// Gather source files that exist.
+	allSources := append([]string{logPath}, opts.ExtraFiles...)
+	var presentSources []string
+	var totalSize int64
+	for _, p := range allSources {
+		p = filepath.Clean(p)
+		info, err := os.Stat(p)
+		if err != nil {
+			continue // absent or inaccessible — skip silently
 		}
-		return fmt.Errorf("backup: stat log: %w", err)
+		if info.Size() == 0 {
+			continue // skip empty files
+		}
+		presentSources = append(presentSources, p)
+		totalSize += info.Size()
 	}
-	if info.Size() == 0 {
-		return nil
+	if len(presentSources) == 0 {
+		return nil // nothing to archive
 	}
-	sourceSize := info.Size()
 
 	stamp := now.Format("20060102_150405")
-	base := filepath.Base(logPath)
-	copyName := fmt.Sprintf("%s.%s.copy", base, stamp)
-	copyPath := filepath.Join(logDir, copyName)
-	tarName := fmt.Sprintf("%s.%s.%s", base, stamp, compression)
+	tarName := fmt.Sprintf("backup.%s.%s", stamp, compression)
 	finalPath := filepath.Join(archiveDir, tarName)
+	timestamp := now.UTC().Format("2006-01-02T15:04:05Z")
 
-	if err := copyFile(logPath, copyPath, info.Mode()); err != nil {
-		emitBackupLine(buildBackupStatusLine(requestID, "BACKUP FAILED", err.Error(), sourceSize, 0, compression, archiveDir, tarName, ""))
+	// Snapshot all source files to temp copies.
+	var entries []archiveEntry
+	var tmpPaths []string
+	for _, src := range presentSources {
+		info, _ := os.Stat(src)
+		copyName := fmt.Sprintf("%s.%s.copy", filepath.Base(src), stamp)
+		copyPath := filepath.Join(logDir, copyName)
+		if err := copyFile(src, copyPath, info.Mode()); err != nil {
+			_ = cleanupTemps(tmpPaths)
+			return fmt.Errorf("backup: snapshot %s: %w", filepath.Base(src), err)
+		}
+		entries = append(entries, archiveEntry{SrcPath: copyPath, Name: filepath.Base(src)})
+		tmpPaths = append(tmpPaths, copyPath)
+	}
+
+	// Truncate only the primary log file (if it was part of the snapshot).
+	if containsPath(presentSources, logPath) {
+		if err := os.Truncate(logPath, 0); err != nil {
+			_ = cleanupTemps(tmpPaths)
+			emitFailed(id, method, err.Error())
+			return fmt.Errorf("backup: truncate log: %w", err)
+		}
+	}
+
+	// Emit NEW STARTED line.
+	applog.PrintLifecycle("NEW", "backup",
+		applog.F("ID", id),
+		applog.F("status", "STARTED"),
+		applog.F("method", method),
+		applog.F("timestamp", timestamp),
+		applog.F("compression", strings.ToUpper(compression)),
+		applog.F("source", sourceDir),
+		applog.F("list", listSource),
+		applog.F("to", finalPath),
+		applog.F("size", humanSize(totalSize)),
+	)
+
+	if err := writeTarGz(entries, finalPath); err != nil {
+		_ = cleanupTemps(tmpPaths)
+		emitFailed(id, method, err.Error())
 		return err
 	}
-	if err := os.Truncate(logPath, 0); err != nil {
-		emitBackupLine(buildBackupStatusLine(requestID, "BACKUP FAILED", err.Error(), sourceSize, 0, compression, archiveDir, tarName, ""))
-		return fmt.Errorf("backup: truncate log: %w", err)
-	}
-
-	emitBackupLine(buildBackupStatusLine(requestID, "BACKUP STARTED", "started", sourceSize, 0, compression, archiveDir, tarName, ""))
-
-	if err := writeTarGz(copyPath, copyName, finalPath); err != nil {
-		emitBackupLine(buildBackupStatusLine(requestID, "BACKUP FAILED", err.Error(), sourceSize, 0, compression, archiveDir, tarName, ""))
-		return err
-	}
-	_ = os.Remove(copyPath)
+	_ = cleanupTemps(tmpPaths)
 
 	archiveInfo, err := os.Stat(finalPath)
 	if err != nil {
-		emitBackupLine(buildBackupStatusLine(requestID, "BACKUP FAILED", err.Error(), sourceSize, 0, compression, archiveDir, tarName, ""))
+		emitFailed(id, method, err.Error())
 		return fmt.Errorf("backup: stat archive: %w", err)
 	}
 
-	emitBackupLine(buildBackupStatusLine(requestID, "BACKUP COMPLETE", "success", sourceSize, archiveInfo.Size(), compression, archiveDir, tarName, ""))
+	// Emit UPD COMPLETED line.
+	applog.PrintLifecycle("UPD", "backup",
+		applog.F("ID", id),
+		applog.F("status", "COMPLETED"),
+		applog.F("location", finalPath),
+		applog.F("compressedSize", humanSize(archiveInfo.Size())),
+	)
 
 	if opts.StatePath != "" {
 		_ = writeLastRun(opts.StatePath, now)
 	}
 	return nil
+}
+
+// emitFailed emits a UPD FAILED log line.
+func emitFailed(id, method, reason string) {
+	applog.PrintLifecycle("UPD", "backup",
+		applog.F("ID", id),
+		applog.F("status", "FAILED"),
+		applog.F("method", method),
+		applog.F("reason", reason),
+	)
+}
+
+// cleanupTemps removes a list of temporary file paths, ignoring errors.
+func cleanupTemps(paths []string) error {
+	for _, p := range paths {
+		_ = os.Remove(p)
+	}
+	return nil
+}
+
+func containsPath(paths []string, target string) bool {
+	target = filepath.Clean(target)
+	for _, p := range paths {
+		if filepath.Clean(p) == target {
+			return true
+		}
+	}
+	return false
 }
 
 // StartAuto starts an automated backup loop based on interval and/or size.
@@ -129,6 +232,7 @@ func StartAuto(opts Options) (func(), error) {
 	if opts.CheckInterval <= 0 {
 		opts.CheckInterval = 10 * time.Minute
 	}
+	opts.Method = "AUTO" // always AUTO for scheduled runs
 	stop := make(chan struct{})
 
 	go func() {
@@ -157,6 +261,13 @@ func StartAuto(opts Options) (func(), error) {
 	}()
 
 	return func() { close(stop) }, nil
+}
+
+func nowOrDefault(f func() time.Time) func() time.Time {
+	if f != nil {
+		return f
+	}
+	return time.Now
 }
 
 func shouldBackup(opts Options) (bool, string, error) {
@@ -215,32 +326,6 @@ func copyFile(src, dst string, mode os.FileMode) error {
 	return nil
 }
 
-func buildBackupStatusLine(requestID, event, status string, sourceSize, compressedSize int64, compression, location, filename, failed string) string {
-	event = strings.ToUpper(strings.TrimSpace(event))
-	if event == "" {
-		event = "BACKUP"
-	}
-	requestID = strings.ToUpper(strings.TrimSpace(requestID))
-	compression = strings.ToUpper(strings.TrimSpace(compression))
-	fields := []applog.Field{
-		applog.F("request_id", requestID),
-		applog.F("status", strings.TrimSpace(status)),
-		applog.F("filesize", humanSize(sourceSize)),
-		applog.F("compression", compression),
-		applog.F("location", strings.TrimSpace(location)),
-		applog.F("filename", strings.TrimSpace(filename)),
-		applog.F("archivesize", humanSize(compressedSize)),
-	}
-	if strings.TrimSpace(failed) != "" {
-		fields = append(fields, applog.F("failed", strings.TrimSpace(failed)))
-	}
-	level := "INFO"
-	if strings.EqualFold(event, "BACKUP FAILED") {
-		level = "ERROR"
-	}
-	return applog.Line(level, "backup", event, fields...)
-}
-
 func humanSize(bytes int64) string {
 	if bytes < 0 {
 		bytes = 0
@@ -258,14 +343,8 @@ func humanSize(bytes int64) string {
 	return fmt.Sprintf("%.2f%s", sz, unit)
 }
 
-func emitBackupLine(line string) {
-	if strings.TrimSpace(line) == "" {
-		return
-	}
-	log.Println(line)
-}
-
-func writeTarGz(srcPath, srcName, tarPath string) error {
+// writeTarGz archives all entries into a single tar.gz at tarPath.
+func writeTarGz(entries []archiveEntry, tarPath string) error {
 	f, err := os.Create(tarPath)
 	if err != nil {
 		return fmt.Errorf("backup: create tar: %w", err)
@@ -278,27 +357,28 @@ func writeTarGz(srcPath, srcName, tarPath string) error {
 	tw := tar.NewWriter(gz)
 	defer tw.Close()
 
-	info, err := os.Stat(srcPath)
-	if err != nil {
-		return fmt.Errorf("backup: stat source copy: %w", err)
-	}
-	header, err := tar.FileInfoHeader(info, "")
-	if err != nil {
-		return fmt.Errorf("backup: tar header: %w", err)
-	}
-	header.Name = srcName
-	if err := tw.WriteHeader(header); err != nil {
-		return fmt.Errorf("backup: write header: %w", err)
-	}
-
-	file, err := os.Open(srcPath)
-	if err != nil {
-		return fmt.Errorf("backup: open copy: %w", err)
-	}
-	defer file.Close()
-
-	if _, err := io.Copy(tw, file); err != nil {
-		return fmt.Errorf("backup: tar write: %w", err)
+	for _, e := range entries {
+		info, err := os.Stat(e.SrcPath)
+		if err != nil {
+			return fmt.Errorf("backup: stat %s: %w", e.Name, err)
+		}
+		header, err := tar.FileInfoHeader(info, "")
+		if err != nil {
+			return fmt.Errorf("backup: tar header %s: %w", e.Name, err)
+		}
+		header.Name = e.Name
+		if err := tw.WriteHeader(header); err != nil {
+			return fmt.Errorf("backup: write header %s: %w", e.Name, err)
+		}
+		file, err := os.Open(e.SrcPath)
+		if err != nil {
+			return fmt.Errorf("backup: open %s: %w", e.Name, err)
+		}
+		_, copyErr := io.Copy(tw, file)
+		_ = file.Close()
+		if copyErr != nil {
+			return fmt.Errorf("backup: tar write %s: %w", e.Name, copyErr)
+		}
 	}
 	return nil
 }

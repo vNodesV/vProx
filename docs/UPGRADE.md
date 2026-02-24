@@ -101,8 +101,8 @@ $HOME/.vProx/
 
 ### 3. **Chain Configurations**
 - **Old**: `$HOME/.vProx/config/*.toml` (mixed with ports.toml)
-- **New**: `$HOME/.vProx/chains/*.toml` (dedicated directory)
-- **Backward compatibility**: Still loads configs from `config/` if present
+- **New**: `$HOME/.vProx/config/chains/*.toml` (dedicated directory)
+- **Legacy**: `$HOME/.vProx/chains/` still scanned for backward compatibility
 - **Benefit**: Cleaner separation of global config vs chain-specific configs
 
 ### 4. **GEO Database Installation**
@@ -150,13 +150,14 @@ IP2LOCATION_MMDB=$HOME/.vProx/data/geolocation/ip2location.mmdb
 ```
 
 ### Chain Configurations
-Can now be placed in either:
-- `$HOME/.vProx/chains/` (preferred)
-- `$HOME/.vProx/config/` (backward compatibility)
+Can now be placed in (scan order):
+1. `$HOME/.vProx/config/chains/` (preferred)
+2. `$HOME/.vProx/chains/` (legacy, still scanned)
+3. `$HOME/.vProx/config/` (backward compatibility)
 
 Sample configuration available at:
-- Repo: `chains/chain.sample.toml`
-- Installed: `$HOME/.vProx/chains/chain.sample.toml`
+- Repo: `config/chains/chain.sample.toml`
+- Installed: `$HOME/.vProx/config/chains/chain.sample.toml`
 
 ## Testing
 

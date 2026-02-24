@@ -1,0 +1,40 @@
+# vProx Backup Configuration
+# Copy to: $VPROX_HOME/config/backup/backup.toml
+
+[backup]
+
+# automation: when true, backups run automatically based on interval_days and/or max_size_mb.
+# Set to false to disable automatic backups (manual `vprox --new-backup` always works regardless).
+automation = true
+
+# compression: archive format. Only "tar.gz" is currently supported.
+compression = "tar.gz"
+
+# destination: override the archive output directory.
+# Default (empty): $VPROX_HOME/data/logs/archives
+destination = ""
+
+# interval_days: trigger a backup every N days. 0 = disabled.
+interval_days = 7
+
+# max_size_mb: trigger a backup when main.log exceeds N MB. 0 = disabled.
+max_size_mb = 100
+
+# check_interval_min: how often (minutes) the auto loop evaluates triggers.
+check_interval_min = 10
+
+[backup.files]
+
+# Log files to include in the archive.
+# Paths are relative to $VPROX_HOME/data/logs/
+# Each file is a separate quoted string in the array.
+logs = ["main.log", "rate-limit.jsonl"]
+
+# Data files to include in the archive.
+# Paths are relative to $VPROX_HOME/data/
+data = ["access-counts.json"]
+
+# Config files to include in the archive.
+# Paths are relative to $VPROX_HOME/config/
+# Subdirectory paths are supported (e.g. "chains/your_chain.toml").
+config = ["ports.toml", "chains/your_chain.toml"]

@@ -28,10 +28,9 @@ var (
 	lastIP2LErr string
 )
 
-// Preferred MMDB location(s)
+// Preferred MMDB location(s) — system-wide paths only. User home paths are
+// added dynamically in initDB() to respect VPROX_HOME overrides.
 var ip2lPaths = []string{
-	// User's vProx home directory (new structure)
-	filepath.Join(os.Getenv("HOME"), ".vProx", "data", "geolocation", "ip2location.mmdb"),
 	// System-wide locations
 	"/usr/local/share/IP2Proxy/ip2location.mmdb",
 	"/usr/local/share/IP2Location/ip2location.mmdb",
@@ -75,6 +74,14 @@ func safeOpenMMDB(path string) (db *maxminddb.Reader, err error) {
 
 // lazy init — tries IP2Location MMDB first, then GeoLite2 fallbacks
 func initDB() {
+	// Resolve user home path at init time (not package init) so
+	// VPROX_HOME overrides are respected.
+	if home := os.Getenv("VPROX_HOME"); home != "" {
+		ip2lPaths = append([]string{filepath.Join(home, "data", "geolocation", "ip2location.mmdb")}, ip2lPaths...)
+	} else if home := os.Getenv("HOME"); home != "" {
+		ip2lPaths = append([]string{filepath.Join(home, ".vProx", "data", "geolocation", "ip2location.mmdb")}, ip2lPaths...)
+	}
+
 	// 1) IP2Location MMDB
 	if ip2lDB == nil {
 		if p := strings.TrimSpace(os.Getenv("IP2LOCATION_MMDB")); p != "" {
@@ -163,6 +170,21 @@ type cacheEntry struct {
 var cache sync.Map // ip string -> cacheEntry
 
 const cacheTTL = 10 * time.Minute
+
+func init() {
+	// Periodic cache sweep to evict expired entries and bound memory.
+	go func() {
+		for range time.Tick(5 * time.Minute) {
+			now := time.Now()
+			cache.Range(func(key, val any) bool {
+				if e := val.(cacheEntry); now.After(e.exp) {
+					cache.Delete(key)
+				}
+				return true
+			})
+		}
+	}()
+}
 
 func cacheGet(ip string) (cc, asn string, ok bool) {
 	if v, ok := cache.Load(ip); ok {
@@ -294,16 +316,21 @@ func Info() string {
 }
 
 // Close releases DB resources (useful on shutdown / hot-reload).
+// Resets the init guard so a subsequent Lookup() re-opens the databases.
 func Close() {
 	if ip2lDB != nil {
 		_ = ip2lDB.Close()
+		ip2lDB = nil
 	}
 	if geoCountry != nil {
 		_ = geoCountry.Close()
+		geoCountry = nil
 	}
 	if geoASN != nil {
 		_ = geoASN.Close()
+		geoASN = nil
 	}
+	once = sync.Once{} // allow re-initialization
 }
 
 // ------------------------

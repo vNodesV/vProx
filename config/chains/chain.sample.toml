@@ -1,6 +1,6 @@
 # vProx Chain Configuration Sample
 # Copy this file and customize for each chain you want to proxy
-# Place chain configs in: $HOME/.vProx/chains/
+# Place chain configs in: $HOME/.vProx/config/chains/
 
 chain_name     = "your_chain"
 host           = "api-link.example.com"
