@@ -72,6 +72,53 @@ func Line(level, module, event string, fields ...Field) string {
 	return strings.Join(parts, " ")
 }
 
+// LineLifecycle renders a lifecycle event without a message token.
+//
+// Format:
+//
+//	<time> <lifecycle> key=value ... module=<module>
+//
+// Example:
+//
+//	10:23AM NEW ID=BUP1A2B status=STARTED method=AUTO module=backup
+//	10:23AM UPD ID=BUP1A2B status=COMPLETED module=backup
+func LineLifecycle(lifecycle, module string, fields ...Field) string {
+	ts := time.Now().Local().Format("3:04PM")
+	lifecycle = strings.ToUpper(strings.TrimSpace(lifecycle))
+	if lifecycle == "" {
+		lifecycle = "INF"
+	}
+	module = strings.TrimSpace(module)
+	if module == "" {
+		module = "app"
+	}
+
+	parts := []string{ts, lifecycle}
+	hasModule := false
+
+	for _, f := range fields {
+		k := strings.TrimSpace(f.Key)
+		if k == "" {
+			continue
+		}
+		if strings.EqualFold(k, "module") {
+			hasModule = true
+		}
+		parts = append(parts, k+"="+encodeValue(f.Value))
+	}
+
+	if !hasModule {
+		parts = append(parts, "module="+encodeValue(module))
+	}
+
+	return strings.Join(parts, " ")
+}
+
+// PrintLifecycle emits a lifecycle line via the global default logger.
+func PrintLifecycle(lifecycle, module string, fields ...Field) {
+	log.Println(LineLifecycle(lifecycle, module, fields...))
+}
+
 // Print emits a structured line via the global default logger.
 func Print(level, module, event string, fields ...Field) {
 	log.Println(Line(level, module, event, fields...))
@@ -130,6 +177,16 @@ func NewRequestID() string {
 		return fmt.Sprintf("req-%d", time.Now().UTC().UnixNano())
 	}
 	return "req-" + hex.EncodeToString(buf)
+}
+
+// NewTypedID generates a log correlation ID with a 3-letter prefix and 24 uppercase hex chars.
+// Used for structured log IDs: API{hex}, RPC{hex}, WSS{hex}, BUP{hex}, etc.
+func NewTypedID(prefix string) string {
+	buf := make([]byte, 12)
+	if _, err := rand.Read(buf); err != nil {
+		return strings.ToUpper(prefix) + fmt.Sprintf("%024X", time.Now().UTC().UnixNano())
+	}
+	return strings.ToUpper(strings.TrimSpace(prefix)) + strings.ToUpper(hex.EncodeToString(buf))
 }
 
 func isSafeRequestID(v string) bool {

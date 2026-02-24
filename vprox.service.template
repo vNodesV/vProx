@@ -10,10 +10,10 @@ Environment=IP2LOCATION_MMDB=__HOME__/.vProx/data/geolocation/ip2location.mmdb
 Environment=GOTRACEBACK=all
 EnvironmentFile=-__HOME__/.vProx/.env
 ExecStart=/usr/local/bin/vProx start
-Restart=on-failure
-RestartSec=5
+Restart=no
 User=__USER__
 WorkingDirectory=__HOME__/.vProx
+SyslogIdentifier=vProx
 StandardOutput=journal
 StandardError=journal
 
