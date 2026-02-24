@@ -259,7 +259,7 @@ $HOME/.vProx/data/logs/archives/backup.YYYYMMDD_HHMMSS.tar.gz
 Source access counters (`src_count`) are persisted at `$HOME/.vProx/data/access-counts.json`. They survive restarts and backup cycles. Reset only when explicitly requested:
 
 ```bash
-vProx backup --reset_count    # or --reset-count
+vProx --new-backup --reset_count    # or --reset-count
 ```
 
 ---
@@ -357,4 +357,12 @@ vProx --backup-status                 # Show scheduler status
 
 **Rate limit overrides (CLI, override .env):**
 
+```bash
+vProx --rps 50                        # Override default RPS (env: VPROX_RPS, default: 25)
+vProx --burst 250                     # Override burst capacity (env: VPROX_BURST, default: 100)
+vProx --auto-rps 0.5                  # Override quarantine penalty RPS (env: VPROX_AUTO_RPS)
+vProx --auto-burst 2                  # Override quarantine penalty burst (env: VPROX_AUTO_BURST)
+vProx --disable-auto                  # Disable auto-quarantine for this run
+```
 
+For detailed flag descriptions, see [`CLI_FLAGS_GUIDE.md`](./CLI_FLAGS_GUIDE.md).

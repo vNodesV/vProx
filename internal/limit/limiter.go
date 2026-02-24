@@ -52,7 +52,8 @@ type IPLimiter struct {
 	lastAllowLog  sync.Map // ip -> time.Time
 
 	// sweeper
-	sweepDone chan struct{} // closed to stop sweeper goroutine
+	sweepDone  chan struct{} // closed to stop sweeper goroutine
+	sweepClose sync.Once   // ensures sweepDone is closed at most once
 
 	// logging
 	logger     *log.Logger
@@ -329,7 +330,7 @@ func (l *IPLimiter) DeleteOverride(ip string) {
 
 // Close releases resources (e.g., log file).
 func (l *IPLimiter) Close() error {
-	close(l.sweepDone)
+	l.sweepClose.Do(func() { close(l.sweepDone) })
 	if l.logFile != nil {
 		return l.logFile.Close()
 	}

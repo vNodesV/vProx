@@ -174,7 +174,8 @@ const cacheTTL = 10 * time.Minute
 func init() {
 	// Periodic cache sweep to evict expired entries and bound memory.
 	go func() {
-		for range time.Tick(5 * time.Minute) {
+		ticker := time.NewTicker(5 * time.Minute)
+		for range ticker.C {
 			now := time.Now()
 			cache.Range(func(key, val any) bool {
 				if e := val.(cacheEntry); now.After(e.exp) {
