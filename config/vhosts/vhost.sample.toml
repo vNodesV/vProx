@@ -1,0 +1,56 @@
+# vProx Virtual Host Configuration — Example
+# Copy to: $VPROX_HOME/config/vhosts/<yoursite>.toml
+# One file per virtual host.  Fields are at the top level (no section prefix).
+
+# name: human-readable label used in logs (required).
+name = "mysite"
+
+# host: primary ServerName matched against the HTTP Host header (required).
+host = "mysite.example.com"
+
+# aliases: additional hostnames that resolve to this vhost (optional).
+# aliases = ["www.mysite.example.com"]
+
+# backend: upstream URL for reverse-proxy mode.
+# Leave empty for static-only vhosts.
+backend = "http://127.0.0.1:3000"
+
+# root: filesystem directory for static files.
+# Leave empty for proxy-only vhosts.
+# root = "/var/www/mysite"
+
+# index: directory index file (default: "index.html").
+# index = "index.html"
+
+# compress: enable outbound gzip for text/* and application/json (default: false).
+# compress = true
+
+# proxy_timeout_sec: upstream proxy timeout in seconds (default: 30).
+# proxy_timeout_sec = 30
+
+# http_redirect: force HTTP→HTTPS redirect.
+# nil/absent = auto (true when tls.cert+key are set), false = disabled, true = forced.
+# http_redirect = true
+
+[tls]
+# cert = "/etc/ssl/mysite/fullchain.pem"
+# key  = "/etc/ssl/mysite/privkey.pem"
+
+[cors]
+# enabled = true
+# origins = ["https://app.example.com"]
+# methods = ["GET", "POST", "OPTIONS"]
+# headers = ["Content-Type", "Authorization"]
+# credentials = true
+
+[headers]
+# strip  = ["Server", "X-Powered-By"]
+# inject = { "X-Frame-Options" = "DENY" }
+
+[security]
+# hsts                = true
+# no_sniff            = true
+# frame_deny          = true
+# xss_protection      = true
+# referrer_policy     = "strict-origin-when-cross-origin"
+# permissions_policy  = "geolocation=(), camera=()"

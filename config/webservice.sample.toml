@@ -1,0 +1,18 @@
+# vProx WebService Configuration
+# Copy to: $VPROX_HOME/config/webservice.toml
+#
+# webservice.toml controls the embedded HTTP/HTTPS server module.
+# Virtual hosts are configured individually in config/vhosts/*.toml.
+
+# enable: set to false to disable the webserver module entirely.
+# Default (key absent): true
+enable = true
+
+[server]
+# http_addr: listen address for plain HTTP (used only for HTTP→HTTPS redirect).
+# Default: ":80"
+http_addr = ":80"
+
+# https_addr: listen address for HTTPS (TLS).
+# Default: ":443"
+https_addr = ":443"
