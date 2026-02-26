@@ -1,0 +1,20 @@
+[Unit]
+Description=vLog by vNodes[V] — vProx log archive analyzer and IP intelligence server.
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+Environment=VPROX_HOME=__HOME__/.vProx
+Environment=GOTRACEBACK=all
+EnvironmentFile=-__HOME__/.vProx/.env
+ExecStart=/usr/local/bin/vLog start
+Restart=no
+User=__USER__
+WorkingDirectory=__HOME__/.vProx
+SyslogIdentifier=vLog
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

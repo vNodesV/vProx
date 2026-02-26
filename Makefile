@@ -5,6 +5,11 @@ BUILD_SRC := ./cmd/vprox
 BUILD_DIR := .build
 BUILD_OUT := $(BUILD_DIR)/$(APP_NAME)
 
+VLOG_NAME    := vLog
+VLOG_SRC     := ./cmd/vlog
+VLOG_BUILD   := $(BUILD_DIR)/$(VLOG_NAME)
+VLOG_SERVICE := $(SERVICE_DIR)/vLog.service
+
 VPROX_HOME := $(HOME)/.vProx
 DATA_DIR := $(VPROX_HOME)/data
 GEO_DIR := $(DATA_DIR)/geolocation
@@ -28,7 +33,8 @@ GOPATH := $(shell go env GOPATH)
 GOROOT := $(shell go env GOROOT)
 GOPATH_BIN := $(GOPATH)/bin
 
-.PHONY: all validate-go dirs geo config build install clean systemd env
+.PHONY: all validate-go dirs geo config build install clean systemd env \
+        build-vlog install-vlog config-vlog service-vlog
 
 all: install
 install: validate-go dirs geo config env
@@ -247,4 +253,84 @@ systemd:
 			echo "  echo '$$SUDOERS_LINE' | sudo tee $$SUDOERS_FILE"; \
 			echo "  sudo chmod 0440 $$SUDOERS_FILE"; \
 		fi; \
+	fi
+
+## ─── vLog targets ────────────────────────────────────────────────────────────
+
+## Build vLog binary to .build/vLog  (does NOT rebuild vProx)
+
+build-vlog:
+	@echo "Building $(VLOG_NAME)..."
+	mkdir -p "$(BUILD_DIR)"
+	go build -o "$(VLOG_BUILD)" "$(VLOG_SRC)"
+	@echo "✓ Build complete"
+	@echo "  Output: $(VLOG_BUILD)"
+
+## Install vLog to GOPATH/bin + optional /usr/local/bin symlink
+
+install-vlog: validate-go dirs config-vlog
+	@echo "Installing $(VLOG_NAME)..."
+	go build -o "$(GOPATH_BIN)/$(VLOG_NAME)" "$(VLOG_SRC)"
+	@echo ""
+	@echo "The next step will create a symlink at /usr/local/bin/$(VLOG_NAME)."
+	@read -p "Create symlink? (y/n) " -n 1 -r; echo ""; \
+	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
+		sudo ln -sf "$(GOPATH_BIN)/$(VLOG_NAME)" "/usr/local/bin/$(VLOG_NAME)"; \
+		echo "✓ Symlink created at /usr/local/bin/$(VLOG_NAME)"; \
+		$(MAKE) service-vlog; \
+	else \
+		echo "✓ Skipped symlink. Run: $(GOPATH_BIN)/$(VLOG_NAME) start"; \
+	fi
+
+## Install vlog.sample.toml → ~/.vProx/config/vlog.toml (only if absent)
+
+config-vlog: dirs
+	@echo "Installing vLog config..."
+	@if [[ -f "config/vlog.sample.toml" ]]; then \
+		if [[ ! -f "$(CFG_DIR)/vlog.toml" ]]; then \
+			cp "config/vlog.sample.toml" "$(CFG_DIR)/vlog.toml"; \
+			echo "✓ Copied vlog.sample.toml to $(CFG_DIR)/vlog.toml"; \
+			echo "  Edit $(CFG_DIR)/vlog.toml to set your API keys."; \
+		else \
+			echo "✓ $(CFG_DIR)/vlog.toml already exists"; \
+		fi; \
+	else \
+		echo "WARNING: config/vlog.sample.toml not found in repo"; \
+	fi
+
+## Create and optionally install vLog systemd service
+
+service-vlog:
+	@echo "Rendering vLog systemd service file..."
+	@mkdir -p "$(SERVICE_DIR)"
+	@TMP_RENDERED="$$(mktemp)"; \
+	sed "s|__HOME__|$(HOME)|g; s|__USER__|$(USER)|g" vlog.service.template > "$$TMP_RENDERED"; \
+	if [[ -f "$(VLOG_SERVICE)" ]]; then \
+		if cmp -s "$$TMP_RENDERED" "$(VLOG_SERVICE)"; then \
+			echo "✓ Local vLog.service already up to date"; \
+		else \
+			echo "⚠ vLog.service differs; applying update..."; \
+			cp "$$TMP_RENDERED" "$(VLOG_SERVICE)"; \
+			echo "✓ Updated $(VLOG_SERVICE)"; \
+		fi; \
+	else \
+		cp "$$TMP_RENDERED" "$(VLOG_SERVICE)"; \
+		echo "✓ Created $(VLOG_SERVICE)"; \
+	fi; \
+	rm -f "$$TMP_RENDERED"
+	@echo ""
+	@read -p "Install vLog.service to /etc/systemd/system? (y/n) " -n 1 -r; echo ""; \
+	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
+		if sudo cp "$(VLOG_SERVICE)" "/etc/systemd/system/vLog.service" && \
+		   sudo systemctl daemon-reload && \
+		   sudo systemctl enable vLog.service; \
+		then \
+			echo "✓ vLog.service installed. Start with: sudo service vLog start"; \
+		else \
+			echo "✗ Failed. Check: sudo systemctl status vLog.service"; \
+		fi; \
+	else \
+		echo "✓ Skipped. Install manually:"; \
+		echo "  sudo cp $(VLOG_SERVICE) /etc/systemd/system/vLog.service"; \
+		echo "  sudo systemctl daemon-reload && sudo systemctl enable vLog.service"; \
 	fi
