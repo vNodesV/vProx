@@ -1,0 +1,83 @@
+/* vLog — supplemental styles over Pico CSS */
+
+/* Threat score badges */
+.badge {
+	display: inline-block;
+	padding: 0.25em 0.5em;
+	border-radius: 0.25em;
+	font-size: 0.85em;
+	font-weight: bold;
+}
+.badge-unknown    { background: #6c757d; color: #fff; }
+.badge-clean      { background: #198754; color: #fff; }
+.badge-active     { background: #0d6efd; color: #fff; }
+.badge-suspicious { background: #fd7e14; color: #fff; }
+.badge-malicious  { background: #dc3545; color: #fff; }
+
+/* Threat score progress bar */
+.threat-bar {
+	height: 8px;
+	border-radius: 4px;
+	background: #e9ecef;
+	overflow: hidden;
+}
+.threat-fill {
+	height: 100%;
+	border-radius: 4px;
+	transition: width 0.3s ease;
+}
+.threat-fill-low       { background: #198754; }
+.threat-fill-medium    { background: #fd7e14; }
+.threat-fill-high      { background: #dc3545; }
+
+/* Stats cards */
+.stats-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+	gap: 1rem;
+	margin-bottom: 1.5rem;
+}
+.stat-card {
+	background: var(--pico-card-background-color, #fff);
+	border: 1px solid var(--pico-muted-border-color, #dee2e6);
+	border-radius: 0.5rem;
+	padding: 1rem;
+	text-align: center;
+}
+.stat-card h3 {
+	margin: 0 0 0.25rem;
+	font-size: 2rem;
+}
+.stat-card p {
+	margin: 0;
+	color: var(--pico-muted-color, #6c757d);
+	font-size: 0.85rem;
+}
+
+/* Detail sections */
+.detail-header {
+	display: flex;
+	align-items: center;
+	gap: 1rem;
+	margin-bottom: 1rem;
+}
+
+.flags-list {
+	list-style: none;
+	padding: 0;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+}
+.flags-list li {
+	background: #f8d7da;
+	color: #842029;
+	padding: 0.2em 0.6em;
+	border-radius: 0.25em;
+	font-size: 0.85em;
+}
+
+/* Ingest result */
+#ingest-result {
+	margin-top: 0.5rem;
+}

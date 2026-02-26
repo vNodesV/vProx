@@ -1,0 +1,167 @@
+// Package config handles loading and validating vLog configuration from
+// $VPROX_HOME/config/vlog.toml.
+package config
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/pelletier/go-toml/v2"
+)
+
+// Config is the top-level structure for vlog.toml.
+type Config struct {
+	VLog VLogSection `toml:"vlog"`
+}
+
+// VLogSection holds all vLog settings.
+type VLogSection struct {
+	// Port is the HTTP listen port for the vLog web UI.
+	Port int `toml:"port"`
+
+	// DBPath is the path to the SQLite database file.
+	// Default: $VPROX_HOME/data/vlog.db
+	DBPath string `toml:"db_path"`
+
+	// ArchivesDir is the directory containing vProx log archives.
+	// Default: $VPROX_HOME/data/logs/archives
+	ArchivesDir string `toml:"archives_dir"`
+
+	// WatchIntervalSec is the poll interval (seconds) for new archives.
+	WatchIntervalSec int `toml:"watch_interval_sec"`
+
+	// Intel holds IP intelligence enrichment settings.
+	Intel IntelConfig `toml:"intel"`
+
+	// Server holds HTTP server tuning parameters.
+	Server ServerConfig `toml:"server"`
+}
+
+// IntelConfig controls automatic IP intelligence enrichment.
+type IntelConfig struct {
+	// AutoEnrich enables automatic threat intel lookups for new IPs.
+	AutoEnrich bool `toml:"auto_enrich"`
+
+	// CacheTTLHours is how long (hours) cached intel results remain valid.
+	CacheTTLHours int `toml:"cache_ttl_hours"`
+
+	// RateLimitRPM is the maximum API calls per minute per intel source.
+	RateLimitRPM int `toml:"rate_limit_rpm"`
+
+	// Keys holds API keys for each intelligence source.
+	Keys IntelKeys `toml:"keys"`
+}
+
+// IntelKeys stores API keys for threat intelligence providers.
+type IntelKeys struct {
+	AbuseIPDB  string `toml:"abuseipdb"`
+	VirusTotal string `toml:"virustotal"`
+	Shodan     string `toml:"shodan"`
+}
+
+// ServerConfig holds HTTP server timeout parameters.
+type ServerConfig struct {
+	// ReadTimeoutSec is the maximum duration (seconds) for reading a request.
+	ReadTimeoutSec int `toml:"read_timeout_sec"`
+
+	// WriteTimeoutSec is the maximum duration (seconds) for writing a response.
+	WriteTimeoutSec int `toml:"write_timeout_sec"`
+}
+
+// DefaultConfig returns a Config with all defaults computed from the given
+// home directory path (typically $VPROX_HOME).
+func DefaultConfig(home string) Config {
+	return Config{
+		VLog: VLogSection{
+			Port:             8889,
+			DBPath:           filepath.Join(home, "data", "vlog.db"),
+			ArchivesDir:      filepath.Join(home, "data", "logs", "archives"),
+			WatchIntervalSec: 60,
+			Intel: IntelConfig{
+				AutoEnrich:    true,
+				CacheTTLHours: 24,
+				RateLimitRPM:  10,
+			},
+			Server: ServerConfig{
+				ReadTimeoutSec:  30,
+				WriteTimeoutSec: 30,
+			},
+		},
+	}
+}
+
+// Load reads vlog.toml from path and returns the parsed Config.
+// If the file does not exist, it returns DefaultConfig with no error.
+// TOML fields are optional; zero-value fields are backfilled with defaults.
+func Load(path string) (Config, error) {
+	home := FindHome()
+	cfg := DefaultConfig(home)
+
+	b, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return cfg, nil
+		}
+		return cfg, fmt.Errorf("read vlog.toml: %w", err)
+	}
+
+	if err := toml.Unmarshal(b, &cfg); err != nil {
+		return DefaultConfig(home), fmt.Errorf("parse vlog.toml: %w", err)
+	}
+
+	// Backfill zero-value fields with defaults.
+	if cfg.VLog.Port == 0 {
+		cfg.VLog.Port = 8889
+	}
+	if strings.TrimSpace(cfg.VLog.DBPath) == "" {
+		cfg.VLog.DBPath = filepath.Join(home, "data", "vlog.db")
+	}
+	if strings.TrimSpace(cfg.VLog.ArchivesDir) == "" {
+		cfg.VLog.ArchivesDir = filepath.Join(home, "data", "logs", "archives")
+	}
+	if cfg.VLog.WatchIntervalSec <= 0 {
+		cfg.VLog.WatchIntervalSec = 60
+	}
+	if cfg.VLog.Intel.CacheTTLHours <= 0 {
+		cfg.VLog.Intel.CacheTTLHours = 24
+	}
+	if cfg.VLog.Intel.RateLimitRPM <= 0 {
+		cfg.VLog.Intel.RateLimitRPM = 10
+	}
+	if cfg.VLog.Server.ReadTimeoutSec <= 0 {
+		cfg.VLog.Server.ReadTimeoutSec = 30
+	}
+	if cfg.VLog.Server.WriteTimeoutSec <= 0 {
+		cfg.VLog.Server.WriteTimeoutSec = 30
+	}
+
+	return cfg, nil
+}
+
+// Validate checks Config invariants and returns the first error found.
+func (c *Config) Validate() error {
+	if c.VLog.Port < 1 || c.VLog.Port > 65535 {
+		return fmt.Errorf("vlog: port %d out of range 1-65535", c.VLog.Port)
+	}
+	if c.VLog.WatchIntervalSec <= 0 {
+		return fmt.Errorf("vlog: watch_interval_sec must be > 0, got %d", c.VLog.WatchIntervalSec)
+	}
+	if c.VLog.Intel.CacheTTLHours <= 0 {
+		return fmt.Errorf("vlog: intel.cache_ttl_hours must be > 0, got %d", c.VLog.Intel.CacheTTLHours)
+	}
+	return nil
+}
+
+// FindHome returns the vProx home directory.
+// Priority: $VPROX_HOME → $HOME/.vProx → ".vProx" (cwd fallback).
+func FindHome() string {
+	if v := strings.TrimSpace(os.Getenv("VPROX_HOME")); v != "" {
+		return v
+	}
+	if h, err := os.UserHomeDir(); err == nil && h != "" {
+		return filepath.Join(h, ".vProx")
+	}
+	return ".vProx"
+}

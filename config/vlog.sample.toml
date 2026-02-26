@@ -1,0 +1,53 @@
+# vLog configuration — copy to $VPROX_HOME/config/vlog.toml and edit.
+# vLog is a standalone log archive analyzer for vProx.
+
+[vlog]
+# TCP port for the embedded vLog web UI. Default: 8889.
+port = 8889
+
+# Path to the SQLite database file.
+# Default: $VPROX_HOME/data/vlog.db
+# db_path = "/home/user/.vProx/data/vlog.db"
+
+# Directory containing vProx log archives (*.tar.gz).
+# Default: $VPROX_HOME/data/logs/archives
+# archives_dir = "/home/user/.vProx/data/logs/archives"
+
+# How often (seconds) to poll archives_dir for new archives.
+# Set to 0 to disable background polling (use on-demand ingest only).
+# Default: 60
+watch_interval_sec = 60
+
+[vlog.intel]
+# Automatically enrich new IP accounts with threat intelligence.
+# Requires at least one API key set below.
+# Default: true
+auto_enrich = true
+
+# How long (hours) to cache intel API responses before re-fetching.
+# Default: 24
+cache_ttl_hours = 24
+
+# Maximum API calls per minute per intel source.
+# Adjust based on your API plan quotas.
+# Default: 10
+rate_limit_rpm = 10
+
+[vlog.intel.keys]
+# AbuseIPDB API key — https://www.abuseipdb.com/account/api
+# abuseipdb = ""
+
+# VirusTotal API key — https://www.virustotal.com/gui/my-apikey
+# virustotal = ""
+
+# Shodan API key — https://account.shodan.io/
+# shodan = ""
+
+[vlog.server]
+# Maximum seconds to wait for a complete HTTP request.
+# Default: 30
+read_timeout_sec = 30
+
+# Maximum seconds to write a complete HTTP response.
+# Default: 30
+write_timeout_sec = 30

@@ -7,6 +7,23 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.1.0] — Unreleased
+
+### Added
+- **vLog module**: standalone log archive analyzer binary (`vlog`)
+  - SQLite database (`$VPROX_HOME/data/vlog.db`) for IP accounts, request events, and rate-limit events
+  - Ingests vProx log archives (`*.tar.gz`) from `$VPROX_HOME/data/logs/archives` — oldest-first, with deduplication
+  - Background FS watcher for automatic ingestion of new archives
+  - IP Security Assessment: AbuseIPDB v2 + VirusTotal v3 + Shodan — composite threat score (0–100)
+  - CRM-like IP account profiles with threat flags, notes, and enrichment history
+  - Embedded web UI: dashboard, IP account list, account detail with threat panel, htmx partial updates
+  - REST API: `/api/v1/ingest`, `/api/v1/accounts`, `/api/v1/enrich/:ip`, `/api/v1/stats`
+  - vProx integration: optional POST to vLog after `--new-backup` via `$VLOG_URL`
+  - Config: `$VPROX_HOME/config/vlog.toml` (sample: `config/vlog.sample.toml`)
+- **`modernc.org/sqlite v1.46.1`** added as pure-Go SQLite driver (no CGO required)
+
+---
+
 ## [v1.0.2] — unreleased
 
 ### Added

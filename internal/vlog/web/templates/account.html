@@ -1,0 +1,140 @@
+{{define "title"}}Account — {{.Account.IP}}{{end}}
+{{define "content"}}
+<div class="detail-header">
+  <h2 style="margin:0;">{{.Account.IP}}</h2>
+  <span class="badge badge-{{.Account.Status}}">{{.Account.Status}}</span>
+</div>
+
+<div id="threat-panel">
+  <article>
+    <header><strong>Threat Intelligence</strong></header>
+
+    <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem;">
+      <span>Score: <strong>{{.Account.ThreatScore}}</strong> / 100</span>
+      <div class="threat-bar" style="flex:1;">
+        <div class="threat-fill {{if le .Account.ThreatScore 30}}threat-fill-low{{else if le .Account.ThreatScore 60}}threat-fill-medium{{else}}threat-fill-high{{end}}"
+             style="width:{{.Account.ThreatScore}}%"></div>
+      </div>
+    </div>
+
+    {{if .ThreatFlagsArr}}
+    <p><strong>Flags:</strong></p>
+    <ul class="flags-list">
+      {{range .ThreatFlagsArr}}
+      <li>{{.}}</li>
+      {{end}}
+    </ul>
+    {{end}}
+
+    <table>
+      <tbody>
+        <tr><td>AbuseIPDB Score</td><td>{{.Account.AbuseScore}}</td></tr>
+        <tr><td>VirusTotal Malicious</td><td>{{.Account.VTMalicious}}</td></tr>
+        <tr><td>Organization</td><td>{{.Account.Org}}</td></tr>
+        <tr><td>Hostnames</td><td>{{.Account.Hostnames}}</td></tr>
+        <tr><td>Open Ports</td><td>{{.Account.OpenPorts}}</td></tr>
+      </tbody>
+    </table>
+
+    <button hx-post="/api/v1/enrich/{{.Account.IP}}"
+            hx-target="#threat-panel"
+            hx-swap="outerHTML">
+      Re-enrich
+    </button>
+  </article>
+</div>
+
+<article>
+  <header><strong>Account Details</strong></header>
+  <table>
+    <tbody>
+      <tr><td>Country</td><td>{{.Account.Country}}</td></tr>
+      <tr><td>ASN</td><td>{{.Account.ASN}}</td></tr>
+      <tr><td>First Seen</td><td>{{.Account.FirstSeen}}</td></tr>
+      <tr><td>Last Seen</td><td>{{.Account.LastSeen}}</td></tr>
+      <tr><td>Total Requests</td><td>{{.Account.TotalRequests}}</td></tr>
+      <tr><td>Rate Limit Events</td><td>{{.Account.RatelimitEvents}}</td></tr>
+      <tr><td>Intel Updated</td><td>{{.Account.IntelUpdatedAt}}</td></tr>
+    </tbody>
+  </table>
+</article>
+
+{{if .Account.Notes}}
+<article>
+  <header><strong>Notes</strong></header>
+  <p>{{.Account.Notes}}</p>
+</article>
+{{end}}
+
+<article>
+  <header><strong>Recent Requests</strong> (last 20)</header>
+  {{if .RecentRequests}}
+  <div style="overflow-x:auto;">
+    <table>
+      <thead>
+        <tr>
+          <th>Timestamp</th>
+          <th>Method</th>
+          <th>Path</th>
+          <th>Host</th>
+          <th>Status</th>
+          <th>Country</th>
+          <th>User Agent</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .RecentRequests}}
+        <tr>
+          <td>{{.Ts}}</td>
+          <td><code>{{.Method}}</code></td>
+          <td><code>{{.Path}}</code></td>
+          <td>{{.Host}}</td>
+          <td>{{.Status}}</td>
+          <td>{{.Country}}</td>
+          <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;">{{.UserAgent}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+  {{else}}
+  <p>No request events recorded.</p>
+  {{end}}
+</article>
+
+<article>
+  <header><strong>Recent Rate Limit Events</strong> (last 20)</header>
+  {{if .RecentLimits}}
+  <div style="overflow-x:auto;">
+    <table>
+      <thead>
+        <tr>
+          <th>Timestamp</th>
+          <th>Event</th>
+          <th>Reason</th>
+          <th>Method</th>
+          <th>Path</th>
+          <th>RPS</th>
+          <th>Burst</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .RecentLimits}}
+        <tr>
+          <td>{{.Ts}}</td>
+          <td>{{.Event}}</td>
+          <td>{{.Reason}}</td>
+          <td><code>{{.Method}}</code></td>
+          <td><code>{{.Path}}</code></td>
+          <td>{{printf "%.1f" .RPS}}</td>
+          <td>{{.Burst}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+  {{else}}
+  <p>No rate limit events recorded.</p>
+  {{end}}
+</article>
+{{end}}

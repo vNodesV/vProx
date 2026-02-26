@@ -1,0 +1,53 @@
+{{define "title"}}IP Accounts{{end}}
+{{define "content"}}
+<h2>IP Accounts</h2>
+<p>Showing page {{.Page}} ({{.PageSize}} per page, {{.Total}} total)</p>
+
+<table role="grid">
+  <thead>
+    <tr>
+      <th>IP</th>
+      <th>Country</th>
+      <th>ASN</th>
+      <th>Requests</th>
+      <th>Rate Limits</th>
+      <th>Threat Score</th>
+      <th>Status</th>
+      <th>Last Seen</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody id="accounts-table">
+    {{range .Accounts}}
+    <tr>
+      <td><code>{{.IP}}</code></td>
+      <td>{{.Country}}</td>
+      <td>{{.ASN}}</td>
+      <td>{{.TotalRequests}}</td>
+      <td>{{.RatelimitEvents}}</td>
+      <td>
+        <div class="threat-bar" style="width:80px;display:inline-block;vertical-align:middle;">
+          <div class="threat-fill {{if le .ThreatScore 30}}threat-fill-low{{else if le .ThreatScore 60}}threat-fill-medium{{else}}threat-fill-high{{end}}"
+               style="width:{{.ThreatScore}}%"></div>
+        </div>
+        {{.ThreatScore}}
+      </td>
+      <td><span class="badge badge-{{.Status}}">{{.Status}}</span></td>
+      <td>{{.LastSeen}}</td>
+      <td><a href="/accounts/{{.IP}}" role="button" class="outline">View</a></td>
+    </tr>
+    {{else}}
+    <tr><td colspan="9">No accounts found.</td></tr>
+    {{end}}
+  </tbody>
+</table>
+
+<nav>
+  <ul>
+    {{if gt .Page 1}}
+    <li><a href="/accounts?page={{subtract .Page 1}}&page_size={{.PageSize}}">&laquo; Previous</a></li>
+    {{end}}
+    <li><a href="/accounts?page={{add .Page 1}}&page_size={{.PageSize}}">Next &raquo;</a></li>
+  </ul>
+</nav>
+{{end}}

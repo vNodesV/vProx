@@ -358,3 +358,88 @@ vProx --backup-status                 # Show scheduler status
 **Rate limit overrides (CLI, override .env):**
 
 
+---
+
+## 11) vLog — Log Archive Analyzer
+
+**Purpose**: Standalone binary that analyzes vProx log archives. Maintains a SQLite database of per-IP accounts, request events, and rate-limit events. Provides a CRM-like web UI and REST API for security intelligence and traffic analysis.
+
+**Location:**
+- `cmd/vlog/` — binary entry point
+- `internal/vlog/` — packages (config, db, ingest, intel, web)
+
+**Binary**: `vlog` — standalone, mirrors vProx architecture (single binary, embedded HTTP server, Apache-proxied).
+
+**Database**: SQLite at `$VPROX_HOME/data/vlog.db` via `modernc.org/sqlite` (pure Go, no CGO required).
+
+**Config**: `$VPROX_HOME/config/vlog.toml` — sample at `config/vlog.sample.toml`.
+
+### CLI Commands
+
+| Command | Action |
+|---|---|
+| `vlog start` | Start vLog server (foreground) |
+| `vlog ingest` | One-shot archive ingest and exit |
+| `vlog status` | Show database stats and exit |
+
+**Flags:** `--home`, `--config`, `--port`, `--quiet`, `--version`, `--help`
+
+### Web UI Routes
+
+| Route | Description |
+|---|---|
+| `/` | Dashboard: stats, recent flagged IPs |
+| `/accounts` | Paginated IP account list |
+| `/accounts/:ip` | CRM-like IP account detail |
+| `/api/v1/ingest` | POST: trigger archive ingest |
+| `/api/v1/accounts` | GET: JSON account list |
+| `/api/v1/accounts/:ip` | GET: JSON account detail |
+| `/api/v1/enrich/:ip` | POST: trigger IP enrichment |
+| `/api/v1/stats` | GET: JSON dashboard stats |
+
+### Internal Packages
+
+| Package | Description |
+|---|---|
+| `internal/vlog/config/` | TOML config loader (`vlog.toml`) |
+| `internal/vlog/db/` | SQLite schema, connection pool, query methods (5 tables) |
+| `internal/vlog/ingest/` | Archive scanner, log parser (`main.log` + `rate-limit.jsonl`), FS watcher |
+| `internal/vlog/intel/` | AbuseIPDB v2, VirusTotal v3, Shodan API clients; composite threat scoring (0–100) |
+| `internal/vlog/web/` | Embedded HTTP server, `html/template` + htmx UI |
+
+### vProx Integration
+
+After `--new-backup`, vProx optionally POSTs to `$VLOG_URL/api/v1/ingest` to trigger automatic ingest:
+
+```bash
+# In $VPROX_HOME/config/ports.toml or environment
+VLOG_URL=http://localhost:8889   # Enable automatic ingest after each backup
+```
+
+The POST is non-fatal — if vLog is unavailable, vProx logs a warning and continues normally.
+
+### Security Assessment
+
+vLog builds a composite threat score (0–100) for each IP using three external intelligence sources:
+
+| Source | Weight | API Version |
+|---|---|---|
+| AbuseIPDB | 40% | v2 |
+| VirusTotal | 40% | v3 |
+| Shodan | 20% | current |
+
+**Threat levels:**
+
+| Score Range | Level |
+|---|---|
+| 0–19 | clean |
+| 20–49 | suspicious |
+| 50–100 | malicious |
+
+**Threat flags:** `ABUSEIPDB_CONFIRMED`, `VT_MALICIOUS`, `SHODAN_OPEN_RISKY_PORT`, `HIGH_RATELIMIT_EVENTS`, `DATACENTER_ASN`
+
+### Dependencies
+
+- `modernc.org/sqlite v1.46.1` — pure Go SQLite driver, no CGO required
+
+

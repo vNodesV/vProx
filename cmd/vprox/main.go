@@ -33,11 +33,12 @@ import (
 // --------------------- TYPES ---------------------
 
 type Ports struct {
-	RPC     int `toml:"rpc"`
-	REST    int `toml:"rest"`
-	GRPC    int `toml:"grpc"`
-	GRPCWeb int `toml:"grpc_web"`
-	API     int `toml:"api"`
+	RPC     int    `toml:"rpc"`
+	REST    int    `toml:"rest"`
+	GRPC    int    `toml:"grpc"`
+	GRPCWeb int    `toml:"grpc_web"`
+	API     int    `toml:"api"`
+	VLogURL string `toml:"vlog_url"` // optional: notify vLog after --new-backup
 }
 
 type VHostPrefix struct {
@@ -1761,6 +1762,12 @@ func main() {
 		}); err != nil {
 			log.Fatalf("Backup failed: %v", err)
 		}
+		// Notify vLog (non-fatal). Prefer ports.toml vlog_url, fall back to env.
+		vlogURL := os.Getenv("VLOG_URL")
+		if p, err := loadPorts(filepath.Join(configDir, "ports.toml")); err == nil && p.VLogURL != "" {
+			vlogURL = p.VLogURL
+		}
+		go notifyVLog(vlogURL)
 		return
 	}
 
@@ -2079,4 +2086,18 @@ func main() {
 		}
 		cleanup()
 	}
+}
+
+// notifyVLog sends a non-blocking POST to vLog's ingest endpoint after a successful backup.
+// Called in a goroutine; errors are silently ignored (vLog may not be running).
+func notifyVLog(vlogURL string) {
+	if vlogURL == "" {
+		return
+	}
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Post(vlogURL+"/api/v1/ingest", "application/json", nil)
+	if err != nil {
+		return
+	}
+	resp.Body.Close()
 }

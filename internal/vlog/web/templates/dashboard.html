@@ -1,0 +1,73 @@
+{{define "title"}}Dashboard{{end}}
+{{define "content"}}
+<h2>Dashboard</h2>
+
+<div class="stats-grid">
+  <div class="stat-card">
+    <h3>{{index .Stats "total_ips"}}</h3>
+    <p>Total IPs</p>
+  </div>
+  <div class="stat-card">
+    <h3>{{index .Stats "total_requests"}}</h3>
+    <p>Total Requests</p>
+  </div>
+  <div class="stat-card">
+    <h3>{{index .Stats "total_ratelimit_events"}}</h3>
+    <p>Rate Limit Events</p>
+  </div>
+  <div class="stat-card">
+    <h3>{{index .Stats "flagged_ips"}}</h3>
+    <p>Flagged IPs</p>
+  </div>
+</div>
+
+<section>
+  <header>
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h3 style="margin:0;">Archive Ingestion</h3>
+      <button hx-post="/api/v1/ingest" hx-target="#ingest-result" hx-swap="innerHTML">
+        Refresh Archives
+      </button>
+    </div>
+  </header>
+  <div id="ingest-result"></div>
+</section>
+
+<section>
+  <h3>Top Flagged IPs</h3>
+  {{if .RecentFlags}}
+  <table role="grid">
+    <thead>
+      <tr>
+        <th>IP</th>
+        <th>Country</th>
+        <th>Threat Score</th>
+        <th>Status</th>
+        <th>Last Seen</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{range .RecentFlags}}
+      <tr>
+        <td><code>{{.IP}}</code></td>
+        <td>{{.Country}}</td>
+        <td>
+          <div class="threat-bar" style="width:100px;display:inline-block;vertical-align:middle;">
+            <div class="threat-fill {{if le .ThreatScore 30}}threat-fill-low{{else if le .ThreatScore 60}}threat-fill-medium{{else}}threat-fill-high{{end}}"
+                 style="width:{{.ThreatScore}}%"></div>
+          </div>
+          {{.ThreatScore}}
+        </td>
+        <td><span class="badge badge-{{.Status}}">{{.Status}}</span></td>
+        <td>{{.LastSeen}}</td>
+        <td><a href="/accounts/{{.IP}}" role="button" class="outline">View</a></td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+  {{else}}
+  <p>No flagged IPs yet. Ingest some archives to get started.</p>
+  {{end}}
+</section>
+{{end}}
