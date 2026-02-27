@@ -13,59 +13,92 @@ import (
 // ---------------------------------------------------------------------------
 
 // ParseLogLine parses one structured key=value line from main.log.
-// Returns nil if the line does not represent an access event (module=access
-// or module=proxy for older format compatibility).
+// Returns nil if the line does not represent a request event.
 // archiveTS is used as the event timestamp (archive-level granularity).
+//
+// Current vProx log format (LineLifecycle):
+//
+//	10:23AM NEW ID=API1A2B status=COMPLETED method=GET from=1.2.3.4 \
+//	  count=5 to=HOST endpoint=/rpc latency=12ms userAgent="..." \
+//	  country=US module=vProx
 func ParseLogLine(line, archiveName, archiveTS string) *db.RequestEvent {
 	line = strings.TrimSpace(line)
 	if len(line) == 0 || line[0] == '#' {
 		return nil
 	}
 
-	// Tokenise: time level <rest>
-	// Token 1 = time (ignored), Token 2 = level, remainder = message + kv pairs.
+	// Tokenise: time lifecycle key=value...
+	// Token 0 = time (ignored), Token 1 = lifecycle, remainder = kv pairs.
 	fields := strings.Fields(line)
 	if len(fields) < 3 {
 		return nil
 	}
 
-	// Skip token 0 (time) and token 1 (level); parse key=value from the rest.
+	// Skip token 0 (time) and token 1 (lifecycle); parse key=value from the rest.
 	kv := parseKV(fields[2:])
 
-	// Only process access / proxy module lines.
-	mod := kv["module"]
-	if mod != "access" && mod != "proxy" {
+	// Accept current module name (vProx / vProxWeb) and legacy aliases.
+	mod := strings.ToLower(kv["module"])
+	if mod != "vprox" && mod != "vproxweb" && mod != "access" && mod != "proxy" {
 		return nil
 	}
 
-	ev := &db.RequestEvent{
+	// IP: "from" is the current field; "ip" is the legacy alias.
+	ip := kv["from"]
+	if ip == "" {
+		ip = kv["ip"]
+	}
+
+	// Path: "endpoint" is the current field; "path" / "request" are legacy aliases.
+	path := kv["endpoint"]
+	if path == "" {
+		path = kv["path"]
+	}
+	if path == "" {
+		path = kv["request"]
+	}
+
+	// UserAgent: "userAgent" is the current field; "user_agent" / "ua" are legacy aliases.
+	ua := kv["userAgent"]
+	if ua == "" {
+		ua = kv["user_agent"]
+	}
+	if ua == "" {
+		ua = kv["ua"]
+	}
+
+	// Host: "to" is the current field; "host" is the legacy alias.
+	host := kv["to"]
+	if host == "" {
+		host = kv["host"]
+	}
+
+	// RequestID: "ID" is the current field; "request_id" is the legacy alias.
+	requestID := kv["ID"]
+	if requestID == "" {
+		requestID = kv["request_id"]
+	}
+
+	// Route: infer from the ID prefix (API, RPC, WSS, REQ) or fall back to "route" field.
+	route := kv["route"]
+	if route == "" && len(requestID) >= 3 {
+		route = requestID[:3]
+	}
+
+	return &db.RequestEvent{
 		Archive:   archiveName,
 		Ts:        archiveTS,
-		RequestID: kv["request_id"],
-		IP:        kv["ip"],
+		RequestID: requestID,
+		IP:        ip,
 		Method:    kv["method"],
-		Host:      kv["host"],
-		Route:     kv["route"],
+		Host:      host,
+		Route:     route,
 		Status:    kv["status"],
 		Country:   kv["country"],
 		ASN:       kv["asn"],
+		Path:      path,
+		UserAgent: ua,
 	}
-
-	// Path: prefer explicit "path", fall back to "request" (older format).
-	if p := kv["path"]; p != "" {
-		ev.Path = p
-	} else {
-		ev.Path = kv["request"]
-	}
-
-	// UserAgent: both "user_agent" and "ua" are valid aliases.
-	if ua := kv["user_agent"]; ua != "" {
-		ev.UserAgent = ua
-	} else {
-		ev.UserAgent = kv["ua"]
-	}
-
-	return ev
 }
 
 // parseKV extracts key=value pairs from a slice of tokens.

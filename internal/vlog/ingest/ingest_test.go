@@ -16,22 +16,32 @@ func TestParseLogLine_Access(t *testing.T) {
 		wantNil  bool
 	}{
 		{
-			name:     "basic access line",
-			line:     `10:23AM INF request request_id=req-abc123 ip=1.2.3.4 method=GET path=/rpc host=api.example.com status=ok module=access`,
+			// Real vProx LineLifecycle format (current)
+			name:     "vProx lifecycle format",
+			line:     `10:23AM NEW ID=API1A2B3C4D5E6F7G8H9I0J1K2 status=COMPLETED method=GET from=1.2.3.4 count=5 to=API.EXAMPLE.COM endpoint=/rpc latency=12ms userAgent="curl/7.64.1" country=US module=vProx`,
 			wantIP:   "1.2.3.4",
 			wantPath: "/rpc",
 			wantMeth: "GET",
 		},
 		{
-			name:     "access line with ua alias",
+			// vProxWeb module also accepted
+			name:     "vProxWeb module accepted",
+			line:     `10:23AM NEW ID=REQ1A2B from=5.6.7.8 method=POST endpoint=/rest country=US module=vProxWeb`,
+			wantIP:   "5.6.7.8",
+			wantPath: "/rest",
+			wantMeth: "POST",
+		},
+		{
+			// Legacy format (module=access) for backward compatibility
+			name:     "legacy access line with ua alias",
 			line:     `10:23AM INF request ip=5.6.7.8 method=POST path=/rest ua="curl/7.64.1" module=access`,
 			wantIP:   "5.6.7.8",
 			wantPath: "/rest",
 			wantMeth: "POST",
 		},
 		{
-			name:    "non-access module skipped",
-			line:    `10:23AM INF backup started module=backup`,
+			name:    "non-request module skipped",
+			line:    `10:23AM NEW status=STARTED module=backup`,
 			wantNil: true,
 		},
 		{
@@ -45,7 +55,8 @@ func TestParseLogLine_Access(t *testing.T) {
 			wantNil: true,
 		},
 		{
-			name:     "proxy module accepted",
+			// Legacy module=proxy also accepted
+			name:     "legacy proxy module accepted",
 			line:     `10:23AM INF request ip=9.10.11.12 method=GET path=/api module=proxy`,
 			wantIP:   "9.10.11.12",
 			wantPath: "/api",

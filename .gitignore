@@ -90,3 +90,9 @@ scripts/*.*
 
 # GeoLocation database — keep compressed .gz, ignore uncompressed
 ip2l/ip2location.mmdb
+
+# vLog SQLite database and WAL files
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
