@@ -2,12 +2,14 @@ package web
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
 	"strings"
 
 	"github.com/vNodesV/vProx/internal/vlog/db"
+	"github.com/vNodesV/vProx/internal/vlog/intel"
 )
 
 // ---------------------------------------------------------------------------
@@ -210,16 +212,25 @@ func (s *Server) handleAPIEnrich(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := s.enricher.EnrichNow(ip); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
+	// Stream progress via Server-Sent Events so the client can show real steps.
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("X-Accel-Buffering", "no") // tell nginx/apache not to buffer
+	w.WriteHeader(http.StatusOK)
+
+	flusher, canFlush := w.(http.Flusher)
+
+	emit := func(p intel.EnrichProgress) {
+		data, _ := json.Marshal(p)
+		fmt.Fprintf(w, "data: %s\n\n", data)
+		if canFlush {
+			flusher.Flush()
+		}
 	}
 
-	// After enrichment, redirect the htmx client to reload the account page
-	// so the threat panel renders fresh HTML instead of raw JSON.
-	redirectTo := s.cfg.VLog.BasePath + "/accounts/" + ip
-	w.Header().Set("HX-Redirect", redirectTo)
-	w.WriteHeader(http.StatusNoContent)
+	if _, err := s.enricher.EnrichStream(r.Context(), ip, true, emit); err != nil {
+		log.Printf("[web] enrich %s: %v", ip, err)
+	}
 }
 
 func (s *Server) handleAPIStats(w http.ResponseWriter, _ *http.Request) {

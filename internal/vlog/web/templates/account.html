@@ -42,13 +42,13 @@
   </article>
 </div>
 
-<!-- Enrich progress modal — shown by startEnrich() -->
+<!-- Enrich progress modal -->
 <div id="enrich-modal" class="enrich-overlay" style="display:none;" role="dialog" aria-modal="true">
   <div class="enrich-popup">
-    <h4>Updating Intelligence</h4>
-    <div id="enrich-status" class="enrich-status-text">Connecting to API&hellip;</div>
+    <h4>Updating Intelligence &mdash; {{.Account.IP}}</h4>
+    <div id="enrich-status" class="enrich-status-text">Initialising&hellip;</div>
     <div class="enrich-bar-wrap"><div id="enrich-bar" class="enrich-bar"></div></div>
-    <div id="enrich-detail" class="enrich-detail"></div>
+    <div id="enrich-log" class="enrich-log"></div>
   </div>
 </div>
 
@@ -57,58 +57,95 @@ function startEnrich(ip, base) {
   var modal  = document.getElementById('enrich-modal');
   var bar    = document.getElementById('enrich-bar');
   var stat   = document.getElementById('enrich-status');
-  var detail = document.getElementById('enrich-detail');
+  var log    = document.getElementById('enrich-log');
 
   bar.className    = 'enrich-bar';
   bar.style.width  = '0%';
-  stat.textContent = 'Connecting to API\u2026';
-  detail.textContent = '';
+  stat.textContent = 'Initialising\u2026';
+  log.innerHTML    = '';
   modal.style.display = 'flex';
 
-  function setProgress(pct, msg) {
-    bar.style.width  = pct + '%';
-    stat.textContent = msg;
+  function setBar(pct) { bar.style.width = pct + '%'; }
+  function addLog(msg, cls) {
+    var li = document.createElement('div');
+    li.className = 'enrich-log-line' + (cls ? ' ' + cls : '');
+    li.textContent = msg;
+    log.appendChild(li);
+    log.scrollTop = log.scrollHeight;
   }
-  function setDone() {
-    bar.style.width = '100%';
-    bar.classList.add('enrich-done');
-    stat.textContent   = 'Complete \u2713';
-    detail.textContent = 'Reloading\u2026';
-    setTimeout(function() { window.location.reload(); }, 1200);
-  }
-  function setError(msg) {
-    bar.style.width = '100%';
-    bar.classList.add('enrich-error');
-    stat.textContent   = 'Failed';
-    detail.textContent = msg;
-    setTimeout(function() { modal.style.display = 'none'; }, 5000);
-  }
-
-  var stages = [
-    [600,  20, 'Validating key\u2026'],
-    [1500, 45, 'Updating information\u2026'],
-    [3000, 65, 'Working\u2026'],
-    [5000, 80, 'Please wait\u2026'],
-  ];
-  var timers = stages.map(function(s) {
-    return setTimeout(function() { setProgress(s[1], s[2]); }, s[0]);
-  });
 
   fetch(base + '/api/v1/enrich/' + ip, { method: 'POST' })
     .then(function(res) {
-      timers.forEach(clearTimeout);
       if (!res.ok) {
-        res.json()
-          .then(function(j) { setError((j && j.error) ? j.error : 'HTTP ' + res.status); })
-          .catch(function()  { setError('HTTP ' + res.status); });
-        return;
+        return res.text().then(function(t) { throw new Error('HTTP ' + res.status + ': ' + t); });
       }
-      setDone();
+      var reader  = res.body.getReader();
+      var decoder = new TextDecoder();
+      var buf     = '';
+
+      function pump() {
+        return reader.read().then(function(chunk) {
+          if (chunk.done) {
+            // Stream ended without a "done" event — treat as complete.
+            if (bar.style.width !== '100%') {
+              stat.textContent = 'Complete \u2713';
+              setBar(100);
+              bar.classList.add('enrich-done');
+              setTimeout(function() { window.location.reload(); }, 1500);
+            }
+            return;
+          }
+          buf += decoder.decode(chunk.value, { stream: true });
+          var lines = buf.split('\n');
+          buf = lines.pop();
+          lines.forEach(function(line) {
+            if (!line.startsWith('data: ')) return;
+            try {
+              var ev = JSON.parse(line.slice(6));
+              handleEvent(ev);
+            } catch(e) {}
+          });
+          return pump();
+        });
+      }
+      return pump();
     })
     .catch(function(err) {
-      timers.forEach(clearTimeout);
-      setError(err.message || 'Network error');
+      bar.classList.add('enrich-error');
+      setBar(100);
+      stat.textContent = 'Connection error';
+      addLog(err.message || 'Network error', 'enrich-log-err');
+      setTimeout(function() { modal.style.display = 'none'; }, 6000);
     });
+
+  function handleEvent(ev) {
+    if (!ev) return;
+    setBar(ev.pct || 0);
+    stat.textContent = ev.msg || '';
+
+    // Classify log line
+    var cls = '';
+    if (ev.step && ev.step.endsWith('_err')) cls = 'enrich-log-err';
+    else if (ev.step && (ev.step.endsWith('_skip') || ev.step.endsWith('_cached'))) cls = 'enrich-log-dim';
+    else if (ev.step && ev.step.endsWith('_done')) cls = 'enrich-log-ok';
+
+    // Only add discrete source-result lines to the log
+    var logSteps = ['vt_done','vt_err','vt_skip','vt_cached',
+                    'abuse_done','abuse_err','abuse_skip','abuse_cached',
+                    'shodan_done','shodan_err','shodan_skip','shodan_cached',
+                    'score','save','done','error'];
+    if (logSteps.indexOf(ev.step) !== -1) {
+      addLog(ev.msg, cls);
+    }
+
+    if (ev.step === 'done') {
+      bar.classList.add('enrich-done');
+      setTimeout(function() { window.location.reload(); }, 1800);
+    } else if (ev.step === 'error') {
+      bar.classList.add('enrich-error');
+      setTimeout(function() { modal.style.display = 'none'; }, 6000);
+    }
+  }
 }
 </script>
 
