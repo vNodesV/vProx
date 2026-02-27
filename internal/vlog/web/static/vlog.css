@@ -212,3 +212,14 @@ align-items: center;
 gap: 0.75rem;
 margin-bottom: 1rem;
 }
+
+/* ── Account Details: two-column (table left, ports right) ── */
+.detail-grid {
+display: grid;
+grid-template-columns: 1fr 1fr;
+gap: 1.25rem;
+align-items: start;
+}
+@media (max-width: 700px) {
+.detail-grid { grid-template-columns: 1fr; }
+}

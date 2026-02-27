@@ -5,87 +5,77 @@
   <span class="badge badge-{{.Account.Status}}">{{.Account.Status}}</span>
 </div>
 
-<div class="intel-grid">
+<!-- ── Account Details ── -->
+<article>
+  <header class="intel-card-header">
+    <strong>Account Details</strong>
+    <button class="btn-update btn-update-org" onclick="startUpdate('{{.Account.IP}}','{{.BasePath}}','/api/v1/osint/','Network Scan')">ORG UPDATE</button>
+  </header>
 
-  <!-- ── Threat Intelligence ── -->
-  <article class="intel-card">
-    <header class="intel-card-header">
-      <strong>Threat Intelligence</strong>
-      <button class="btn-update" onclick="startUpdate('{{.Account.IP}}','{{.BasePath}}','/api/v1/enrich/','Threat Update')">THREAT UPDATE</button>
-    </header>
-
-    <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1rem;">
-      <span style="font-size:1.5rem;font-weight:700;">{{.Account.ThreatScore}}<span style="font-size:0.9rem;opacity:0.5;">/100</span></span>
-      <div class="threat-bar" style="flex:1;">
-        <div class="threat-fill {{threatClass .Account.ThreatScore}}"
-             style="width:{{if ge .Account.ThreatScore 0}}{{.Account.ThreatScore}}{{else}}0{{end}}%"></div>
-      </div>
-    </div>
-
-    {{if .ThreatFlagsArr}}
-    <ul class="flags-list" style="margin-bottom:1rem;">
-      {{range .ThreatFlagsArr}}<li>{{.}}</li>{{end}}
-    </ul>
-    {{end}}
-
-    <table style="font-size:0.85rem;">
-      <tbody>
-        <tr><td>VirusTotal Malicious</td><td>{{if ge .Account.VTMalicious 0}}{{.Account.VTMalicious}}{{else}}<em>—</em>{{end}}</td></tr>
-        <tr><td>AbuseIPDB Score</td><td>{{if ge .Account.AbuseScore 0}}{{.Account.AbuseScore}}{{else}}<em>—</em>{{end}}</td></tr>
-        <tr><td>Intel Updated</td><td>{{if .Account.IntelUpdatedAt}}{{.Account.IntelUpdatedAt}}{{else}}<em>never</em>{{end}}</td></tr>
-      </tbody>
-    </table>
-  </article>
-
-  <!-- ── Network Profile ── -->
-  <article class="intel-card">
-    <header class="intel-card-header">
-      <strong>Network Profile</strong>
-      <button class="btn-update btn-update-org" onclick="startUpdate('{{.Account.IP}}','{{.BasePath}}','/api/v1/osint/','Network Scan')">ORG UPDATE</button>
-    </header>
-
+  <div class="detail-grid">
     <table style="font-size:0.85rem;">
       <tbody>
         <tr><td>Organization</td><td>{{if .Account.Org}}{{.Account.Org}}{{else}}<em>—</em>{{end}}</td></tr>
         <tr><td>Country</td><td>{{if .Account.Country}}{{.Account.Country}}{{else}}<em>—</em>{{end}}</td></tr>
         <tr><td>ASN</td><td>{{if .Account.ASN}}{{.Account.ASN}}{{else}}<em>—</em>{{end}}</td></tr>
         <tr><td>Reverse DNS</td><td>{{if .Account.RDNS}}{{.Account.RDNS}}{{else}}<em>—</em>{{end}}</td></tr>
-        <tr><td>Abuse Email</td><td>{{if .Account.AbuseEmail}}{{.Account.AbuseEmail}}{{else}}<em>—</em>{{end}}</td></tr>
         <tr><td>Protocol</td><td>{{if .Account.Protocol}}{{.Account.Protocol}}{{else}}<em>—</em>{{end}}</td></tr>
         <tr><td>Latency</td><td>{{if ge .Account.PingMs 0.0}}{{printf "%.1f" .Account.PingMs}} ms{{else}}<em>—</em>{{end}}</td></tr>
         <tr><td>OSINT Updated</td><td>{{if .Account.OSINTUpdatedAt}}{{.Account.OSINTUpdatedAt}}{{else}}<em>never</em>{{end}}</td></tr>
       </tbody>
     </table>
-  </article>
-</div>
 
-<!-- ── Port Scan ── -->
-<article>
-  <header><strong>Port Scan</strong></header>
-  <div class="ports-row">
-    {{range .Ports}}
-    <div class="port-badge {{if .Open}}port-open{{else}}port-closed{{end}}">
-      <span class="port-dot">{{if .Open}}●{{else}}○{{end}}</span>
-      <span class="port-num">{{.Port}}</span>
-      <span class="port-label">{{.Label}}</span>
+    <div>
+      <div style="font-size:0.75rem;opacity:0.55;margin-bottom:0.4rem;font-weight:600;letter-spacing:0.05em;">PORT SCAN</div>
+      <div class="ports-row">
+        {{range .Ports}}
+        <div class="port-badge {{if .Open}}port-open{{else}}port-closed{{end}}">
+          <span class="port-dot">{{if .Open}}●{{else}}○{{end}}</span>
+          <span class="port-num">{{.Port}}</span>
+          <span class="port-label">{{.Label}}</span>
+        </div>
+        {{end}}
+        {{if not .Ports}}<em style="font-size:0.8rem;opacity:0.5;">No scan data yet</em>{{end}}
+      </div>
+      {{if .Account.Moniker}}
+      <div style="margin-top:1rem;font-size:0.85rem;">
+        <div style="font-size:0.75rem;opacity:0.55;margin-bottom:0.4rem;font-weight:600;letter-spacing:0.05em;">COSMOS NODE</div>
+        <div><strong>{{.Account.Moniker}}</strong> &nbsp;·&nbsp; {{.Account.ChainID}}</div>
+      </div>
+      {{end}}
     </div>
-    {{end}}
-    {{if not .Ports}}<em>No scan data — click ORG UPDATE</em>{{end}}
   </div>
 </article>
 
-<!-- ── Cosmos Node ── -->
-{{if .Account.Moniker}}
+<!-- ── Threat Intelligence ── -->
 <article>
-  <header><strong>Cosmos Node</strong></header>
-  <table>
+  <header class="intel-card-header">
+    <strong>Threat Intelligence</strong>
+    <button class="btn-update" onclick="startUpdate('{{.Account.IP}}','{{.BasePath}}','/api/v1/enrich/','Threat Update')">THREAT UPDATE</button>
+  </header>
+
+  <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1rem;">
+    <span style="font-size:1.5rem;font-weight:700;">{{.Account.ThreatScore}}<span style="font-size:0.9rem;opacity:0.5;">/100</span></span>
+    <div class="threat-bar" style="flex:1;">
+      <div class="threat-fill {{threatClass .Account.ThreatScore}}"
+           style="width:{{if ge .Account.ThreatScore 0}}{{.Account.ThreatScore}}{{else}}0{{end}}%"></div>
+    </div>
+  </div>
+
+  {{if .ThreatFlagsArr}}
+  <ul class="flags-list" style="margin-bottom:1rem;">
+    {{range .ThreatFlagsArr}}<li>{{.}}</li>{{end}}
+  </ul>
+  {{end}}
+
+  <table style="font-size:0.85rem;">
     <tbody>
-      <tr><td>Moniker</td><td>{{.Account.Moniker}}</td></tr>
-      <tr><td>Chain ID</td><td>{{.Account.ChainID}}</td></tr>
+      <tr><td>VirusTotal Malicious</td><td>{{if ge .Account.VTMalicious 0}}{{.Account.VTMalicious}}{{else}}<em>—</em>{{end}}</td></tr>
+      <tr><td>AbuseIPDB Score</td><td>{{if ge .Account.AbuseScore 0}}{{.Account.AbuseScore}}{{else}}<em>—</em>{{end}}</td></tr>
+      <tr><td>Intel Updated</td><td>{{if .Account.IntelUpdatedAt}}{{.Account.IntelUpdatedAt}}{{else}}<em>never</em>{{end}}</td></tr>
     </tbody>
   </table>
 </article>
-{{end}}
 
 <!-- ── Account Events ── -->
 <article>
@@ -246,6 +236,7 @@ function startUpdate(ip, base, endpoint, title) {
     var logSteps = ['vt_done','vt_err','vt_skip','vt_cached',
                     'abuse_done','abuse_err','abuse_skip','abuse_cached',
                     'shodan_done','shodan_err','shodan_skip','shodan_cached',
+                    'org_done','org_none',
                     'rdns_done','rdns_none','ports_done','ports_none',
                     'proto_done','proto_none','cosmos_done','cosmos_none',
                     'score','save','done','error'];

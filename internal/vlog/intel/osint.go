@@ -25,6 +25,20 @@ type OSINTResult struct {
 	Protocol  string  // "https", "http", or ""
 	Moniker   string  // Cosmos RPC moniker (empty if not a Cosmos node)
 	ChainID   string  // Cosmos RPC chain/network ID
+	// Geo / org from ip-api.com (no key required)
+	Org     string
+	Country string
+	ASN     string
+}
+
+// ipAPIResponse is the JSON shape returned by ip-api.com/json/{ip}.
+type ipAPIResponse struct {
+	Status      string `json:"status"`
+	Country     string `json:"country"`
+	CountryCode string `json:"countryCode"`
+	Org         string `json:"org"`
+	AS          string `json:"as"` // e.g. "AS13335 Cloudflare, Inc."
+	Query       string `json:"query"`
 }
 
 // CheckOSINT performs network-layer OSINT for ip concurrently:
@@ -34,6 +48,14 @@ type OSINTResult struct {
 //   - Cosmos RPC probe (port 26657)
 func CheckOSINT(ip string) (*OSINTResult, error) {
 	res := &OSINTResult{LatencyMs: -1}
+
+	// Shared HTTP client for all sub-requests (ip-api, protocol probe, Cosmos RPC).
+	client := &http.Client{
+		Timeout: 4 * time.Second,
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
 
 	// ---- Reverse DNS ----
 	if ptrs, err := net.LookupAddr(ip); err == nil {
@@ -84,13 +106,17 @@ func CheckOSINT(ip string) (*OSINTResult, error) {
 	}
 	res.LatencyMs = minLatency
 
-	// ---- Protocol detection ----
-	client := &http.Client{
-		Timeout: 4 * time.Second,
-		CheckRedirect: func(*http.Request, []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
+	// ---- IP geo / org (ip-api.com, no key) ----
+	if info, err := checkIPInfo(client, ip); err == nil {
+		res.Org = info.Org
+		res.Country = info.Country
+		// Normalise ASN: "AS13335 Cloudflare, Inc." → "AS13335"
+		if parts := strings.SplitN(info.AS, " ", 2); len(parts) > 0 {
+			res.ASN = parts[0]
+		}
 	}
+
+	// ---- Protocol detection ----
 	if probeHTTP(client, "https://"+ip) {
 		res.Protocol = "https"
 	} else if probeHTTP(client, "http://"+ip) {
@@ -143,10 +169,23 @@ func (e *Enricher) OSINTStream(ctx context.Context, ip string, emit func(EnrichP
 		osint := done.res
 
 		// Emit per-result events.
-		if osint.RDNS != "" {
-			emit(EnrichProgress{Step: "rdns_done", Msg: "Reverse DNS: " + osint.RDNS, Pct: 40})
+		if osint.Org != "" {
+			msg := osint.Org
+			if osint.Country != "" {
+				msg += " \u2022 " + osint.Country
+			}
+			if osint.ASN != "" {
+				msg += " (" + osint.ASN + ")"
+			}
+			emit(EnrichProgress{Step: "org_done", Msg: "Organization: " + msg, Pct: 35})
 		} else {
-			emit(EnrichProgress{Step: "rdns_none", Msg: "Reverse DNS: (none)", Pct: 40})
+			emit(EnrichProgress{Step: "org_none", Msg: "Organization: lookup failed", Pct: 35})
+		}
+
+		if osint.RDNS != "" {
+			emit(EnrichProgress{Step: "rdns_done", Msg: "Reverse DNS: " + osint.RDNS, Pct: 45})
+		} else {
+			emit(EnrichProgress{Step: "rdns_none", Msg: "Reverse DNS: (none)", Pct: 45})
 		}
 
 		if len(osint.OpenPorts) > 0 {
@@ -198,6 +237,17 @@ func (e *Enricher) OSINTStream(ctx context.Context, ip string, emit func(EnrichP
 		acc.ChainID = osint.ChainID
 		acc.PingMs = osint.LatencyMs
 		acc.OSINTUpdatedAt = nowISO
+		// Only overwrite Org/Country/ASN if ip-api.com returned data
+		// (preserves Shodan-populated values if ip-api fails).
+		if osint.Org != "" {
+			acc.Org = osint.Org
+		}
+		if osint.Country != "" {
+			acc.Country = osint.Country
+		}
+		if osint.ASN != "" {
+			acc.ASN = osint.ASN
+		}
 		if len(osint.OpenPorts) > 0 {
 			acc.OpenPorts = portsToJSON(osint.OpenPorts)
 		}
@@ -250,4 +300,26 @@ func checkCosmosRPC(client *http.Client, baseURL string) (moniker, chainID strin
 		return "", "", err
 	}
 	return parsed.Result.NodeInfo.Moniker, parsed.Result.NodeInfo.Network, nil
+}
+
+// checkIPInfo queries ip-api.com (free, no key, 45 req/min) for geo/org data.
+func checkIPInfo(client *http.Client, ip string) (*ipAPIResponse, error) {
+	url := "http://ip-api.com/json/" + ip + "?fields=status,country,countryCode,org,as,query"
+	resp, err := client.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 4*1024))
+	if err != nil {
+		return nil, err
+	}
+	var result ipAPIResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, err
+	}
+	if result.Status != "success" {
+		return nil, fmt.Errorf("ip-api: status %s", result.Status)
+	}
+	return &result, nil
 }
