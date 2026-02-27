@@ -97,6 +97,8 @@
       {{if .ShodanResult.Vulns}}
       <tr><td>CVEs</td><td><span style="color:#c0392b;font-weight:600;">{{range $i,$v := .ShodanResult.Vulns}}{{if $i}}, {{end}}{{$v}}{{end}}</span></td></tr>
       {{end}}
+      {{else}}
+      <tr><td>Shodan</td><td><em>not indexed</em></td></tr>
       {{end}}
       <tr><td>Intel Updated</td><td>{{if .Account.IntelUpdatedAt}}{{.Account.IntelUpdatedAt}}{{else}}<em>never</em>{{end}}</td></tr>
     </tbody>
