@@ -357,6 +357,54 @@ func (d *DB) CountIPAccounts() (int64, error) {
 	return n, err
 }
 
+// ListIngestedArchives returns up to limit ingested archives ordered by
+// ingested_at descending. If limit <= 0 all rows are returned.
+func (d *DB) ListIngestedArchives(limit int) ([]*IngestedArchive, error) {
+	var (
+		rows *sql.Rows
+		err  error
+	)
+	const base = `SELECT filename, ingested_at, request_count, ratelimit_count, size_bytes
+		FROM ingested_archives ORDER BY ingested_at DESC`
+	if limit > 0 {
+		rows, err = d.Query(base+` LIMIT ?`, limit)
+	} else {
+		rows, err = d.Query(base)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("list ingested_archives: %w", err)
+	}
+	defer rows.Close()
+
+	var out []*IngestedArchive
+	for rows.Next() {
+		a := &IngestedArchive{}
+		if err := rows.Scan(&a.Filename, &a.IngestedAt, &a.RequestCount, &a.RatelimitCount, &a.SizeBytes); err != nil {
+			return nil, fmt.Errorf("scan ingested_archive: %w", err)
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
+// PurgeIntelCache deletes cached intelligence entries.
+// If ip is non-empty only entries for that IP are removed; if empty all
+// entries are removed. Returns the number of rows deleted.
+func (d *DB) PurgeIntelCache(ip string) (int64, error) {
+	var res sql.Result
+	var err error
+	if ip != "" {
+		res, err = d.Exec(`DELETE FROM intel_cache WHERE ip = ?`, ip)
+	} else {
+		res, err = d.Exec(`DELETE FROM intel_cache`)
+	}
+	if err != nil {
+		return 0, fmt.Errorf("purge intel_cache: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	return n, nil
+}
+
 // ---------------------------------------------------------------------------
 // Aggregate stats
 // ---------------------------------------------------------------------------
