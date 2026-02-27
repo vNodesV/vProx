@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 
 	goshodan "github.com/ns3777k/go-shodan/v4/shodan"
 )
@@ -49,6 +50,12 @@ func CheckShodan(apiKey, ip string, httpClient *http.Client) (result *ShodanResu
 
 	host, err := client.GetServicesForHost(context.Background(), ip, nil)
 	if err != nil {
+		// Shodan returns HTTP 404 with {"error":"No information available for that IP."}
+		// for unindexed IPs. Treat this as "no data" rather than an error so the
+		// enrichment pipeline continues and the caller can emit shodan_none.
+		if strings.Contains(err.Error(), "No information available") {
+			return nil, "", nil
+		}
 		return nil, "", fmt.Errorf("shodan: GetServicesForHost %s: %w", ip, err)
 	}
 

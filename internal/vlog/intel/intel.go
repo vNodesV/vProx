@@ -191,6 +191,8 @@ func (e *Enricher) EnrichStream(ctx context.Context, ip string, force bool, emit
 			if err != nil {
 				emit(EnrichProgress{Step: "shodan_err", Msg: "Shodan: " + err.Error(), Pct: 80, IsErr: true})
 				log.Printf("[intel] shodan %s: %v", ip, err)
+			} else if sr == nil {
+				emit(EnrichProgress{Step: "shodan_none", Msg: "Shodan: no data for this IP", Pct: 80})
 			} else {
 				shodanResult = sr
 				shodanRaw = raw
