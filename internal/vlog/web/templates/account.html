@@ -77,7 +77,8 @@
         <td class="ti-icon-cell">
           {{if lt .Account.VTMalicious 0}}<span class="ti-na" title="Not checked">—</span>
           {{else if eq .Account.VTMalicious 0}}<span class="ti-clean" title="Clean">✓</span>
-          {{else if lt .Account.VTMalicious 3}}<span class="ti-suspicious" title="Suspicious">!</span>
+          {{else if lt .Account.VTMalicious 3}}<span class="ti-suspicious" title="Minor — unconfirmed">&#x26A0;</span>
+          {{else if lt .Account.VTMalicious 10}}<span class="ti-suspicious" title="Suspicious">!</span>
           {{else}}<span class="ti-malicious" title="High Risk">!</span>{{end}}
         </td>
         <td>VirusTotal</td>
@@ -88,7 +89,7 @@
         <td class="ti-icon-cell">
           {{if lt .Account.AbuseScore 0}}<span class="ti-na" title="Not checked">—</span>
           {{else if le .Account.AbuseScore 25}}<span class="ti-clean" title="Clean">✓</span>
-          {{else if lt .Account.AbuseScore 50}}<span class="ti-suspicious" title="Suspicious">!</span>
+          {{else if lt .Account.AbuseScore 50}}<span class="ti-suspicious" title="Low confidence">&#x26A0;</span>
           {{else}}<span class="ti-malicious" title="High Risk">!</span>{{end}}
         </td>
         <td>AbuseIPDB</td>
@@ -110,7 +111,7 @@
         <td class="ti-icon-cell">
           {{if lt .Account.ThreatScore 0}}<span class="ti-na">—</span>
           {{else if le .Account.ThreatScore 19}}<span class="ti-clean" title="Clean">✓</span>
-          {{else if le .Account.ThreatScore 49}}<span class="ti-suspicious" title="Suspicious">!</span>
+          {{else if le .Account.ThreatScore 49}}<span class="ti-suspicious" title="Suspicious">&#x26A0;</span>
           {{else}}<span class="ti-malicious" title="High Risk">!</span>{{end}}
         </td>
         <td>Threat Score</td>
