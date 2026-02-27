@@ -12,7 +12,7 @@
     <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem;">
       <span>Score: <strong>{{.Account.ThreatScore}}</strong> / 100</span>
       <div class="threat-bar" style="flex:1;">
-        <div class="threat-fill {{if le .Account.ThreatScore 30}}threat-fill-low{{else if le .Account.ThreatScore 60}}threat-fill-medium{{else}}threat-fill-high{{end}}"
+        <div class="threat-fill {{threatClass .Account.ThreatScore}}"
              style="width:{{.Account.ThreatScore}}%"></div>
       </div>
     </div>

@@ -27,6 +27,17 @@ var webFS embed.FS
 var templateFuncs = template.FuncMap{
 	"add":      func(a, b int) int { return a + b },
 	"subtract": func(a, b int) int { return a - b },
+	// threatClass returns a CSS class name for a threat score (int64).
+	"threatClass": func(score int64) string {
+		switch {
+		case score <= 30:
+			return "threat-fill-low"
+		case score <= 60:
+			return "threat-fill-medium"
+		default:
+			return "threat-fill-high"
+		}
+	},
 }
 
 // Server is the vLog HTTP server. It owns the ServeMux, parsed
