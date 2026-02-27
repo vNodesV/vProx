@@ -72,7 +72,7 @@
       </td>
       <td class="lastseen-cell">{{.LastSeen}}</td>
       <td class="actions-cell">
-        <button class="btn-investigate" onclick="openInvestigate('{{$.BasePath}}', '{{.IP}}')" title="Run TI + OSINT investigation">Investigate</button>
+        <button class="btn-investigate{{if .IntelUpdatedAt}} btn-investigate-done{{end}}" onclick="openInvestigate('{{$.BasePath}}', '{{.IP}}')" title="Run TI + OSINT investigation">Investigate</button>
         <a href="{{$.BasePath}}/accounts/{{.IP}}" role="button" class="btn-view outline">View</a>
       </td>
     </tr>

@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -370,13 +371,14 @@ func (s *Server) handleAPIInvestigate(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Phase 1: TI enrichment (0-50%)
-	if _, err := s.enricher.EnrichStream(r.Context(), ip, true, emitPhase("ti")); err != nil {
+	// Phase 1: TI enrichment (0-50%). Use context.Background() so saves complete
+	// even if the Apache proxy times out and cancels the HTTP connection context.
+	if _, err := s.enricher.EnrichStream(context.Background(), ip, true, emitPhase("ti")); err != nil {
 		log.Printf("[web] investigate enrich %s: %v", ip, err)
 	}
 
-	// Phase 2: OSINT scan (50-100%)
-	if _, err := s.enricher.OSINTStream(r.Context(), ip, emitPhase("osint")); err != nil {
+	// Phase 2: OSINT scan (50-100%).
+	if _, err := s.enricher.OSINTStream(context.Background(), ip, emitPhase("osint")); err != nil {
 		log.Printf("[web] investigate osint %s: %v", ip, err)
 	}
 }

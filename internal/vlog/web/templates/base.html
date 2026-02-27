@@ -10,19 +10,9 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
   <script src="https://unpkg.com/htmx.org@2.0.4"></script>
   <link rel="stylesheet" href="{{.BasePath}}/static/vlog.css">
-</head>
-<body>
-  <nav class="container-fluid">
-    <ul><li><strong>vLog</strong></li></ul>
-    <ul>
-      <li><a href="{{.BasePath}}/">Dashboard</a></li>
-      <li><a href="{{.BasePath}}/accounts">Accounts</a></li>
-    </ul>
-  </nav>
-  <main class="container">
-    {{block "content" .}}{{end}}
-  </main>
   <script>
+  // initSortableTable must be defined in <head> so inline calls in content
+  // blocks can reference it without a ReferenceError.
   function initSortableTable(tableId, spinnerId) {
     var table = document.getElementById(tableId);
     if (!table) return;
@@ -37,7 +27,6 @@
         ths.forEach(function(t) { t.classList.remove('sort-asc','sort-desc'); });
         th.classList.add(asc ? 'sort-asc' : 'sort-desc');
         if (spinner) spinner.style.display = 'flex';
-        // Defer sort to next frame so spinner renders first
         requestAnimationFrame(function() {
           setTimeout(function() {
             var tbody = table.querySelector('tbody');
@@ -57,6 +46,18 @@
     });
   }
   </script>
+</head>
+<body>
+  <nav class="container-fluid">
+    <ul><li><strong>vLog</strong></li></ul>
+    <ul>
+      <li><a href="{{.BasePath}}/">Dashboard</a></li>
+      <li><a href="{{.BasePath}}/accounts">Accounts</a></li>
+    </ul>
+  </nav>
+  <main class="container">
+    {{block "content" .}}{{end}}
+  </main>
 </body>
 </html>
 {{end}}
