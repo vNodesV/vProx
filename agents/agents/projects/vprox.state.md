@@ -678,3 +678,45 @@ config/vlog.sample.toml
 - vProx backup hook (non-breaking addition to `cmd/vprox/main.go`)
 - `config/vlog.sample.toml`
 - MODULES.md §11 + CHANGELOG.md v1.1.0
+
+---
+
+## Session: 2026-02-27 — develop branch HEAD: 422a208
+
+### Commits this session
+| SHA | Description |
+|-----|-------------|
+| `f84c836` | feat(vlog): ip-api.com org/country/ASN in OSINT scan + account UI redesign |
+| `422a208` | feat(vlog): block button + UFW integration + Shodan ns3777k migration |
+
+### What was built
+
+#### ip-api.com OSINT (f84c836)
+- `intel/osint.go`: `checkIPInfo()` via ip-api.com (free, no key); `Org/Country/ASN` in `OSINTResult` + `OSINTStream`; preserves Shodan values as fallback
+- `account.html`: Account Details first (ORG UPDATE button), Threat Intel below; two-column `.detail-grid`; Cosmos node inline
+- `vlog.css`: `.detail-grid` (1fr 1fr) + 700px mobile breakpoint
+
+#### Block Button + UFW (422a208, Track A — claude-opus-4.6)
+- `internal/vlog/ufw/ufw.go` — NEW: `Block/Unblock/IsAvailable`; `net.ParseIP` guard + `exec.Command` separate args; soft-fail if ufw absent
+- `db/schema.go` — `blocked_ips` table (id, ip, blocked_at, reason, ufw_applied)
+- `db/queries.go` — `BlockIP / UnblockIP / IsBlocked / ListBlockedIPs`
+- `web/handlers.go` — `handleAPIBlock` + `handleAPIUnblock` (JSON, not SSE)
+- `web/server.go` — `POST/DELETE /api/v1/block/{ip}`
+- `account.html` — BLOCK IP / UNBLOCK button in header; `doBlock()` JS; blocked-article banner
+- `vlog.css` — `.btn-block`, `.badge-blocked`, `.blocked-article`
+- `Makefile` — `make ufw-vlog` → `/etc/sudoers.d/vlog`
+
+#### Shodan ns3777k Migration (422a208, Track B — claude-sonnet-4.6)
+- `go.mod` — `github.com/ns3777k/go-shodan/v4 v4.2.0`
+- `intel/shodan.go` — library-backed `CheckShodan()` (signature preserved); `ShodanResult` + `Vulns/Services`; `CheckShodanSearch()` for Membership
+- `intel/score.go` — `ExtractRiskFlagsFromResult(*ShodanResult)` typed path
+
+### Conventions established
+- `ufw` package pattern: `net.ParseIP()` guard → `exec.Command` separate args → sudoers exact restriction
+- Block/unblock uses simple JSON response (not SSE) — fast, synchronous op
+- `ip_accounts.status = "blocked"` is the canonical blocked state; `blocked_ips` table is audit trail
+
+### Open follow-ups
+- Production: `make ufw-vlog` on server → `make vlog && sudo service vLog restart`
+- Shodan search UI panel (Membership) — `CheckShodanSearch()` is ready, needs UI
+- vProx-level IP deny list (P4) — vLog block list → vProx rejects at proxy level
