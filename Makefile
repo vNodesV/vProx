@@ -282,20 +282,21 @@ install-vlog: validate-go dirs config-vlog
 		echo "✓ Skipped symlink. Run: $(GOPATH_BIN)/$(VLOG_NAME) start"; \
 	fi
 
-## Install vlog.sample.toml → ~/.vProx/config/vlog.toml (only if absent)
+## Install config/vlog/vlog.sample.toml → ~/.vProx/config/vlog/vlog.toml (only if absent)
 
 config-vlog: dirs
 	@echo "Installing vLog config..."
-	@if [[ -f "config/vlog.sample.toml" ]]; then \
-		if [[ ! -f "$(CFG_DIR)/vlog.toml" ]]; then \
-			cp "config/vlog.sample.toml" "$(CFG_DIR)/vlog.toml"; \
-			echo "✓ Copied vlog.sample.toml to $(CFG_DIR)/vlog.toml"; \
-			echo "  Edit $(CFG_DIR)/vlog.toml to set your API keys."; \
+	@mkdir -p "$(CFG_DIR)/vlog"
+	@if [[ -f "config/vlog/vlog.sample.toml" ]]; then \
+		if [[ ! -f "$(CFG_DIR)/vlog/vlog.toml" ]]; then \
+			cp "config/vlog/vlog.sample.toml" "$(CFG_DIR)/vlog/vlog.toml"; \
+			echo "✓ Copied vlog.sample.toml to $(CFG_DIR)/vlog/vlog.toml"; \
+			echo "  Edit $(CFG_DIR)/vlog/vlog.toml to set your API keys."; \
 		else \
-			echo "✓ $(CFG_DIR)/vlog.toml already exists"; \
+			echo "✓ $(CFG_DIR)/vlog/vlog.toml already exists"; \
 		fi; \
 	else \
-		echo "WARNING: config/vlog.sample.toml not found in repo"; \
+		echo "WARNING: config/vlog/vlog.sample.toml not found in repo"; \
 	fi
 
 ## Create and optionally install vLog systemd service
