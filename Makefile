@@ -33,6 +33,12 @@ GOPATH := $(shell go env GOPATH)
 GOROOT := $(shell go env GOROOT)
 GOPATH_BIN := $(GOPATH)/bin
 
+# On servers where GOROOT points to a manually installed (potentially broken)
+# Go tree, the module-cache toolchain has a clean stdlib. Prefer it when present.
+# Falls back to the current GOROOT transparently (no persistent state is changed).
+_TOOLCHAIN_GOROOT := $(shell find $(GOPATH)/pkg/mod/golang.org -maxdepth 1 -name 'toolchain@*' 2>/dev/null | sort -V | tail -1)
+EFFECTIVE_GOROOT  := $(if $(_TOOLCHAIN_GOROOT),$(_TOOLCHAIN_GOROOT),$(GOROOT))
+
 .PHONY: all validate-go dirs geo config build install clean systemd env \
         build-vlog install-vlog config-vlog service-vlog ufw-vlog
 
@@ -52,6 +58,9 @@ validate-go:
 		exit 1; \
 	fi
 	@echo "✓ GOROOT: $(GOROOT)"
+	@if [[ "$(EFFECTIVE_GOROOT)" != "$(GOROOT)" ]]; then \
+		echo "  ↳ using clean toolchain: $(EFFECTIVE_GOROOT)"; \
+	fi
 	@echo "✓ GOPATH: $(GOPATH)"
 	@echo "✓ Go version: $$(go version)"
 
@@ -148,7 +157,7 @@ config: dirs
 build:
 	@echo "Building $(APP_NAME)..."
 	mkdir -p "$(BUILD_DIR)"
-	go build -o "$(BUILD_OUT)" "$(BUILD_SRC)"
+	GOROOT="$(EFFECTIVE_GOROOT)" go build -o "$(BUILD_OUT)" "$(BUILD_SRC)"
 	@echo "✓ Build complete"
 	@echo "  Output: $(BUILD_OUT)"
 
@@ -159,7 +168,7 @@ build:
 install:
 	@echo "Installing $(APP_NAME)..."
 # 	mkdir -p "$(GOPATH_BIN)"
-	go build -o "$(GOPATH_BIN)/$(APP_NAME)" "$(BUILD_SRC)"
+	GOROOT="$(EFFECTIVE_GOROOT)" go build -o "$(GOPATH_BIN)/$(APP_NAME)" "$(BUILD_SRC)"
 	@echo ""
 	@echo "The next step will create a symlink to /usr/local/bin/$(APP_NAME) which may require sudo permissions. If you do not have sudo access, you can add $(GOPATH_BIN) to your PATH instead."
 	@read -p "Do you want to create the symlink (y/n) " -n 1 -r; echo ""; \
@@ -262,7 +271,7 @@ systemd:
 build-vlog:
 	@echo "Building $(VLOG_NAME)..."
 	mkdir -p "$(BUILD_DIR)"
-	go build -o "$(VLOG_BUILD)" "$(VLOG_SRC)"
+	GOROOT="$(EFFECTIVE_GOROOT)" go build -o "$(VLOG_BUILD)" "$(VLOG_SRC)"
 	@echo "✓ Build complete"
 	@echo "  Output: $(VLOG_BUILD)"
 
@@ -270,7 +279,7 @@ build-vlog:
 
 install-vlog: validate-go dirs config-vlog
 	@echo "Installing $(VLOG_NAME)..."
-	go build -o "$(GOPATH_BIN)/$(VLOG_NAME)" "$(VLOG_SRC)"
+	GOROOT="$(EFFECTIVE_GOROOT)" go build -o "$(GOPATH_BIN)/$(VLOG_NAME)" "$(VLOG_SRC)"
 	@echo ""
 	@echo "The next step will create a symlink at /usr/local/bin/$(VLOG_NAME)."
 	@read -p "Create symlink? (y/n) " -n 1 -r; echo ""; \
