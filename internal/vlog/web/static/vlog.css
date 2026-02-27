@@ -136,6 +136,21 @@
 .enrich-log-ok       { opacity: 1; color: #198754; }
 .enrich-log-err      { opacity: 1; color: #dc3545; }
 .enrich-log-dim      { opacity: 0.45; }
+.enrich-dismiss {
+	margin-top: 1rem;
+	width: 100%;
+	padding: 0.45rem;
+	border: 1px solid rgba(255,255,255,0.15);
+	border-radius: 0.4rem;
+	background: transparent;
+	color: inherit;
+	cursor: pointer;
+	font-size: 0.85rem;
+	opacity: 0.7;
+	display: none;
+}
+.enrich-dismiss:hover { opacity: 1; background: rgba(255,255,255,0.07); }
+.enrich-dismiss.visible { display: block; }
 
 	margin-top: 0.5rem;
 }

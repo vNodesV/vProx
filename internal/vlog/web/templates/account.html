@@ -70,14 +70,6 @@
     <button class="btn-update" onclick="startUpdate('{{.Account.IP}}','{{.BasePath}}','/api/v1/enrich/','Threat Update')">THREAT UPDATE</button>
   </header>
 
-  <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1rem;">
-    <span style="font-size:1.5rem;font-weight:700;">{{.Account.ThreatScore}}<span style="font-size:0.9rem;opacity:0.5;">/100</span></span>
-    <div class="threat-bar" style="flex:1;">
-      <div class="threat-fill {{threatClass .Account.ThreatScore}}"
-           style="width:{{if ge .Account.ThreatScore 0}}{{.Account.ThreatScore}}{{else}}0{{end}}%"></div>
-    </div>
-  </div>
-
   {{if .ThreatFlagsArr}}
   <ul class="flags-list" style="margin-bottom:1rem;">
     {{range .ThreatFlagsArr}}<li>{{.}}</li>{{end}}
@@ -86,6 +78,7 @@
 
   <table style="font-size:0.85rem;">
     <tbody>
+      <tr><td>Threat Score</td><td><strong>{{.Account.ThreatScore}}/100</strong> &nbsp;<span class="badge badge-{{.Account.Status}}" style="font-size:0.75rem;">{{.Account.Status}}</span></td></tr>
       <tr><td>VirusTotal Malicious</td><td>{{if ge .Account.VTMalicious 0}}{{.Account.VTMalicious}}{{else}}<em>—</em>{{end}}</td></tr>
       <tr><td>AbuseIPDB Score</td><td>{{if ge .Account.AbuseScore 0}}{{.Account.AbuseScore}}{{else}}<em>—</em>{{end}}</td></tr>
       {{if .ShodanResult}}
@@ -203,22 +196,25 @@
     <div id="enrich-status" class="enrich-status-text">Initialising&hellip;</div>
     <div class="enrich-bar-wrap"><div id="enrich-bar" class="enrich-bar"></div></div>
     <div id="enrich-log" class="enrich-log"></div>
+    <button id="enrich-dismiss" class="enrich-dismiss" onclick="dismissEnrich()">Dismiss &amp; Refresh</button>
   </div>
 </div>
 
 <script>
 function startUpdate(ip, base, endpoint, title) {
-  var modal  = document.getElementById('enrich-modal');
-  var bar    = document.getElementById('enrich-bar');
-  var stat   = document.getElementById('enrich-status');
-  var log    = document.getElementById('enrich-log');
-  var head   = document.getElementById('enrich-title');
+  var modal   = document.getElementById('enrich-modal');
+  var bar     = document.getElementById('enrich-bar');
+  var stat    = document.getElementById('enrich-status');
+  var log     = document.getElementById('enrich-log');
+  var head    = document.getElementById('enrich-title');
+  var dismiss = document.getElementById('enrich-dismiss');
 
   bar.className    = 'enrich-bar';
   bar.style.width  = '0%';
   stat.textContent = 'Initialising\u2026';
   head.textContent = title + ' \u2014 ' + ip;
   log.innerHTML    = '';
+  dismiss.className = 'enrich-dismiss';
   modal.style.display = 'flex';
 
   function setBar(pct) { bar.style.width = pct + '%'; }
@@ -229,6 +225,7 @@ function startUpdate(ip, base, endpoint, title) {
     log.appendChild(li);
     log.scrollTop = log.scrollHeight;
   }
+  function showDismiss() { dismiss.className = 'enrich-dismiss visible'; }
 
   fetch(base + endpoint + ip, { method: 'POST' })
     .then(function(res) {
@@ -246,8 +243,8 @@ function startUpdate(ip, base, endpoint, title) {
               bar.classList.add('enrich-done');
               setBar(100);
               stat.textContent = 'Complete \u2713';
-              setTimeout(function() { window.location.reload(); }, 1500);
             }
+            showDismiss();
             return;
           }
           buf += decoder.decode(chunk.value, { stream: true });
@@ -265,9 +262,9 @@ function startUpdate(ip, base, endpoint, title) {
     .catch(function(err) {
       bar.classList.add('enrich-error');
       setBar(100);
-      stat.textContent = 'Connection error';
+      stat.textContent = 'Error';
       addLog(err.message || 'Network error', 'enrich-log-err');
-      setTimeout(function() { modal.style.display = 'none'; }, 6000);
+      showDismiss();
     });
 
   function handleEvent(ev) {
@@ -291,24 +288,28 @@ function startUpdate(ip, base, endpoint, title) {
 
     if (ev.step === 'done') {
       bar.classList.add('enrich-done');
-      setTimeout(function() { window.location.reload(); }, 1800);
+      showDismiss();
     } else if (ev.step === 'error') {
       bar.classList.add('enrich-error');
-      setTimeout(function() { modal.style.display = 'none'; }, 6000);
+      showDismiss();
     }
   }
 }
+function dismissEnrich() {
+  document.getElementById('enrich-modal').style.display = 'none';
+  window.location.reload();
+}
 function doBlock(ip, base, block) {
-  var method = block ? 'POST' : 'DELETE';
-  var label  = block ? 'Blocking ' + ip + '…' : 'Unblocking ' + ip + '…';
+  var url   = block ? (base + '/api/v1/block/' + ip) : (base + '/api/v1/unblock/' + ip);
+  var label = block ? 'Blocking ' + ip + '\u2026' : 'Unblocking ' + ip + '\u2026';
   if (!confirm(label + '\nProceed?')) return;
-  fetch(base + '/api/v1/block/' + ip, { method: method })
+  fetch(url, { method: 'POST' })
     .then(function(res) { return res.json(); })
     .then(function(data) {
       if (data.error) { alert('Error: ' + data.error); return; }
       window.location.reload();
     })
-    .catch(function(err) { alert('Network error: ' + err.message); });
+    .catch(function(err) { alert('Error: ' + err.message); });
 }
 </script>
 {{end}}
