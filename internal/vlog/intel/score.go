@@ -118,10 +118,11 @@ var riskyPorts = map[int]bool{
 
 // ExtractShodanRiskFlags counts risky signals from raw Shodan JSON data.
 // Risky ports: 4444, 6666, 1080, 9050, 8080 (if labeled proxy), 23, 2323 (telnet).
-// Returns 0 on parse error or empty data.
+// Returns -1 when shodanData is empty (no data fetched) so ComputeScore
+// can exclude this source from the weighted average instead of diluting it.
 func ExtractShodanRiskFlags(shodanData string) int64 {
 	if shodanData == "" {
-		return 0
+		return -1 // not fetched — exclude from score calculation
 	}
 
 	var raw struct {

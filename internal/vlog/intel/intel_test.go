@@ -59,14 +59,17 @@ func TestLevel(t *testing.T) {
 
 func TestExtractShodanRiskFlags(t *testing.T) {
 	tests := []struct {
-		name     string
-		data     string
-		wantMin  int64
+		name    string
+		data    string
+		want    int64
+		wantMin int64
+		exact   bool
 	}{
 		{
-			name:    "no data",
-			data:    "",
-			wantMin: 0,
+			name:  "no data returns -1",
+			data:  "",
+			want:  -1,
+			exact: true,
 		},
 		{
 			name:    "clean ports",
@@ -93,7 +96,11 @@ func TestExtractShodanRiskFlags(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			flags := intel.ExtractShodanRiskFlags(tt.data)
-			if flags < tt.wantMin {
+			if tt.exact {
+				if flags != tt.want {
+					t.Errorf("ExtractShodanRiskFlags(%q) = %d, want %d", tt.data, flags, tt.want)
+				}
+			} else if flags < tt.wantMin {
 				t.Errorf("ExtractShodanRiskFlags(%q) = %d, want >= %d", tt.data, flags, tt.wantMin)
 			}
 		})

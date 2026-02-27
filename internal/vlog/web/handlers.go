@@ -210,12 +210,16 @@ func (s *Server) handleAPIEnrich(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	account, err := s.enricher.EnrichNow(ip)
-	if err != nil {
+	if _, err := s.enricher.EnrichNow(ip); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	writeJSON(w, http.StatusOK, account)
+
+	// After enrichment, redirect the htmx client to reload the account page
+	// so the threat panel renders fresh HTML instead of raw JSON.
+	redirectTo := s.cfg.VLog.BasePath + "/accounts/" + ip
+	w.Header().Set("HX-Redirect", redirectTo)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) handleAPIStats(w http.ResponseWriter, _ *http.Request) {
