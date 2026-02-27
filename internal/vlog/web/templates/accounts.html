@@ -1,18 +1,55 @@
-{{define "title"}}IP Accounts{{end}}
+{{define "title"}}Accounts{{end}}
 {{define "content"}}
-<h2>IP Accounts</h2>
-<p>Showing page {{.Page}} ({{.PageSize}} per page, {{.Total}} total)</p>
+<h2>Accounts</h2>
 
+<div class="accounts-toolbar">
+  <div class="accounts-toolbar-left">
+    <span class="toolbar-info">
+      Showing page <strong>{{.Page}}</strong> &mdash; {{.Total}} total
+    </span>
+    <form method="get" action="{{.BasePath}}/accounts" class="per-page-form">
+      {{if .Search}}<input type="hidden" name="q" value="{{.Search}}">{{end}}
+      <input type="hidden" name="page" value="1">
+      <label class="per-page-label">
+        Per page
+        <select name="page_size" onchange="this.form.submit()" class="per-page-select">
+          {{$ps := .PageSize}}
+          {{range $v := (intSlice 25 50 100 200)}}
+          <option value="{{$v}}"{{if eq $v $ps}} selected{{end}}>{{$v}}</option>
+          {{end}}
+        </select>
+      </label>
+    </form>
+  </div>
+  <form method="get" action="{{.BasePath}}/accounts" class="search-form" id="search-form">
+    <input type="hidden" name="page" value="1">
+    <input type="hidden" name="page_size" value="{{.PageSize}}">
+    <div class="search-wrap">
+      <input type="search" name="q" value="{{.Search}}" placeholder="Search IP, Country, ID…" class="search-input" id="search-input" autocomplete="off">
+      <button type="submit" class="search-btn" aria-label="Search">⌕</button>
+      {{if .Search}}<a href="{{.BasePath}}/accounts?page_size={{.PageSize}}" class="search-clear" title="Clear search">✕</a>{{end}}
+    </div>
+  </form>
+</div>
+
+<div class="sort-spinner" id="sort-spinner" style="display:none">
+  <span class="sort-spinner-dot"></span>
+  <span class="sort-spinner-dot"></span>
+  <span class="sort-spinner-dot"></span>
+  <span class="sort-spinner-label">Sorting…</span>
+</div>
+
+<div class="table-wrap">
 <table id="accounts-tbl" role="grid">
   <thead>
     <tr>
+      <th class="sortable">Org</th>
       <th class="sortable">IP</th>
       <th class="sortable">Country</th>
       <th class="sortable">ASN</th>
       <th class="sortable">Requests</th>
       <th class="sortable">Rate Limits</th>
       <th class="sortable">Threat Score</th>
-      <th class="sortable">Status</th>
       <th class="sortable">Last Seen</th>
       <th>Actions</th>
     </tr>
@@ -20,35 +57,156 @@
   <tbody id="accounts-table">
     {{range .Accounts}}
     <tr>
-      <td><code>{{.IP}}</code></td>
+      <td class="org-cell">{{if .Org}}<span class="org-name">{{.Org}}</span>{{else}}<span class="org-none">—</span>{{end}}</td>
+      <td><code class="ip-code">{{.IP}}</code></td>
       <td>{{.Country}}</td>
-      <td>{{.ASN}}</td>
+      <td class="asn-cell">{{.ASN}}</td>
       <td>{{.TotalRequests}}</td>
       <td>{{.RatelimitEvents}}</td>
       <td>
-        <div class="threat-bar" style="width:80px;display:inline-block;vertical-align:middle;">
+        <div class="threat-bar" style="width:60px;display:inline-block;vertical-align:middle;">
           <div class="threat-fill {{threatClass .ThreatScore}}"
                style="width:{{.ThreatScore}}%"></div>
         </div>
-        {{.ThreatScore}}
+        <span class="threat-num">{{.ThreatScore}}</span>
       </td>
-      <td><span class="badge badge-{{.Status}}">{{.Status}}</span></td>
-      <td>{{.LastSeen}}</td>
-      <td><a href="{{$.BasePath}}/accounts/{{.IP}}" role="button" class="outline">View</a></td>
+      <td class="lastseen-cell">{{.LastSeen}}</td>
+      <td class="actions-cell">
+        <button class="btn-investigate" onclick="openInvestigate('{{$.BasePath}}', '{{.IP}}')" title="Run TI + OSINT investigation">Investigate</button>
+        <a href="{{$.BasePath}}/accounts/{{.IP}}" role="button" class="btn-view outline">View</a>
+      </td>
     </tr>
     {{else}}
     <tr><td colspan="9">No accounts found.</td></tr>
     {{end}}
   </tbody>
 </table>
-<script>initSortableTable('accounts-tbl');</script>
+</div>
+<script>initSortableTable('accounts-tbl', 'sort-spinner');</script>
 
-<nav>
+<nav class="pagination-nav">
   <ul>
     {{if gt .Page 1}}
-    <li><a href="{{.BasePath}}/accounts?page={{subtract .Page 1}}&page_size={{.PageSize}}">&laquo; Previous</a></li>
+    <li><a href="{{.BasePath}}/accounts?page={{subtract .Page 1}}&page_size={{.PageSize}}{{if .Search}}&q={{.Search}}{{end}}">&laquo; Prev</a></li>
     {{end}}
-    <li><a href="{{.BasePath}}/accounts?page={{add .Page 1}}&page_size={{.PageSize}}">Next &raquo;</a></li>
+    {{if lt (multiply .Page .PageSize) .Total}}
+    <li><a href="{{.BasePath}}/accounts?page={{add .Page 1}}&page_size={{.PageSize}}{{if .Search}}&q={{.Search}}{{end}}">Next &raquo;</a></li>
+    {{end}}
   </ul>
 </nav>
+
+<!-- Investigate popup modal -->
+<div class="enrich-overlay" id="investigate-overlay" style="display:none" onclick="if(event.target===this && investigateDone) closeInvestigate()">
+  <div class="enrich-popup">
+    <h4>🔍 Investigation</h4>
+    <div id="inv-ip-label" style="font-size:0.8rem;opacity:0.5;margin-bottom:0.75rem;font-family:monospace;"></div>
+
+    <!-- TI phase -->
+    <div class="inv-phase-label">Threat Intelligence</div>
+    <div class="enrich-status-text" id="inv-ti-msg">Waiting…</div>
+    <div class="enrich-bar-wrap"><div class="enrich-bar" id="inv-ti-bar"></div></div>
+
+    <!-- OSINT phase -->
+    <div class="inv-phase-label" style="margin-top:0.75rem">OSINT Scan</div>
+    <div class="enrich-status-text" id="inv-osint-msg" style="opacity:0.4">Waiting…</div>
+    <div class="enrich-bar-wrap"><div class="enrich-bar" id="inv-osint-bar"></div></div>
+
+    <!-- Combined log -->
+    <div class="enrich-log" id="inv-log"></div>
+
+    <button class="enrich-dismiss" id="inv-dismiss" onclick="closeInvestigate()">Dismiss &amp; Refresh</button>
+  </div>
+</div>
+
+<script>
+var investigateDone = false;
+var investigateES = null;
+
+function openInvestigate(base, ip) {
+  investigateDone = false;
+  document.getElementById('investigate-overlay').style.display = 'flex';
+  document.getElementById('inv-ip-label').textContent = ip;
+  document.getElementById('inv-ti-msg').textContent = 'Starting…';
+  document.getElementById('inv-osint-msg').textContent = 'Waiting…';
+  document.getElementById('inv-osint-msg').style.opacity = '0.4';
+  document.getElementById('inv-ti-bar').style.width = '0';
+  document.getElementById('inv-ti-bar').className = 'enrich-bar';
+  document.getElementById('inv-osint-bar').style.width = '0';
+  document.getElementById('inv-osint-bar').className = 'enrich-bar';
+  document.getElementById('inv-log').innerHTML = '';
+  document.getElementById('inv-dismiss').className = 'enrich-dismiss';
+
+  // Use fetch+ReadableStream for POST (EventSource only supports GET)
+  fetch(base + '/api/v1/investigate/' + encodeURIComponent(ip), {method:'POST'})
+    .then(function(res) {
+      var reader = res.body.getReader();
+      var decoder = new TextDecoder();
+      var buf = '';
+      function read() {
+        reader.read().then(function(r) {
+          if (r.done) { finishInvestigate(); return; }
+          buf += decoder.decode(r.value, {stream:true});
+          var parts = buf.split('\n\n');
+          buf = parts.pop();
+          parts.forEach(function(part) {
+            var line = part.trim();
+            if (line.startsWith('data:')) {
+              try { handleInvEvent(JSON.parse(line.slice(5).trim())); } catch(e){}
+            }
+          });
+          read();
+        }).catch(function(){ finishInvestigate(); });
+      }
+      read();
+    })
+    .catch(function(e){ addInvLog(e.toString(), 'enrich-log-err'); finishInvestigate(); });
+}
+
+function handleInvEvent(ev) {
+  var step = ev.step || '';
+  var msg  = ev.msg  || '';
+  var pct  = ev.pct  || 0;
+  var isErr = ev.err || false;
+
+  if (step.startsWith('ti:')) {
+    // scale back to 0-100 within TI phase
+    var tiPct = Math.min(100, pct * 2);
+    document.getElementById('inv-ti-bar').style.width = tiPct + '%';
+    document.getElementById('inv-ti-msg').textContent = msg;
+    if (step === 'ti:done') {
+      document.getElementById('inv-ti-bar').classList.add('enrich-done');
+      document.getElementById('inv-osint-msg').style.opacity = '1';
+      document.getElementById('inv-osint-msg').textContent = 'Starting…';
+    }
+    addInvLog('[TI] ' + msg, isErr ? 'enrich-log-err' : (step.endsWith(':done') ? 'enrich-log-ok' : 'enrich-log-line'));
+  } else if (step.startsWith('osint:')) {
+    var osintPct = Math.min(100, (pct - 50) * 2);
+    document.getElementById('inv-osint-bar').style.width = Math.max(0, osintPct) + '%';
+    document.getElementById('inv-osint-msg').textContent = msg;
+    if (step === 'osint:done') {
+      document.getElementById('inv-osint-bar').classList.add('enrich-done');
+    }
+    addInvLog('[OSINT] ' + msg, isErr ? 'enrich-log-err' : (step.endsWith(':done') ? 'enrich-log-ok' : 'enrich-log-line'));
+  }
+}
+
+function addInvLog(msg, cls) {
+  var log = document.getElementById('inv-log');
+  var line = document.createElement('div');
+  line.className = cls || 'enrich-log-line';
+  line.textContent = msg;
+  log.appendChild(line);
+  log.scrollTop = log.scrollHeight;
+}
+
+function finishInvestigate() {
+  investigateDone = true;
+  document.getElementById('inv-dismiss').className = 'enrich-dismiss visible';
+}
+
+function closeInvestigate() {
+  document.getElementById('investigate-overlay').style.display = 'none';
+  window.location.reload();
+}
+</script>
 {{end}}

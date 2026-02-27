@@ -196,6 +196,54 @@ func (d *DB) ListIPAccounts(limit, offset int) ([]*IPAccount, error) {
 	return out, rows.Err()
 }
 
+// SearchIPAccounts returns accounts whose ip or country match the query string
+// (case-insensitive LIKE), ordered by last_seen DESC.
+func (d *DB) SearchIPAccounts(query string, limit, offset int) ([]*IPAccount, error) {
+	pat := "%" + query + "%"
+	const q = `SELECT
+		ip, first_seen, last_seen, total_requests, ratelimit_events,
+		country, asn, org, hostnames, open_ports, services,
+		vt_malicious, vt_data, abuse_score, abuse_data, shodan_data,
+		threat_score, threat_flags, intel_updated_at,
+		notes, tags, status
+	FROM ip_accounts
+	WHERE ip LIKE ? OR country LIKE ? OR CAST(rowid AS TEXT) LIKE ?
+	ORDER BY last_seen DESC LIMIT ? OFFSET ?`
+
+	rows, err := d.Query(q, pat, pat, pat, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("search ip_accounts: %w", err)
+	}
+	defer rows.Close()
+
+	var out []*IPAccount
+	for rows.Next() {
+		a := &IPAccount{}
+		if err := rows.Scan(
+			&a.IP, &a.FirstSeen, &a.LastSeen, &a.TotalRequests, &a.RatelimitEvents,
+			&a.Country, &a.ASN, &a.Org, &a.Hostnames, &a.OpenPorts, &a.Services,
+			&a.VTMalicious, &a.VTData, &a.AbuseScore, &a.AbuseData, &a.ShodanData,
+			&a.ThreatScore, &a.ThreatFlags, &a.IntelUpdatedAt,
+			&a.Notes, &a.Tags, &a.Status,
+		); err != nil {
+			return nil, fmt.Errorf("search ip_accounts scan: %w", err)
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
+// CountSearchIPAccounts returns the total number of accounts matching query.
+func (d *DB) CountSearchIPAccounts(query string) (int64, error) {
+	pat := "%" + query + "%"
+	var n int64
+	err := d.QueryRow(
+		`SELECT COUNT(*) FROM ip_accounts WHERE ip LIKE ? OR country LIKE ? OR CAST(rowid AS TEXT) LIKE ?`,
+		pat, pat, pat,
+	).Scan(&n)
+	return n, err
+}
+
 // ---------------------------------------------------------------------------
 // Blocked IPs
 // ---------------------------------------------------------------------------

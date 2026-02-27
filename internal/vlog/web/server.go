@@ -27,6 +27,8 @@ var webFS embed.FS
 var templateFuncs = template.FuncMap{
 	"add":      func(a, b int) int { return a + b },
 	"subtract": func(a, b int) int { return a - b },
+	"multiply": func(a, b int) int { return a * b },
+	"intSlice": func(vals ...int) []int { return vals },
 	// threatClass returns a CSS class name for a threat score (int64).
 	"threatClass": func(score int64) string {
 		switch {
@@ -89,6 +91,7 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 	mux.HandleFunc("GET /api/v1/accounts/{ip}", s.handleAPIAccountDetail)
 	mux.HandleFunc("POST /api/v1/enrich/{ip}", s.handleAPIEnrich)
 	mux.HandleFunc("POST /api/v1/osint/{ip}", s.handleAPIosint)
+	mux.HandleFunc("POST /api/v1/investigate/{ip}", s.handleAPIInvestigate)
 	mux.HandleFunc("POST /api/v1/block/{ip}", s.handleAPIBlock)
 	mux.HandleFunc("POST /api/v1/unblock/{ip}", s.handleAPIUnblock)
 	mux.HandleFunc("GET /api/v1/stats", s.handleAPIStats)

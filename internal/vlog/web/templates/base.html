@@ -4,6 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>vLog — {{block "title" .}}Log Analyzer{{end}}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
   <script src="https://unpkg.com/htmx.org@2.0.4"></script>
   <link rel="stylesheet" href="{{.BasePath}}/static/vlog.css">
@@ -13,35 +16,43 @@
     <ul><li><strong>vLog</strong></li></ul>
     <ul>
       <li><a href="{{.BasePath}}/">Dashboard</a></li>
-      <li><a href="{{.BasePath}}/accounts">IP Accounts</a></li>
+      <li><a href="{{.BasePath}}/accounts">Accounts</a></li>
     </ul>
   </nav>
   <main class="container">
     {{block "content" .}}{{end}}
   </main>
   <script>
-  function initSortableTable(tableId) {
+  function initSortableTable(tableId, spinnerId) {
     var table = document.getElementById(tableId);
     if (!table) return;
+    var spinner = spinnerId ? document.getElementById(spinnerId) : null;
     var ths = table.querySelectorAll('thead th.sortable');
     var state = {col: -1, asc: true};
-    ths.forEach(function(th, i) {
+    ths.forEach(function(th) {
       th.addEventListener('click', function() {
         var colIdx = Array.from(th.parentNode.children).indexOf(th);
         var asc = (state.col === colIdx) ? !state.asc : true;
         state.col = colIdx; state.asc = asc;
         ths.forEach(function(t) { t.classList.remove('sort-asc','sort-desc'); });
         th.classList.add(asc ? 'sort-asc' : 'sort-desc');
-        var tbody = table.querySelector('tbody');
-        var rows = Array.from(tbody.querySelectorAll('tr'));
-        rows.sort(function(a, b) {
-          var av = a.cells[colIdx] ? a.cells[colIdx].textContent.trim() : '';
-          var bv = b.cells[colIdx] ? b.cells[colIdx].textContent.trim() : '';
-          var an = parseFloat(av), bn = parseFloat(bv);
-          if (!isNaN(an) && !isNaN(bn)) return asc ? an - bn : bn - an;
-          return asc ? av.localeCompare(bv) : bv.localeCompare(av);
+        if (spinner) spinner.style.display = 'flex';
+        // Defer sort to next frame so spinner renders first
+        requestAnimationFrame(function() {
+          setTimeout(function() {
+            var tbody = table.querySelector('tbody');
+            var rows = Array.from(tbody.querySelectorAll('tr'));
+            rows.sort(function(a, b) {
+              var av = a.cells[colIdx] ? a.cells[colIdx].textContent.trim() : '';
+              var bv = b.cells[colIdx] ? b.cells[colIdx].textContent.trim() : '';
+              var an = parseFloat(av), bn = parseFloat(bv);
+              if (!isNaN(an) && !isNaN(bn)) return asc ? an - bn : bn - an;
+              return asc ? av.localeCompare(bv) : bv.localeCompare(av);
+            });
+            rows.forEach(function(r) { tbody.appendChild(r); });
+            if (spinner) spinner.style.display = 'none';
+          }, 0);
         });
-        rows.forEach(function(r) { tbody.appendChild(r); });
       });
     });
   }

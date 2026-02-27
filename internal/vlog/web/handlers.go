@@ -37,6 +37,7 @@ type accountListData struct {
 	Total    int64
 	Page     int
 	PageSize int
+	Search   string
 }
 
 type accountDetailData struct {
@@ -120,15 +121,30 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleAccountList(w http.ResponseWriter, r *http.Request) {
 	page, pageSize := parsePagination(r, 1, 50)
 	offset := (page - 1) * pageSize
+	search := strings.TrimSpace(r.URL.Query().Get("q"))
 
-	accounts, err := s.db.ListIPAccounts(pageSize, offset)
-	if err != nil {
-		log.Printf("[web] account list: %v", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return
+	var (
+		accounts []*db.IPAccount
+		total    int64
+		err      error
+	)
+	if search != "" {
+		accounts, err = s.db.SearchIPAccounts(search, pageSize, offset)
+		if err != nil {
+			log.Printf("[web] account search: %v", err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		total, err = s.db.CountSearchIPAccounts(search)
+	} else {
+		accounts, err = s.db.ListIPAccounts(pageSize, offset)
+		if err != nil {
+			log.Printf("[web] account list: %v", err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		total, err = s.db.CountIPAccounts()
 	}
-
-	total, err := s.db.CountIPAccounts()
 	if err != nil {
 		log.Printf("[web] account count: %v", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
@@ -141,6 +157,7 @@ func (s *Server) handleAccountList(w http.ResponseWriter, r *http.Request) {
 		Total:    total,
 		Page:     page,
 		PageSize: pageSize,
+		Search:   search,
 	}
 	if err := s.pages["accounts.html"].ExecuteTemplate(w, "base", data); err != nil {
 		log.Printf("[web] account list render: %v", err)
@@ -313,6 +330,57 @@ func (s *Server) handleAPIosint(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// handleAPIInvestigate runs a full investigation: TI enrichment then OSINT scan,
+// streaming progress via SSE. Each event carries a "phase" prefix in Step so
+// the client popup can track two distinct stages in one stream.
+func (s *Server) handleAPIInvestigate(w http.ResponseWriter, r *http.Request) {
+	ip := r.PathValue("ip")
+	if net.ParseIP(ip) == nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid IP"})
+		return
+	}
+
+	if s.enricher == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "enricher not configured"})
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("X-Accel-Buffering", "no")
+	w.WriteHeader(http.StatusOK)
+
+	rc := http.NewResponseController(w)
+	_ = rc.SetWriteDeadline(time.Time{})
+
+	flusher, canFlush := w.(http.Flusher)
+
+	emitPhase := func(phase string) func(intel.EnrichProgress) {
+		return func(p intel.EnrichProgress) {
+			p.Step = phase + ":" + p.Step
+			p.Pct = p.Pct / 2 // scale each phase to 0-50 range
+			if phase == "osint" {
+				p.Pct += 50 // shift OSINT phase to 50-100
+			}
+			data, _ := json.Marshal(p)
+			fmt.Fprintf(w, "data: %s\n\n", data)
+			if canFlush {
+				flusher.Flush()
+			}
+		}
+	}
+
+	// Phase 1: TI enrichment (0-50%)
+	if _, err := s.enricher.EnrichStream(r.Context(), ip, true, emitPhase("ti")); err != nil {
+		log.Printf("[web] investigate enrich %s: %v", ip, err)
+	}
+
+	// Phase 2: OSINT scan (50-100%)
+	if _, err := s.enricher.OSINTStream(r.Context(), ip, emitPhase("osint")); err != nil {
+		log.Printf("[web] investigate osint %s: %v", ip, err)
+	}
+}
+
 func (s *Server) handleAPIStats(w http.ResponseWriter, _ *http.Request) {
 	stats, err := s.db.Stats()
 	if err != nil {
@@ -409,7 +477,7 @@ func parsePagination(r *http.Request, defaultPage, defaultSize int) (page, pageS
 	if page < 1 {
 		page = 1
 	}
-	if pageSize < 1 || pageSize > 100 {
+	if pageSize < 1 || pageSize > 200 {
 		pageSize = defaultSize
 	}
 	return page, pageSize
