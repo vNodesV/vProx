@@ -89,6 +89,8 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 	mux.HandleFunc("GET /api/v1/accounts/{ip}", s.handleAPIAccountDetail)
 	mux.HandleFunc("POST /api/v1/enrich/{ip}", s.handleAPIEnrich)
 	mux.HandleFunc("POST /api/v1/osint/{ip}", s.handleAPIosint)
+	mux.HandleFunc("POST /api/v1/block/{ip}", s.handleAPIBlock)
+	mux.HandleFunc("DELETE /api/v1/block/{ip}", s.handleAPIUnblock)
 	mux.HandleFunc("GET /api/v1/stats", s.handleAPIStats)
 
 	// Static assets (CSS, JS, etc.) served from embedded FS.

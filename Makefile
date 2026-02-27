@@ -34,7 +34,7 @@ GOROOT := $(shell go env GOROOT)
 GOPATH_BIN := $(GOPATH)/bin
 
 .PHONY: all validate-go dirs geo config build install clean systemd env \
-        build-vlog install-vlog config-vlog service-vlog
+        build-vlog install-vlog config-vlog service-vlog ufw-vlog
 
 all: install
 install: validate-go dirs geo config env
@@ -334,4 +334,41 @@ service-vlog:
 		echo "✓ Skipped. Install manually:"; \
 		echo "  sudo cp $(VLOG_SERVICE) /etc/systemd/system/vLog.service"; \
 		echo "  sudo systemctl daemon-reload && sudo systemctl enable vLog.service"; \
+	fi
+
+## ─── UFW passwordless setup for vLog ─────────────────────────────────────────
+
+## Set up passwordless UFW block/unblock for vLog
+ufw-vlog:
+	@SUDOERS_FILE="/etc/sudoers.d/vlog"; \
+	SUDOERS_LINE="$(USER) ALL=(ALL) NOPASSWD: /usr/sbin/ufw deny from *, /usr/sbin/ufw delete deny from *"; \
+	if [[ -f "$$SUDOERS_FILE" ]]; then \
+		if grep -qF "$$SUDOERS_LINE" "$$SUDOERS_FILE"; then \
+			echo "✓ Sudoers rule already configured ($$SUDOERS_FILE)"; \
+		else \
+			echo "⚠ $$SUDOERS_FILE exists but differs. Current content:"; \
+			sudo cat "$$SUDOERS_FILE"; \
+			echo ""; \
+			read -p "Overwrite with updated rule? (y/n) " -n 1 -r; echo ""; \
+			if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
+				echo "$$SUDOERS_LINE" | sudo tee "$$SUDOERS_FILE" > /dev/null; \
+				sudo chmod 0440 "$$SUDOERS_FILE"; \
+				echo "✓ Updated $$SUDOERS_FILE"; \
+			else \
+				echo "✓ Skipped sudoers update"; \
+			fi; \
+		fi; \
+	else \
+		echo "Setting up passwordless UFW block/unblock for vLog..."; \
+		echo "  Allows 'Block IP' and 'Unblock' buttons in vLog UI without password prompt."; \
+		read -p "Create sudoers rule? (y/n) " -n 1 -r; echo ""; \
+		if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
+			echo "$$SUDOERS_LINE" | sudo tee "$$SUDOERS_FILE" > /dev/null; \
+			sudo chmod 0440 "$$SUDOERS_FILE"; \
+			echo "✓ Created $$SUDOERS_FILE"; \
+		else \
+			echo "✓ Skipped. You can create it manually:"; \
+			echo "  echo '$$SUDOERS_LINE' | sudo tee $$SUDOERS_FILE"; \
+			echo "  sudo chmod 0440 $$SUDOERS_FILE"; \
+		fi; \
 	fi

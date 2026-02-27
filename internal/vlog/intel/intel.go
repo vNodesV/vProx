@@ -108,12 +108,12 @@ func (e *Enricher) Enqueue(ip string) {
 
 // EnrichProgress is a single progress event from EnrichStream.
 type EnrichProgress struct {
-	Step   string `json:"step"`            // identifier: "vt_start", "vt_done", "done", "error", etc.
-	Msg    string `json:"msg"`             // human-readable status line
-	Pct    int    `json:"pct"`             // 0-100 progress percentage
-	IsErr  bool   `json:"err,omitempty"`   // true if this event represents a non-fatal warning
-	Score  int64  `json:"score,omitempty"` // set on the final "done" event
-	Status string `json:"status,omitempty"`// set on the final "done" event
+	Step   string `json:"step"`             // identifier: "vt_start", "vt_done", "done", "error", etc.
+	Msg    string `json:"msg"`              // human-readable status line
+	Pct    int    `json:"pct"`              // 0-100 progress percentage
+	IsErr  bool   `json:"err,omitempty"`    // true if this event represents a non-fatal warning
+	Score  int64  `json:"score,omitempty"`  // set on the final "done" event
+	Status string `json:"status,omitempty"` // set on the final "done" event
 }
 
 // EnrichStream synchronously enriches ip, calling emit for each progress step.

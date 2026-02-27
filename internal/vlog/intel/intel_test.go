@@ -16,11 +16,11 @@ func TestComputeScore_AllSources(t *testing.T) {
 		wantMax         int64
 	}{
 		{"clean IP all sources", 0, 0, 0, 0, 5},
-		{"high abuse only", 100, -1, 0, 60, 70},       // AbuseIPDB only: 100*(0.4/0.6)=67
-		{"high VT only", -1, 70, 0, 60, 70},            // VT only (70*5=100 capped): 100*(0.4/0.6)=67
-		{"shodan risk only", -1, -1, 3, 55, 65},        // Shodan only: 3*20=60 with full weight → 60
+		{"high abuse only", 100, -1, 0, 60, 70}, // AbuseIPDB only: 100*(0.4/0.6)=67
+		{"high VT only", -1, 70, 0, 60, 70},     // VT only (70*5=100 capped): 100*(0.4/0.6)=67
+		{"shodan risk only", -1, -1, 3, 55, 65}, // Shodan only: 3*20=60 with full weight → 60
 		{"all max", 100, 100, 5, 95, 100},
-		{"no data", -1, -1, -1, -1, -1},                // special: nothing fetched
+		{"no data", -1, -1, -1, -1, -1}, // special: nothing fetched
 		{"abuse confirmed", 85, 0, 0, 30, 40},
 	}
 

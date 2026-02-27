@@ -4,12 +4,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
 
 	"github.com/vNodesV/vProx/internal/vlog/db"
 	"github.com/vNodesV/vProx/internal/vlog/intel"
+	"github.com/vNodesV/vProx/internal/vlog/ufw"
 )
 
 // ---------------------------------------------------------------------------
@@ -307,6 +309,63 @@ func (s *Server) handleAPIStats(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, stats)
+}
+
+func (s *Server) handleAPIBlock(w http.ResponseWriter, r *http.Request) {
+	ip := r.PathValue("ip")
+	if net.ParseIP(ip) == nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid IP"})
+		return
+	}
+
+	// Parse optional reason from query param
+	reason := r.URL.Query().Get("reason")
+	if reason == "" {
+		reason = "manual block"
+	}
+
+	if err := s.db.BlockIP(ip, reason); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	ufwOK := true
+	if err := ufw.Block(ip); err != nil {
+		log.Printf("[web] ufw block %s: %v", ip, err)
+		ufwOK = false
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ip":      ip,
+		"blocked": true,
+		"ufw":     ufwOK,
+		"reason":  reason,
+	})
+}
+
+func (s *Server) handleAPIUnblock(w http.ResponseWriter, r *http.Request) {
+	ip := r.PathValue("ip")
+	if net.ParseIP(ip) == nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid IP"})
+		return
+	}
+
+	if err := s.db.UnblockIP(ip); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	ufwOK := true
+	if err := ufw.Unblock(ip); err != nil {
+		log.Printf("[web] ufw unblock %s: %v", ip, err)
+		ufwOK = false
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ip":      ip,
+		"blocked": false,
+		"ufw":     ufwOK,
+	})
 }
 
 // ---------------------------------------------------------------------------

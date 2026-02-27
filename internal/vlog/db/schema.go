@@ -88,6 +88,15 @@ CREATE INDEX IF NOT EXISTS idx_ratelimit_events_ip ON ratelimit_events(ip);
 CREATE INDEX IF NOT EXISTS idx_ratelimit_events_ts ON ratelimit_events(ts);
 CREATE INDEX IF NOT EXISTS idx_ip_accounts_status ON ip_accounts(status);
 CREATE INDEX IF NOT EXISTS idx_ip_accounts_threat_score ON ip_accounts(threat_score);
+
+CREATE TABLE IF NOT EXISTS blocked_ips (
+	id          INTEGER PRIMARY KEY AUTOINCREMENT,
+	ip          TEXT NOT NULL,
+	blocked_at  TEXT NOT NULL,
+	reason      TEXT NOT NULL DEFAULT '',
+	ufw_applied INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_blocked_ips_ip ON blocked_ips(ip);
 `
 
 // Migrate executes the schema DDL against db, creating all tables and

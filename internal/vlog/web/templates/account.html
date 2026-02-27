@@ -3,7 +3,23 @@
 <div class="detail-header">
   <h2 style="margin:0;">{{.Account.IP}}</h2>
   <span class="badge badge-{{.Account.Status}}">{{.Account.Status}}</span>
+  {{if eq .Account.Status "blocked"}}
+  <button class="btn-block btn-unblock" onclick="doBlock('{{.Account.IP}}','{{.BasePath}}',false)">⊘ UNBLOCK</button>
+  {{else}}
+  <button class="btn-block" onclick="doBlock('{{.Account.IP}}','{{.BasePath}}',true)">⊘ BLOCK IP</button>
+  {{end}}
 </div>
+
+{{if eq .Account.Status "blocked"}}
+<!-- ── Blocked Status ── -->
+<article class="blocked-article">
+  <header><strong>⊘ IP Blocked</strong></header>
+  <p style="margin:0.5rem 0 0;font-size:0.9rem;">
+    This IP is currently blocked at the OS firewall level (UFW) and marked as blocked in the database.
+    Click <strong>UNBLOCK</strong> to remove the block.
+  </p>
+</article>
+{{end}}
 
 <!-- ── Account Details ── -->
 <article>
@@ -250,6 +266,18 @@ function startUpdate(ip, base, endpoint, title) {
       setTimeout(function() { modal.style.display = 'none'; }, 6000);
     }
   }
+}
+function doBlock(ip, base, block) {
+  var method = block ? 'POST' : 'DELETE';
+  var label  = block ? 'Blocking ' + ip + '…' : 'Unblocking ' + ip + '…';
+  if (!confirm(label + '\nProceed?')) return;
+  fetch(base + '/api/v1/block/' + ip, { method: method })
+    .then(function(res) { return res.json(); })
+    .then(function(data) {
+      if (data.error) { alert('Error: ' + data.error); return; }
+      window.location.reload();
+    })
+    .catch(function(err) { alert('Network error: ' + err.message); });
 }
 </script>
 {{end}}

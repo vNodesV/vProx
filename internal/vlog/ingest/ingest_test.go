@@ -91,12 +91,12 @@ func TestParseLogLine_Access(t *testing.T) {
 
 func TestParseRateLimitLine(t *testing.T) {
 	tests := []struct {
-		name       string
-		line       string
-		wantIP     string
-		wantEvent  string
-		wantRPS    float64
-		wantNil    bool
+		name      string
+		line      string
+		wantIP    string
+		wantEvent string
+		wantRPS   float64
+		wantNil   bool
 	}{
 		{
 			name:      "valid rate limit event",
@@ -116,11 +116,11 @@ func TestParseRateLimitLine(t *testing.T) {
 			wantNil: true,
 		},
 		{
-			name:  "ua alias fallback",
-			line:  `{"ts":"2025-01-01T12:00:01Z","event":"429","ip":"5.6.7.8","ua":"Mozilla/5.0","method":"GET","path":"/rpc","host":"x","rps":10.0,"burst":50}`,
-			wantIP: "5.6.7.8",
+			name:      "ua alias fallback",
+			line:      `{"ts":"2025-01-01T12:00:01Z","event":"429","ip":"5.6.7.8","ua":"Mozilla/5.0","method":"GET","path":"/rpc","host":"x","rps":10.0,"burst":50}`,
+			wantIP:    "5.6.7.8",
 			wantEvent: "429",
-			wantRPS: 10.0,
+			wantRPS:   10.0,
 		},
 	}
 

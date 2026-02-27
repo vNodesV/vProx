@@ -220,11 +220,11 @@ func (e *Enricher) OSINTStream(ctx context.Context, ip string, emit func(EnrichP
 		acc, err := e.db.GetIPAccount(ip)
 		if err != nil {
 			acc = &db.IPAccount{
-				IP:        ip,
-				FirstSeen: nowISO,
-				LastSeen:  nowISO,
-				Status:    string(ThreatUnknown),
-				PingMs:    -1,
+				IP:          ip,
+				FirstSeen:   nowISO,
+				LastSeen:    nowISO,
+				Status:      string(ThreatUnknown),
+				PingMs:      -1,
 				ThreatScore: -1,
 				VTMalicious: -1,
 				AbuseScore:  -1,

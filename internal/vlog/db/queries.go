@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"time"
 )
 
 // ---------------------------------------------------------------------------
@@ -34,12 +35,12 @@ type IPAccount struct {
 	Tags            string // JSON array
 	Status          string
 	// OSINT fields (populated by OSINTStream)
-	RDNS          string  // comma-joined PTR records
-	AbuseEmail    string  // abuse contact email
-	Moniker       string  // Cosmos RPC moniker
-	ChainID       string  // Cosmos chain/network ID
-	PingMs        float64 // TCP latency to first open port (-1 = untested)
-	Protocol      string  // "https", "http", or ""
+	RDNS           string  // comma-joined PTR records
+	AbuseEmail     string  // abuse contact email
+	Moniker        string  // Cosmos RPC moniker
+	ChainID        string  // Cosmos chain/network ID
+	PingMs         float64 // TCP latency to first open port (-1 = untested)
+	Protocol       string  // "https", "http", or ""
 	OSINTUpdatedAt string
 }
 
@@ -86,6 +87,15 @@ type IngestedArchive struct {
 	RequestCount   int64
 	RatelimitCount int64
 	SizeBytes      int64
+}
+
+// BlockedIP mirrors the blocked_ips table.
+type BlockedIP struct {
+	ID         int64
+	IP         string
+	BlockedAt  string
+	Reason     string
+	UFWApplied bool
 }
 
 // ---------------------------------------------------------------------------
@@ -182,6 +192,75 @@ func (d *DB) ListIPAccounts(limit, offset int) ([]*IPAccount, error) {
 			return nil, fmt.Errorf("list ip_accounts scan: %w", err)
 		}
 		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
+// ---------------------------------------------------------------------------
+// Blocked IPs
+// ---------------------------------------------------------------------------
+
+// BlockIP inserts a blocked_ips row and sets ip_accounts.status to "blocked".
+func (d *DB) BlockIP(ip, reason string) error {
+	now := time.Now().UTC().Format(time.RFC3339)
+	_, err := d.Exec(
+		`INSERT INTO blocked_ips (ip, blocked_at, reason) VALUES (?, ?, ?)`,
+		ip, now, reason,
+	)
+	if err != nil {
+		return fmt.Errorf("block ip %s: %w", ip, err)
+	}
+	_, err = d.Exec(
+		`UPDATE ip_accounts SET status = 'blocked' WHERE ip = ?`, ip,
+	)
+	if err != nil {
+		return fmt.Errorf("block ip update status %s: %w", ip, err)
+	}
+	return nil
+}
+
+// UnblockIP removes the blocked_ips row and resets ip_accounts.status to "unknown"
+// (only if it was "blocked").
+func (d *DB) UnblockIP(ip string) error {
+	_, err := d.Exec(`DELETE FROM blocked_ips WHERE ip = ?`, ip)
+	if err != nil {
+		return fmt.Errorf("unblock ip %s: %w", ip, err)
+	}
+	_, err = d.Exec(
+		`UPDATE ip_accounts SET status = 'unknown' WHERE ip = ? AND status = 'blocked'`, ip,
+	)
+	if err != nil {
+		return fmt.Errorf("unblock ip update status %s: %w", ip, err)
+	}
+	return nil
+}
+
+// IsBlocked returns true if ip has an entry in the blocked_ips table.
+func (d *DB) IsBlocked(ip string) (bool, error) {
+	var n int
+	err := d.QueryRow(`SELECT COUNT(*) FROM blocked_ips WHERE ip = ?`, ip).Scan(&n)
+	if err != nil {
+		return false, fmt.Errorf("is blocked %s: %w", ip, err)
+	}
+	return n > 0, nil
+}
+
+// ListBlockedIPs returns all blocked IPs ordered by blocked_at descending.
+func (d *DB) ListBlockedIPs() ([]BlockedIP, error) {
+	const q = `SELECT id, ip, blocked_at, reason, ufw_applied
+		FROM blocked_ips ORDER BY blocked_at DESC`
+	rows, err := d.Query(q)
+	if err != nil {
+		return nil, fmt.Errorf("list blocked_ips: %w", err)
+	}
+	defer rows.Close()
+	var out []BlockedIP
+	for rows.Next() {
+		var b BlockedIP
+		if err := rows.Scan(&b.ID, &b.IP, &b.BlockedAt, &b.Reason, &b.UFWApplied); err != nil {
+			return nil, fmt.Errorf("scan blocked_ip: %w", err)
+		}
+		out = append(out, b)
 	}
 	return out, rows.Err()
 }

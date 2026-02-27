@@ -227,6 +227,44 @@ func BuildThreatFlags(acc *db.IPAccount) string {
 	return string(b)
 }
 
+// ExtractRiskFlagsFromResult counts risky signals from a typed *ShodanResult.
+// This is the typed companion to ExtractShodanRiskFlags; use it when you already
+// have a *ShodanResult rather than raw JSON.
+//
+// Returns -1 when sr is nil (no data fetched) so ComputeScore can exclude this
+// source from the weighted average instead of diluting it.
+func ExtractRiskFlagsFromResult(sr *ShodanResult) int64 {
+	if sr == nil {
+		return -1
+	}
+
+	// Build a product-label map from service data for the port-8080 proxy check.
+	portLabels := make(map[int]string, len(sr.Services))
+	for _, svc := range sr.Services {
+		portLabels[svc.Port] = strings.ToLower(svc.Product)
+	}
+
+	var flags int64
+	seen := make(map[int]bool)
+	for _, p := range sr.Ports {
+		if seen[p] {
+			continue
+		}
+		seen[p] = true
+		if !riskyPorts[p] {
+			continue
+		}
+		// Port 8080 only counts if the service is labelled as a proxy.
+		if p == 8080 {
+			if !strings.Contains(portLabels[p], "proxy") {
+				continue
+			}
+		}
+		flags++
+	}
+	return flags
+}
+
 // portsToJSON converts a slice of ints to a JSON array string.
 func portsToJSON(ports []int) string {
 	if len(ports) == 0 {
