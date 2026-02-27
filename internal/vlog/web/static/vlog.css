@@ -239,6 +239,20 @@ align-items: start;
 .detail-grid { grid-template-columns: 1fr; }
 }
 
+/* ── TI source icon cells ── */
+.ti-icon-cell { width: 1.8rem; text-align: center; }
+.ti-clean      { color: #198754; font-weight: 700; font-size: 1rem; }
+.ti-suspicious { color: #fd7e14; font-weight: 900; font-size: 1rem; }
+.ti-malicious  { color: #dc3545; font-weight: 900; font-size: 1.1rem; }
+.ti-info       { color: #6c757d; font-size: 0.85rem; }
+.ti-na         { color: #6c757d; }
+
+/* ── Sortable table headers ── */
+th.sortable { cursor: pointer; user-select: none; }
+th.sortable:hover { opacity: 0.75; }
+th.sort-asc::after  { content: ' ▲'; font-size: 0.7em; opacity: 0.8; }
+th.sort-desc::after { content: ' ▼'; font-size: 0.7em; opacity: 0.8; }
+
 /* ── Block button + blocked article ── */
 .btn-block {
 color: #fff;

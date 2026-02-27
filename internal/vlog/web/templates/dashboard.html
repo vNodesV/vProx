@@ -36,14 +36,15 @@
 <section>
   <h3>Top Flagged IPs</h3>
   {{if .RecentFlags}}
-  <table role="grid">
+  <table id="flagged-tbl" role="grid">
     <thead>
       <tr>
-        <th>IP</th>
-        <th>Country</th>
-        <th>Threat Score</th>
-        <th>Status</th>
-        <th>Last Seen</th>
+        <th class="sortable">IP</th>
+        <th class="sortable">Country</th>
+        <th class="sortable">Threat Score</th>
+        <th class="sortable">Access Count</th>
+        <th class="sortable">Status</th>
+        <th class="sortable">Last Seen</th>
         <th>Actions</th>
       </tr>
     </thead>
@@ -59,6 +60,7 @@
           </div>
           {{.ThreatScore}}
         </td>
+        <td>{{.TotalRequests}}</td>
         <td><span class="badge badge-{{.Status}}">{{.Status}}</span></td>
         <td>{{.LastSeen}}</td>
         <td><a href="{{$.BasePath}}/accounts/{{.IP}}" role="button" class="outline">View</a></td>
@@ -66,6 +68,7 @@
       {{end}}
     </tbody>
   </table>
+  <script>initSortableTable('flagged-tbl');</script>
   {{else}}
   <p>No flagged IPs yet. Ingest some archives to get started.</p>
   {{end}}

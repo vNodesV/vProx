@@ -70,30 +70,55 @@
     <button class="btn-update" onclick="startUpdate('{{.Account.IP}}','{{.BasePath}}','/api/v1/enrich/','Threat Update')">THREAT UPDATE</button>
   </header>
 
-  {{if .ThreatFlagsArr}}
-  <ul class="flags-list" style="margin-bottom:1rem;">
-    {{range .ThreatFlagsArr}}<li>{{.}}</li>{{end}}
-  </ul>
-  {{end}}
-
   <table style="font-size:0.85rem;">
     <tbody>
-      <tr><td>Threat Score</td><td><strong>{{.Account.ThreatScore}}/100</strong> &nbsp;<span class="badge badge-{{.Account.Status}}" style="font-size:0.75rem;">{{.Account.Status}}</span></td></tr>
-      <tr><td>VirusTotal Malicious</td><td>{{if ge .Account.VTMalicious 0}}{{.Account.VTMalicious}}{{else}}<em>—</em>{{end}}</td></tr>
-      <tr><td>AbuseIPDB Score</td><td>{{if ge .Account.AbuseScore 0}}{{.Account.AbuseScore}}{{else}}<em>—</em>{{end}}</td></tr>
-      {{if .ShodanResult}}
-      <tr><td>Shodan ISP</td><td>{{if .ShodanResult.ISP}}{{.ShodanResult.ISP}}{{else}}<em>—</em>{{end}}</td></tr>
-      <tr><td>Shodan OS</td><td>{{if .ShodanResult.OS}}{{.ShodanResult.OS}}{{else}}<em>—</em>{{end}}</td></tr>
-      <tr><td>Shodan Tags</td><td>{{if .ShodanResult.Tags}}{{range $i,$t := .ShodanResult.Tags}}{{if $i}}, {{end}}{{$t}}{{end}}{{else}}<em>—</em>{{end}}</td></tr>
-      <tr><td>Shodan Ports</td><td>{{if .ShodanResult.Ports}}{{range $i,$p := .ShodanResult.Ports}}{{if $i}}, {{end}}{{$p}}{{end}}{{else}}<em>—</em>{{end}}</td></tr>
-      <tr><td>Shodan Hostnames</td><td>{{if .ShodanResult.Hostnames}}{{range $i,$h := .ShodanResult.Hostnames}}{{if $i}}, {{end}}{{$h}}{{end}}{{else}}<em>—</em>{{end}}</td></tr>
-      {{if .ShodanResult.Vulns}}
-      <tr><td>CVEs</td><td><span style="color:#c0392b;font-weight:600;">{{range $i,$v := .ShodanResult.Vulns}}{{if $i}}, {{end}}{{$v}}{{end}}</span></td></tr>
-      {{end}}
-      {{else}}
-      <tr><td>Shodan</td><td><em>not indexed</em></td></tr>
-      {{end}}
-      <tr><td>Intel Updated</td><td>{{if .Account.IntelUpdatedAt}}{{.Account.IntelUpdatedAt}}{{else}}<em>never</em>{{end}}</td></tr>
+      <!-- VirusTotal row -->
+      <tr>
+        <td class="ti-icon-cell">
+          {{if lt .Account.VTMalicious 0}}<span class="ti-na" title="Not checked">—</span>
+          {{else if eq .Account.VTMalicious 0}}<span class="ti-clean" title="Clean">✓</span>
+          {{else if lt .Account.VTMalicious 3}}<span class="ti-suspicious" title="Suspicious">!</span>
+          {{else}}<span class="ti-malicious" title="High Risk">!</span>{{end}}
+        </td>
+        <td>VirusTotal</td>
+        <td>{{if lt .Account.VTMalicious 0}}<em>not checked</em>{{else if eq .Account.VTMalicious 0}}Clean{{else}}{{.Account.VTMalicious}} malicious detection(s){{end}}</td>
+      </tr>
+      <!-- AbuseIPDB row -->
+      <tr>
+        <td class="ti-icon-cell">
+          {{if lt .Account.AbuseScore 0}}<span class="ti-na" title="Not checked">—</span>
+          {{else if le .Account.AbuseScore 25}}<span class="ti-clean" title="Clean">✓</span>
+          {{else if lt .Account.AbuseScore 50}}<span class="ti-suspicious" title="Suspicious">!</span>
+          {{else}}<span class="ti-malicious" title="High Risk">!</span>{{end}}
+        </td>
+        <td>AbuseIPDB</td>
+        <td>{{if lt .Account.AbuseScore 0}}<em>not checked</em>{{else}}{{.Account.AbuseScore}}/100 confidence score{{end}}</td>
+      </tr>
+      <!-- Shodan row -->
+      <tr>
+        <td class="ti-icon-cell"><span class="ti-info" title="Recon data">◎</span></td>
+        <td>Shodan</td>
+        <td>
+          {{if .ShodanResult}}
+            {{if .ShodanResult.ISP}}{{.ShodanResult.ISP}}{{end}}
+            {{if .ShodanResult.Ports}} &middot; port(s)&nbsp;{{range $i,$p := .ShodanResult.Ports}}{{if $i}},&nbsp;{{end}}{{$p}}{{end}}{{end}}
+          {{else}}<em>not indexed</em>{{end}}
+        </td>
+      </tr>
+      <!-- Score row -->
+      <tr>
+        <td class="ti-icon-cell">
+          {{if lt .Account.ThreatScore 0}}<span class="ti-na">—</span>
+          {{else if le .Account.ThreatScore 19}}<span class="ti-clean" title="Clean">✓</span>
+          {{else if le .Account.ThreatScore 49}}<span class="ti-suspicious" title="Suspicious">!</span>
+          {{else}}<span class="ti-malicious" title="High Risk">!</span>{{end}}
+        </td>
+        <td>Threat Score</td>
+        <td><strong>{{.Account.ThreatScore}}/100</strong>{{if .ThreatFlagsArr}}&nbsp;
+          {{range .ThreatFlagsArr}}<span class="badge badge-malicious" style="font-size:0.7rem;margin-right:2px;">{{.}}</span>{{end}}
+        {{end}}</td>
+      </tr>
+      <tr><td></td><td>Intel Updated</td><td>{{if .Account.IntelUpdatedAt}}{{.Account.IntelUpdatedAt}}{{else}}<em>never</em>{{end}}</td></tr>
     </tbody>
   </table>
 
@@ -196,7 +221,7 @@
     <div id="enrich-status" class="enrich-status-text">Initialising&hellip;</div>
     <div class="enrich-bar-wrap"><div id="enrich-bar" class="enrich-bar"></div></div>
     <div id="enrich-log" class="enrich-log"></div>
-    <button id="enrich-dismiss" class="enrich-dismiss" onclick="dismissEnrich()">Dismiss &amp; Refresh</button>
+    <button id="enrich-dismiss" class="enrich-dismiss" onclick="dismissEnrich()">Dismiss</button>
   </div>
 </div>
 

@@ -3,17 +3,17 @@
 <h2>IP Accounts</h2>
 <p>Showing page {{.Page}} ({{.PageSize}} per page, {{.Total}} total)</p>
 
-<table role="grid">
+<table id="accounts-tbl" role="grid">
   <thead>
     <tr>
-      <th>IP</th>
-      <th>Country</th>
-      <th>ASN</th>
-      <th>Requests</th>
-      <th>Rate Limits</th>
-      <th>Threat Score</th>
-      <th>Status</th>
-      <th>Last Seen</th>
+      <th class="sortable">IP</th>
+      <th class="sortable">Country</th>
+      <th class="sortable">ASN</th>
+      <th class="sortable">Requests</th>
+      <th class="sortable">Rate Limits</th>
+      <th class="sortable">Threat Score</th>
+      <th class="sortable">Status</th>
+      <th class="sortable">Last Seen</th>
       <th>Actions</th>
     </tr>
   </thead>
@@ -41,6 +41,7 @@
     {{end}}
   </tbody>
 </table>
+<script>initSortableTable('accounts-tbl');</script>
 
 <nav>
   <ul>

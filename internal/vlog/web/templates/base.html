@@ -19,6 +19,33 @@
   <main class="container">
     {{block "content" .}}{{end}}
   </main>
+  <script>
+  function initSortableTable(tableId) {
+    var table = document.getElementById(tableId);
+    if (!table) return;
+    var ths = table.querySelectorAll('thead th.sortable');
+    var state = {col: -1, asc: true};
+    ths.forEach(function(th, i) {
+      th.addEventListener('click', function() {
+        var colIdx = Array.from(th.parentNode.children).indexOf(th);
+        var asc = (state.col === colIdx) ? !state.asc : true;
+        state.col = colIdx; state.asc = asc;
+        ths.forEach(function(t) { t.classList.remove('sort-asc','sort-desc'); });
+        th.classList.add(asc ? 'sort-asc' : 'sort-desc');
+        var tbody = table.querySelector('tbody');
+        var rows = Array.from(tbody.querySelectorAll('tr'));
+        rows.sort(function(a, b) {
+          var av = a.cells[colIdx] ? a.cells[colIdx].textContent.trim() : '';
+          var bv = b.cells[colIdx] ? b.cells[colIdx].textContent.trim() : '';
+          var an = parseFloat(av), bn = parseFloat(bv);
+          if (!isNaN(an) && !isNaN(bn)) return asc ? an - bn : bn - an;
+          return asc ? av.localeCompare(bv) : bv.localeCompare(av);
+        });
+        rows.forEach(function(r) { tbody.appendChild(r); });
+      });
+    });
+  }
+  </script>
 </body>
 </html>
 {{end}}
