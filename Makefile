@@ -5,10 +5,9 @@ BUILD_SRC := ./cmd/vprox
 BUILD_DIR := .build
 BUILD_OUT := $(BUILD_DIR)/$(APP_NAME)
 
-VLOG_NAME    := vLog
-VLOG_SRC     := ./cmd/vlog
-VLOG_BUILD   := $(BUILD_DIR)/$(VLOG_NAME)
-VLOG_SERVICE := $(SERVICE_DIR)/vLog.service
+VLOG_NAME  := vLog
+VLOG_SRC   := ./cmd/vlog
+VLOG_BUILD := $(BUILD_DIR)/$(VLOG_NAME)
 
 VPROX_HOME := $(HOME)/.vProx
 DATA_DIR := $(VPROX_HOME)/data
@@ -20,6 +19,7 @@ INTERNAL_DIR := $(VPROX_HOME)/internal
 ARCHIVE_DIR := $(LOG_DIR)/archives
 SERVICE_DIR := $(VPROX_HOME)/service
 SERVICE_PATH := $(SERVICE_DIR)/vProx.service
+VLOG_SERVICE := $(SERVICE_DIR)/vLog.service
 DIR_LIST := $(DATA_DIR) $(GEO_DIR) $(LOG_DIR) $(CFG_DIR) $(CFG_DIR)/chains $(CFG_DIR)/backup $(INTERNAL_DIR) $(ARCHIVE_DIR) $(SERVICE_DIR)
 
 # GeoLocation database
