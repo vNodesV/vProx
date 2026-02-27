@@ -45,6 +45,7 @@ type accountDetailData struct {
 	RecentLimits   []*db.RateLimitEvent
 	ThreatFlagsArr []string
 	Ports          []portInfo // pre-computed port status for display
+	ShodanResult   *intel.ShodanResult
 }
 
 // portInfo holds display state for a single scanned port.
@@ -187,6 +188,7 @@ func (s *Server) handleAccountDetail(w http.ResponseWriter, r *http.Request) {
 		RecentLimits:   rls,
 		ThreatFlagsArr: flags,
 		Ports:          buildPortInfo(account.OpenPorts),
+		ShodanResult:   intel.ParseShodanJSON(account.ShodanData),
 	}
 	if err := s.pages["account.html"].ExecuteTemplate(w, "base", data); err != nil {
 		log.Printf("[web] account detail render: %v", err)

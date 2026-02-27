@@ -91,6 +91,20 @@ func CheckShodanSearch(apiKey, query string, httpClient *http.Client) (matches [
 	return matches, found.Total, nil
 }
 
+// ParseShodanJSON re-hydrates a *ShodanResult from a raw JSON blob that was
+// produced by json.Marshal(*goshodan.Host) and stored in the intel cache / DB.
+// Returns nil if raw is empty or unparseable.
+func ParseShodanJSON(raw string) *ShodanResult {
+	if raw == "" {
+		return nil
+	}
+	var host goshodan.Host
+	if err := json.Unmarshal([]byte(raw), &host); err != nil {
+		return nil
+	}
+	return hostToResult(&host)
+}
+
 // ── internal mappers ──────────────────────────────────────────────────────────
 
 // hostToResult maps a *goshodan.Host (single-host lookup) to *ShodanResult.

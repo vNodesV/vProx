@@ -88,9 +88,38 @@
     <tbody>
       <tr><td>VirusTotal Malicious</td><td>{{if ge .Account.VTMalicious 0}}{{.Account.VTMalicious}}{{else}}<em>—</em>{{end}}</td></tr>
       <tr><td>AbuseIPDB Score</td><td>{{if ge .Account.AbuseScore 0}}{{.Account.AbuseScore}}{{else}}<em>—</em>{{end}}</td></tr>
+      {{if .ShodanResult}}
+      <tr><td>Shodan ISP</td><td>{{if .ShodanResult.ISP}}{{.ShodanResult.ISP}}{{else}}<em>—</em>{{end}}</td></tr>
+      <tr><td>Shodan OS</td><td>{{if .ShodanResult.OS}}{{.ShodanResult.OS}}{{else}}<em>—</em>{{end}}</td></tr>
+      <tr><td>Shodan Tags</td><td>{{if .ShodanResult.Tags}}{{range $i,$t := .ShodanResult.Tags}}{{if $i}}, {{end}}{{$t}}{{end}}{{else}}<em>—</em>{{end}}</td></tr>
+      <tr><td>Shodan Ports</td><td>{{if .ShodanResult.Ports}}{{range $i,$p := .ShodanResult.Ports}}{{if $i}}, {{end}}{{$p}}{{end}}{{else}}<em>—</em>{{end}}</td></tr>
+      <tr><td>Shodan Hostnames</td><td>{{if .ShodanResult.Hostnames}}{{range $i,$h := .ShodanResult.Hostnames}}{{if $i}}, {{end}}{{$h}}{{end}}{{else}}<em>—</em>{{end}}</td></tr>
+      {{if .ShodanResult.Vulns}}
+      <tr><td>CVEs</td><td><span style="color:#c0392b;font-weight:600;">{{range $i,$v := .ShodanResult.Vulns}}{{if $i}}, {{end}}{{$v}}{{end}}</span></td></tr>
+      {{end}}
+      {{end}}
       <tr><td>Intel Updated</td><td>{{if .Account.IntelUpdatedAt}}{{.Account.IntelUpdatedAt}}{{else}}<em>never</em>{{end}}</td></tr>
     </tbody>
   </table>
+
+  {{if and .ShodanResult .ShodanResult.Services}}
+  <div style="margin-top:1rem;">
+    <div style="font-size:0.75rem;opacity:0.55;margin-bottom:0.4rem;font-weight:600;letter-spacing:0.05em;">SHODAN SERVICES</div>
+    <table style="font-size:0.82rem;width:100%;">
+      <thead><tr><th>Port</th><th>Proto</th><th>Product</th><th>Version</th></tr></thead>
+      <tbody>
+        {{range .ShodanResult.Services}}
+        <tr>
+          <td>{{.Port}}</td>
+          <td>{{if .Transport}}{{.Transport}}{{else}}—{{end}}</td>
+          <td>{{if .Product}}{{.Product}}{{else}}<em>—</em>{{end}}</td>
+          <td>{{if .Version}}{{.Version}}{{else}}<em>—</em>{{end}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+  {{end}}
 </article>
 
 <!-- ── Account Events ── -->
