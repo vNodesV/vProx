@@ -6,6 +6,7 @@
 package intel
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"time"
@@ -57,8 +58,15 @@ func NewEnricher(cfg config.IntelConfig, d *db.DB) *Enricher {
 
 // Start launches the background enrichment worker goroutine.
 // It reads IPs from the queue and enriches each one synchronously.
+// A recover guard restarts the worker if an unexpected panic occurs.
 func (e *Enricher) Start() {
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("[intel] worker panic (recovered): %v — restarting", r)
+				e.Start() // restart the goroutine
+			}
+		}()
 		for {
 			select {
 			case ip := <-e.queue:
@@ -114,7 +122,7 @@ func (e *Enricher) EnrichNow(ip string) (*db.IPAccount, error) {
 	var abuseScore int64 = -1
 	var abuseRaw string
 	if e.cfg.Keys.AbuseIPDB != "" && !e.cacheValid(ip, sourceAbuseIPDB, now) {
-		_ = e.limiter.Wait(nil) // nil context is acceptable; blocks until allowed
+		_ = e.limiter.Wait(context.Background())
 		s, raw, err := CheckAbuseIPDB(e.cfg.Keys.AbuseIPDB, ip, e.httpClient)
 		if err != nil {
 			log.Printf("[intel] abuseipdb %s: %v", ip, err)
@@ -131,7 +139,7 @@ func (e *Enricher) EnrichNow(ip string) (*db.IPAccount, error) {
 	var vtMalicious int64 = -1
 	var vtRaw string
 	if e.cfg.Keys.VirusTotal != "" && !e.cacheValid(ip, sourceVirusTotal, now) {
-		_ = e.limiter.Wait(nil)
+		_ = e.limiter.Wait(context.Background())
 		m, raw, err := CheckVirusTotal(e.cfg.Keys.VirusTotal, ip, e.httpClient)
 		if err != nil {
 			log.Printf("[intel] virustotal %s: %v", ip, err)
@@ -148,7 +156,7 @@ func (e *Enricher) EnrichNow(ip string) (*db.IPAccount, error) {
 	var shodanResult *ShodanResult
 	var shodanRaw string
 	if e.cfg.Keys.Shodan != "" && !e.cacheValid(ip, sourceShodan, now) {
-		_ = e.limiter.Wait(nil)
+		_ = e.limiter.Wait(context.Background())
 		sr, raw, err := CheckShodan(e.cfg.Keys.Shodan, ip, e.httpClient)
 		if err != nil {
 			log.Printf("[intel] shodan %s: %v", ip, err)
