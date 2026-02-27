@@ -282,15 +282,39 @@ func (s *Server) handleAPIEnrich(w http.ResponseWriter, r *http.Request) {
 
 	flusher, canFlush := w.(http.Flusher)
 
-	emit := func(p intel.EnrichProgress) {
-		data, _ := json.Marshal(p)
-		fmt.Fprintf(w, "data: %s\n\n", data)
+	flush := func() {
 		if canFlush {
 			flusher.Flush()
 		}
 	}
 
-	if _, err := s.enricher.EnrichStream(r.Context(), ip, true, emit); err != nil {
+	// Keepalive: send an SSE comment every 15s so Apache's idle-connection
+	// timer never fires during slow provider lookups.
+	kaDone := make(chan struct{})
+	go func() {
+		t := time.NewTicker(15 * time.Second)
+		defer t.Stop()
+		for {
+			select {
+			case <-kaDone:
+				return
+			case <-t.C:
+				fmt.Fprintf(w, ": ping\n\n")
+				flush()
+			}
+		}
+	}()
+	defer close(kaDone)
+
+	emit := func(p intel.EnrichProgress) {
+		data, _ := json.Marshal(p)
+		fmt.Fprintf(w, "data: %s\n\n", data)
+		flush()
+	}
+
+	// Use context.Background() so provider saves complete even if the Apache
+	// proxy closes the HTTP connection mid-stream.
+	if _, err := s.enricher.EnrichStream(context.Background(), ip, true, emit); err != nil {
 		log.Printf("[web] enrich %s: %v", ip, err)
 	}
 }
@@ -318,15 +342,39 @@ func (s *Server) handleAPIosint(w http.ResponseWriter, r *http.Request) {
 
 	flusher, canFlush := w.(http.Flusher)
 
-	emit := func(p intel.EnrichProgress) {
-		data, _ := json.Marshal(p)
-		fmt.Fprintf(w, "data: %s\n\n", data)
+	flush := func() {
 		if canFlush {
 			flusher.Flush()
 		}
 	}
 
-	if _, err := s.enricher.OSINTStream(r.Context(), ip, emit); err != nil {
+	// Keepalive: send an SSE comment every 15s so Apache's idle-connection
+	// timer never fires during the port-probe phase.
+	kaDone := make(chan struct{})
+	go func() {
+		t := time.NewTicker(15 * time.Second)
+		defer t.Stop()
+		for {
+			select {
+			case <-kaDone:
+				return
+			case <-t.C:
+				fmt.Fprintf(w, ": ping\n\n")
+				flush()
+			}
+		}
+	}()
+	defer close(kaDone)
+
+	emit := func(p intel.EnrichProgress) {
+		data, _ := json.Marshal(p)
+		fmt.Fprintf(w, "data: %s\n\n", data)
+		flush()
+	}
+
+	// Use context.Background() so the OSINT scan completes and saves even if
+	// Apache closes the proxy connection mid-stream.
+	if _, err := s.enricher.OSINTStream(context.Background(), ip, emit); err != nil {
 		log.Printf("[web] osint %s: %v", ip, err)
 	}
 }
