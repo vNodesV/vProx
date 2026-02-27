@@ -42,6 +42,40 @@ type accountDetailData struct {
 	RecentRequests []*db.RequestEvent
 	RecentLimits   []*db.RateLimitEvent
 	ThreatFlagsArr []string
+	Ports          []portInfo // pre-computed port status for display
+}
+
+// portInfo holds display state for a single scanned port.
+type portInfo struct {
+	Port  int
+	Label string // human-readable service name
+	Open  bool
+}
+
+// standardPorts defines the ports displayed on the account page.
+var standardPorts = []portInfo{
+	{Port: 80, Label: "HTTP"},
+	{Port: 443, Label: "HTTPS"},
+	{Port: 22, Label: "SSH"},
+	{Port: 26657, Label: "CometRPC"},
+	{Port: 26656, Label: "P2P"},
+	{Port: 1317, Label: "REST"},
+	{Port: 9090, Label: "gRPC"},
+}
+
+// buildPortInfo parses the openPortsJSON array and marks ports open/closed.
+func buildPortInfo(openPortsJSON string) []portInfo {
+	var open []int
+	_ = json.Unmarshal([]byte(openPortsJSON), &open)
+	openSet := make(map[int]bool, len(open))
+	for _, p := range open {
+		openSet[p] = true
+	}
+	out := make([]portInfo, len(standardPorts))
+	for i, sp := range standardPorts {
+		out[i] = portInfo{Port: sp.Port, Label: sp.Label, Open: openSet[sp.Port]}
+	}
+	return out
 }
 
 // ---------------------------------------------------------------------------
@@ -150,6 +184,7 @@ func (s *Server) handleAccountDetail(w http.ResponseWriter, r *http.Request) {
 		RecentRequests: reqs,
 		RecentLimits:   rls,
 		ThreatFlagsArr: flags,
+		Ports:          buildPortInfo(account.OpenPorts),
 	}
 	if err := s.pages["account.html"].ExecuteTemplate(w, "base", data); err != nil {
 		log.Printf("[web] account detail render: %v", err)
@@ -230,6 +265,38 @@ func (s *Server) handleAPIEnrich(w http.ResponseWriter, r *http.Request) {
 
 	if _, err := s.enricher.EnrichStream(r.Context(), ip, true, emit); err != nil {
 		log.Printf("[web] enrich %s: %v", ip, err)
+	}
+}
+
+func (s *Server) handleAPIosint(w http.ResponseWriter, r *http.Request) {
+	ip := r.PathValue("ip")
+	if ip == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "missing ip"})
+		return
+	}
+
+	if s.enricher == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "enricher not configured"})
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("X-Accel-Buffering", "no")
+	w.WriteHeader(http.StatusOK)
+
+	flusher, canFlush := w.(http.Flusher)
+
+	emit := func(p intel.EnrichProgress) {
+		data, _ := json.Marshal(p)
+		fmt.Fprintf(w, "data: %s\n\n", data)
+		if canFlush {
+			flusher.Flush()
+		}
+	}
+
+	if _, err := s.enricher.OSINTStream(r.Context(), ip, emit); err != nil {
+		log.Printf("[web] osint %s: %v", ip, err)
 	}
 }
 

@@ -91,7 +91,8 @@ CREATE INDEX IF NOT EXISTS idx_ip_accounts_threat_score ON ip_accounts(threat_sc
 `
 
 // Migrate executes the schema DDL against db, creating all tables and
-// indexes if they do not already exist.
+// indexes if they do not already exist. It also applies column-level
+// migrations so existing databases gain new fields safely.
 func Migrate(db *sql.DB) error {
 	for _, stmt := range strings.Split(schemaSQL, ";") {
 		stmt = strings.TrimSpace(stmt)
@@ -101,6 +102,34 @@ func Migrate(db *sql.DB) error {
 		if _, err := db.Exec(stmt); err != nil {
 			return fmt.Errorf("migrate: %w\nstatement: %s", err, stmt)
 		}
+	}
+
+	// Column-level migrations: safe to run on existing databases.
+	// SQLite returns "duplicate column name" when the column already exists;
+	// we treat that as a no-op.
+	osintCols := []string{
+		"rdns TEXT NOT NULL DEFAULT ''",
+		"abuse_email TEXT NOT NULL DEFAULT ''",
+		"moniker TEXT NOT NULL DEFAULT ''",
+		"chain_id TEXT NOT NULL DEFAULT ''",
+		"ping_ms REAL NOT NULL DEFAULT -1",
+		"protocol TEXT NOT NULL DEFAULT ''",
+		"osint_updated_at TEXT NOT NULL DEFAULT ''",
+	}
+	for _, col := range osintCols {
+		if err := addColumnIfMissing(db, "ip_accounts", col); err != nil {
+			return fmt.Errorf("migrate ip_accounts: %w", err)
+		}
+	}
+	return nil
+}
+
+// addColumnIfMissing runs ALTER TABLE tbl ADD COLUMN colDef, silently
+// ignoring "duplicate column name" errors (column already present).
+func addColumnIfMissing(db *sql.DB, table, colDef string) error {
+	_, err := db.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s", table, colDef))
+	if err != nil && !strings.Contains(err.Error(), "duplicate column name") {
+		return err
 	}
 	return nil
 }

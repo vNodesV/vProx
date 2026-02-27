@@ -20,7 +20,7 @@ type IPAccount struct {
 	ASN             string
 	Org             string
 	Hostnames       string // JSON array
-	OpenPorts       string // JSON array
+	OpenPorts       string // JSON array of ints
 	Services        string // JSON object
 	VTMalicious     int64
 	VTData          string
@@ -33,6 +33,14 @@ type IPAccount struct {
 	Notes           string
 	Tags            string // JSON array
 	Status          string
+	// OSINT fields (populated by OSINTStream)
+	RDNS          string  // comma-joined PTR records
+	AbuseEmail    string  // abuse contact email
+	Moniker       string  // Cosmos RPC moniker
+	ChainID       string  // Cosmos chain/network ID
+	PingMs        float64 // TCP latency to first open port (-1 = untested)
+	Protocol      string  // "https", "http", or ""
+	OSINTUpdatedAt string
 }
 
 // RequestEvent mirrors the request_events table.
@@ -91,13 +99,15 @@ func (d *DB) UpsertIPAccount(a *IPAccount) error {
 		country, asn, org, hostnames, open_ports, services,
 		vt_malicious, vt_data, abuse_score, abuse_data, shodan_data,
 		threat_score, threat_flags, intel_updated_at,
-		notes, tags, status
+		notes, tags, status,
+		rdns, abuse_email, moniker, chain_id, ping_ms, protocol, osint_updated_at
 	) VALUES (
 		?, ?, ?, ?, ?,
 		?, ?, ?, ?, ?, ?,
 		?, ?, ?, ?, ?,
 		?, ?, ?,
-		?, ?, ?
+		?, ?, ?,
+		?, ?, ?, ?, ?, ?, ?
 	)`
 	_, err := d.Exec(q,
 		a.IP, a.FirstSeen, a.LastSeen, a.TotalRequests, a.RatelimitEvents,
@@ -105,6 +115,7 @@ func (d *DB) UpsertIPAccount(a *IPAccount) error {
 		a.VTMalicious, a.VTData, a.AbuseScore, a.AbuseData, a.ShodanData,
 		a.ThreatScore, a.ThreatFlags, a.IntelUpdatedAt,
 		a.Notes, a.Tags, a.Status,
+		a.RDNS, a.AbuseEmail, a.Moniker, a.ChainID, a.PingMs, a.Protocol, a.OSINTUpdatedAt,
 	)
 	if err != nil {
 		return fmt.Errorf("upsert ip_account %s: %w", a.IP, err)
@@ -119,7 +130,8 @@ func (d *DB) GetIPAccount(ip string) (*IPAccount, error) {
 		country, asn, org, hostnames, open_ports, services,
 		vt_malicious, vt_data, abuse_score, abuse_data, shodan_data,
 		threat_score, threat_flags, intel_updated_at,
-		notes, tags, status
+		notes, tags, status,
+		rdns, abuse_email, moniker, chain_id, ping_ms, protocol, osint_updated_at
 	FROM ip_accounts WHERE ip = ?`
 
 	a := &IPAccount{}
@@ -129,6 +141,7 @@ func (d *DB) GetIPAccount(ip string) (*IPAccount, error) {
 		&a.VTMalicious, &a.VTData, &a.AbuseScore, &a.AbuseData, &a.ShodanData,
 		&a.ThreatScore, &a.ThreatFlags, &a.IntelUpdatedAt,
 		&a.Notes, &a.Tags, &a.Status,
+		&a.RDNS, &a.AbuseEmail, &a.Moniker, &a.ChainID, &a.PingMs, &a.Protocol, &a.OSINTUpdatedAt,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil

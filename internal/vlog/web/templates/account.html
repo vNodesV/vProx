@@ -5,47 +5,164 @@
   <span class="badge badge-{{.Account.Status}}">{{.Account.Status}}</span>
 </div>
 
-<div id="threat-panel">
-  <article>
-    <header><strong>Threat Intelligence</strong></header>
+<div class="intel-grid">
 
-    <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem;">
-      <span>Score: <strong>{{.Account.ThreatScore}}</strong> / 100</span>
+  <!-- ── Threat Intelligence ── -->
+  <article class="intel-card">
+    <header class="intel-card-header">
+      <strong>Threat Intelligence</strong>
+      <button class="btn-update" onclick="startUpdate('{{.Account.IP}}','{{.BasePath}}','/api/v1/enrich/','Threat Update')">THREAT UPDATE</button>
+    </header>
+
+    <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1rem;">
+      <span style="font-size:1.5rem;font-weight:700;">{{.Account.ThreatScore}}<span style="font-size:0.9rem;opacity:0.5;">/100</span></span>
       <div class="threat-bar" style="flex:1;">
         <div class="threat-fill {{threatClass .Account.ThreatScore}}"
-             style="width:{{.Account.ThreatScore}}%"></div>
+             style="width:{{if ge .Account.ThreatScore 0}}{{.Account.ThreatScore}}{{else}}0{{end}}%"></div>
       </div>
     </div>
 
     {{if .ThreatFlagsArr}}
-    <p><strong>Flags:</strong></p>
-    <ul class="flags-list">
-      {{range .ThreatFlagsArr}}
-      <li>{{.}}</li>
-      {{end}}
+    <ul class="flags-list" style="margin-bottom:1rem;">
+      {{range .ThreatFlagsArr}}<li>{{.}}</li>{{end}}
     </ul>
     {{end}}
 
-    <table>
+    <table style="font-size:0.85rem;">
       <tbody>
-        <tr><td>AbuseIPDB Score</td><td>{{.Account.AbuseScore}}</td></tr>
-        <tr><td>VirusTotal Malicious</td><td>{{.Account.VTMalicious}}</td></tr>
-        <tr><td>Organization</td><td>{{.Account.Org}}</td></tr>
-        <tr><td>Hostnames</td><td>{{.Account.Hostnames}}</td></tr>
-        <tr><td>Open Ports</td><td>{{.Account.OpenPorts}}</td></tr>
+        <tr><td>VirusTotal Malicious</td><td>{{if ge .Account.VTMalicious 0}}{{.Account.VTMalicious}}{{else}}<em>—</em>{{end}}</td></tr>
+        <tr><td>AbuseIPDB Score</td><td>{{if ge .Account.AbuseScore 0}}{{.Account.AbuseScore}}{{else}}<em>—</em>{{end}}</td></tr>
+        <tr><td>Intel Updated</td><td>{{if .Account.IntelUpdatedAt}}{{.Account.IntelUpdatedAt}}{{else}}<em>never</em>{{end}}</td></tr>
       </tbody>
     </table>
+  </article>
 
-    <button onclick="startEnrich('{{.Account.IP}}','{{.BasePath}}')">
-      UPDATE
-    </button>
+  <!-- ── Network Profile ── -->
+  <article class="intel-card">
+    <header class="intel-card-header">
+      <strong>Network Profile</strong>
+      <button class="btn-update btn-update-org" onclick="startUpdate('{{.Account.IP}}','{{.BasePath}}','/api/v1/osint/','Network Scan')">ORG UPDATE</button>
+    </header>
+
+    <table style="font-size:0.85rem;">
+      <tbody>
+        <tr><td>Organization</td><td>{{if .Account.Org}}{{.Account.Org}}{{else}}<em>—</em>{{end}}</td></tr>
+        <tr><td>Country</td><td>{{if .Account.Country}}{{.Account.Country}}{{else}}<em>—</em>{{end}}</td></tr>
+        <tr><td>ASN</td><td>{{if .Account.ASN}}{{.Account.ASN}}{{else}}<em>—</em>{{end}}</td></tr>
+        <tr><td>Reverse DNS</td><td>{{if .Account.RDNS}}{{.Account.RDNS}}{{else}}<em>—</em>{{end}}</td></tr>
+        <tr><td>Abuse Email</td><td>{{if .Account.AbuseEmail}}{{.Account.AbuseEmail}}{{else}}<em>—</em>{{end}}</td></tr>
+        <tr><td>Protocol</td><td>{{if .Account.Protocol}}{{.Account.Protocol}}{{else}}<em>—</em>{{end}}</td></tr>
+        <tr><td>Latency</td><td>{{if ge .Account.PingMs 0.0}}{{printf "%.1f" .Account.PingMs}} ms{{else}}<em>—</em>{{end}}</td></tr>
+        <tr><td>OSINT Updated</td><td>{{if .Account.OSINTUpdatedAt}}{{.Account.OSINTUpdatedAt}}{{else}}<em>never</em>{{end}}</td></tr>
+      </tbody>
+    </table>
   </article>
 </div>
 
-<!-- Enrich progress modal -->
+<!-- ── Port Scan ── -->
+<article>
+  <header><strong>Port Scan</strong></header>
+  <div class="ports-row">
+    {{range .Ports}}
+    <div class="port-badge {{if .Open}}port-open{{else}}port-closed{{end}}">
+      <span class="port-dot">{{if .Open}}●{{else}}○{{end}}</span>
+      <span class="port-num">{{.Port}}</span>
+      <span class="port-label">{{.Label}}</span>
+    </div>
+    {{end}}
+    {{if not .Ports}}<em>No scan data — click ORG UPDATE</em>{{end}}
+  </div>
+</article>
+
+<!-- ── Cosmos Node ── -->
+{{if .Account.Moniker}}
+<article>
+  <header><strong>Cosmos Node</strong></header>
+  <table>
+    <tbody>
+      <tr><td>Moniker</td><td>{{.Account.Moniker}}</td></tr>
+      <tr><td>Chain ID</td><td>{{.Account.ChainID}}</td></tr>
+    </tbody>
+  </table>
+</article>
+{{end}}
+
+<!-- ── Account Events ── -->
+<article>
+  <header><strong>Activity</strong></header>
+  <table style="font-size:0.85rem;">
+    <tbody>
+      <tr><td>First Seen</td><td>{{.Account.FirstSeen}}</td></tr>
+      <tr><td>Last Seen</td><td>{{.Account.LastSeen}}</td></tr>
+      <tr><td>Total Requests</td><td>{{.Account.TotalRequests}}</td></tr>
+      <tr><td>Rate Limit Events</td><td>{{.Account.RatelimitEvents}}</td></tr>
+    </tbody>
+  </table>
+</article>
+
+{{if .Account.Notes}}
+<article>
+  <header><strong>Notes</strong></header>
+  <p>{{.Account.Notes}}</p>
+</article>
+{{end}}
+
+<article>
+  <header><strong>Recent Requests</strong> (last 20)</header>
+  {{if .RecentRequests}}
+  <div style="overflow-x:auto;">
+    <table>
+      <thead>
+        <tr><th>Timestamp</th><th>Method</th><th>Path</th><th>Host</th><th>Status</th><th>Country</th><th>User Agent</th></tr>
+      </thead>
+      <tbody>
+        {{range .RecentRequests}}
+        <tr>
+          <td>{{.Ts}}</td>
+          <td><code>{{.Method}}</code></td>
+          <td><code>{{.Path}}</code></td>
+          <td>{{.Host}}</td>
+          <td>{{.Status}}</td>
+          <td>{{.Country}}</td>
+          <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;">{{.UserAgent}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+  {{else}}<p>No request events recorded.</p>{{end}}
+</article>
+
+<article>
+  <header><strong>Recent Rate Limit Events</strong> (last 20)</header>
+  {{if .RecentLimits}}
+  <div style="overflow-x:auto;">
+    <table>
+      <thead>
+        <tr><th>Timestamp</th><th>Event</th><th>Reason</th><th>Method</th><th>Path</th><th>RPS</th><th>Burst</th></tr>
+      </thead>
+      <tbody>
+        {{range .RecentLimits}}
+        <tr>
+          <td>{{.Ts}}</td>
+          <td>{{.Event}}</td>
+          <td>{{.Reason}}</td>
+          <td><code>{{.Method}}</code></td>
+          <td><code>{{.Path}}</code></td>
+          <td>{{printf "%.1f" .RPS}}</td>
+          <td>{{.Burst}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+  {{else}}<p>No rate limit events recorded.</p>{{end}}
+</article>
+
+<!-- ── Shared Update Modal ── -->
 <div id="enrich-modal" class="enrich-overlay" style="display:none;" role="dialog" aria-modal="true">
   <div class="enrich-popup">
-    <h4>Updating Intelligence &mdash; {{.Account.IP}}</h4>
+    <h4 id="enrich-title">Updating&hellip;</h4>
     <div id="enrich-status" class="enrich-status-text">Initialising&hellip;</div>
     <div class="enrich-bar-wrap"><div id="enrich-bar" class="enrich-bar"></div></div>
     <div id="enrich-log" class="enrich-log"></div>
@@ -53,15 +170,17 @@
 </div>
 
 <script>
-function startEnrich(ip, base) {
+function startUpdate(ip, base, endpoint, title) {
   var modal  = document.getElementById('enrich-modal');
   var bar    = document.getElementById('enrich-bar');
   var stat   = document.getElementById('enrich-status');
   var log    = document.getElementById('enrich-log');
+  var head   = document.getElementById('enrich-title');
 
   bar.className    = 'enrich-bar';
   bar.style.width  = '0%';
   stat.textContent = 'Initialising\u2026';
+  head.textContent = title + ' \u2014 ' + ip;
   log.innerHTML    = '';
   modal.style.display = 'flex';
 
@@ -74,7 +193,7 @@ function startEnrich(ip, base) {
     log.scrollTop = log.scrollHeight;
   }
 
-  fetch(base + '/api/v1/enrich/' + ip, { method: 'POST' })
+  fetch(base + endpoint + ip, { method: 'POST' })
     .then(function(res) {
       if (!res.ok) {
         return res.text().then(function(t) { throw new Error('HTTP ' + res.status + ': ' + t); });
@@ -86,11 +205,10 @@ function startEnrich(ip, base) {
       function pump() {
         return reader.read().then(function(chunk) {
           if (chunk.done) {
-            // Stream ended without a "done" event — treat as complete.
             if (bar.style.width !== '100%') {
-              stat.textContent = 'Complete \u2713';
-              setBar(100);
               bar.classList.add('enrich-done');
+              setBar(100);
+              stat.textContent = 'Complete \u2713';
               setTimeout(function() { window.location.reload(); }, 1500);
             }
             return;
@@ -100,10 +218,7 @@ function startEnrich(ip, base) {
           buf = lines.pop();
           lines.forEach(function(line) {
             if (!line.startsWith('data: ')) return;
-            try {
-              var ev = JSON.parse(line.slice(6));
-              handleEvent(ev);
-            } catch(e) {}
+            try { handleEvent(JSON.parse(line.slice(6))); } catch(e) {}
           });
           return pump();
         });
@@ -123,20 +238,18 @@ function startEnrich(ip, base) {
     setBar(ev.pct || 0);
     stat.textContent = ev.msg || '';
 
-    // Classify log line
     var cls = '';
-    if (ev.step && ev.step.endsWith('_err')) cls = 'enrich-log-err';
-    else if (ev.step && (ev.step.endsWith('_skip') || ev.step.endsWith('_cached'))) cls = 'enrich-log-dim';
-    else if (ev.step && ev.step.endsWith('_done')) cls = 'enrich-log-ok';
+    if (ev.step && ev.step.endsWith('_err'))                                cls = 'enrich-log-err';
+    else if (ev.step && (ev.step.endsWith('_skip') || ev.step.endsWith('_cached') || ev.step.endsWith('_none'))) cls = 'enrich-log-dim';
+    else if (ev.step && (ev.step.endsWith('_done') || ev.step === 'done')) cls = 'enrich-log-ok';
 
-    // Only add discrete source-result lines to the log
     var logSteps = ['vt_done','vt_err','vt_skip','vt_cached',
                     'abuse_done','abuse_err','abuse_skip','abuse_cached',
                     'shodan_done','shodan_err','shodan_skip','shodan_cached',
+                    'rdns_done','rdns_none','ports_done','ports_none',
+                    'proto_done','proto_none','cosmos_done','cosmos_none',
                     'score','save','done','error'];
-    if (logSteps.indexOf(ev.step) !== -1) {
-      addLog(ev.msg, cls);
-    }
+    if (logSteps.indexOf(ev.step) !== -1) addLog(ev.msg, cls);
 
     if (ev.step === 'done') {
       bar.classList.add('enrich-done');
@@ -148,98 +261,4 @@ function startEnrich(ip, base) {
   }
 }
 </script>
-
-<article>
-  <header><strong>Account Details</strong></header>
-  <table>
-    <tbody>
-      <tr><td>Country</td><td>{{.Account.Country}}</td></tr>
-      <tr><td>ASN</td><td>{{.Account.ASN}}</td></tr>
-      <tr><td>First Seen</td><td>{{.Account.FirstSeen}}</td></tr>
-      <tr><td>Last Seen</td><td>{{.Account.LastSeen}}</td></tr>
-      <tr><td>Total Requests</td><td>{{.Account.TotalRequests}}</td></tr>
-      <tr><td>Rate Limit Events</td><td>{{.Account.RatelimitEvents}}</td></tr>
-      <tr><td>Intel Updated</td><td>{{.Account.IntelUpdatedAt}}</td></tr>
-    </tbody>
-  </table>
-</article>
-
-{{if .Account.Notes}}
-<article>
-  <header><strong>Notes</strong></header>
-  <p>{{.Account.Notes}}</p>
-</article>
-{{end}}
-
-<article>
-  <header><strong>Recent Requests</strong> (last 20)</header>
-  {{if .RecentRequests}}
-  <div style="overflow-x:auto;">
-    <table>
-      <thead>
-        <tr>
-          <th>Timestamp</th>
-          <th>Method</th>
-          <th>Path</th>
-          <th>Host</th>
-          <th>Status</th>
-          <th>Country</th>
-          <th>User Agent</th>
-        </tr>
-      </thead>
-      <tbody>
-        {{range .RecentRequests}}
-        <tr>
-          <td>{{.Ts}}</td>
-          <td><code>{{.Method}}</code></td>
-          <td><code>{{.Path}}</code></td>
-          <td>{{.Host}}</td>
-          <td>{{.Status}}</td>
-          <td>{{.Country}}</td>
-          <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;">{{.UserAgent}}</td>
-        </tr>
-        {{end}}
-      </tbody>
-    </table>
-  </div>
-  {{else}}
-  <p>No request events recorded.</p>
-  {{end}}
-</article>
-
-<article>
-  <header><strong>Recent Rate Limit Events</strong> (last 20)</header>
-  {{if .RecentLimits}}
-  <div style="overflow-x:auto;">
-    <table>
-      <thead>
-        <tr>
-          <th>Timestamp</th>
-          <th>Event</th>
-          <th>Reason</th>
-          <th>Method</th>
-          <th>Path</th>
-          <th>RPS</th>
-          <th>Burst</th>
-        </tr>
-      </thead>
-      <tbody>
-        {{range .RecentLimits}}
-        <tr>
-          <td>{{.Ts}}</td>
-          <td>{{.Event}}</td>
-          <td>{{.Reason}}</td>
-          <td><code>{{.Method}}</code></td>
-          <td><code>{{.Path}}</code></td>
-          <td>{{printf "%.1f" .RPS}}</td>
-          <td>{{.Burst}}</td>
-        </tr>
-        {{end}}
-      </tbody>
-    </table>
-  </div>
-  {{else}}
-  <p>No rate limit events recorded.</p>
-  {{end}}
-</article>
 {{end}}
