@@ -21,6 +21,11 @@ type VLogSection struct {
 	// Port is the HTTP listen port for the vLog web UI.
 	Port int `toml:"port"`
 
+	// BasePath is the URL prefix when vLog is served behind a reverse proxy
+	// at a sub-path (e.g. "/vlog" for https://example.com/vlog).
+	// Leave empty (default) when served at the root path.
+	BasePath string `toml:"base_path"`
+
 	// DBPath is the path to the SQLite database file.
 	// Default: $VPROX_HOME/data/vlog.db
 	DBPath string `toml:"db_path"`
@@ -115,6 +120,8 @@ func Load(path string) (Config, error) {
 	if cfg.VLog.Port == 0 {
 		cfg.VLog.Port = 8889
 	}
+	// Normalise BasePath: trim whitespace and any trailing slash.
+	cfg.VLog.BasePath = strings.TrimRight(strings.TrimSpace(cfg.VLog.BasePath), "/")
 	if strings.TrimSpace(cfg.VLog.DBPath) == "" {
 		cfg.VLog.DBPath = filepath.Join(home, "data", "vlog.db")
 	}

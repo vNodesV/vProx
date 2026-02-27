@@ -14,12 +14,20 @@ import (
 // Template data structs
 // ---------------------------------------------------------------------------
 
+// pageBase is embedded in every template data struct to provide common
+// values available to all templates, such as the URL base path.
+type pageBase struct {
+	BasePath string
+}
+
 type dashboardData struct {
+	pageBase
 	Stats       map[string]int64
 	RecentFlags []*db.IPAccount
 }
 
 type accountListData struct {
+	pageBase
 	Accounts []*db.IPAccount
 	Total    int64
 	Page     int
@@ -27,6 +35,7 @@ type accountListData struct {
 }
 
 type accountDetailData struct {
+	pageBase
 	Account        *db.IPAccount
 	RecentRequests []*db.RequestEvent
 	RecentLimits   []*db.RateLimitEvent
@@ -59,6 +68,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := dashboardData{
+		pageBase:    pageBase{BasePath: s.cfg.VLog.BasePath},
 		Stats:       stats,
 		RecentFlags: flagged,
 	}
@@ -86,6 +96,7 @@ func (s *Server) handleAccountList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := accountListData{
+		pageBase: pageBase{BasePath: s.cfg.VLog.BasePath},
 		Accounts: accounts,
 		Total:    total,
 		Page:     page,
@@ -132,6 +143,7 @@ func (s *Server) handleAccountDetail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := accountDetailData{
+		pageBase:       pageBase{BasePath: s.cfg.VLog.BasePath},
 		Account:        account,
 		RecentRequests: reqs,
 		RecentLimits:   rls,

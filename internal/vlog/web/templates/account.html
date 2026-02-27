@@ -36,7 +36,7 @@
       </tbody>
     </table>
 
-    <button hx-post="/api/v1/enrich/{{.Account.IP}}"
+    <button hx-post="{{.BasePath}}/api/v1/enrich/{{.Account.IP}}"
             hx-target="#threat-panel"
             hx-swap="outerHTML">
       Re-enrich

@@ -34,7 +34,7 @@
       </td>
       <td><span class="badge badge-{{.Status}}">{{.Status}}</span></td>
       <td>{{.LastSeen}}</td>
-      <td><a href="/accounts/{{.IP}}" role="button" class="outline">View</a></td>
+      <td><a href="{{.BasePath}}/accounts/{{.IP}}" role="button" class="outline">View</a></td>
     </tr>
     {{else}}
     <tr><td colspan="9">No accounts found.</td></tr>
@@ -45,9 +45,9 @@
 <nav>
   <ul>
     {{if gt .Page 1}}
-    <li><a href="/accounts?page={{subtract .Page 1}}&page_size={{.PageSize}}">&laquo; Previous</a></li>
+    <li><a href="{{.BasePath}}/accounts?page={{subtract .Page 1}}&page_size={{.PageSize}}">&laquo; Previous</a></li>
     {{end}}
-    <li><a href="/accounts?page={{add .Page 1}}&page_size={{.PageSize}}">Next &raquo;</a></li>
+    <li><a href="{{.BasePath}}/accounts?page={{add .Page 1}}&page_size={{.PageSize}}">Next &raquo;</a></li>
   </ul>
 </nav>
 {{end}}

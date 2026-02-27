@@ -5,6 +5,11 @@
 # TCP port for the embedded vLog web UI. Default: 8889.
 port = 8889
 
+# URL base path when vLog is served behind a reverse proxy at a sub-path.
+# Example: set to "/vlog" if Apache proxies https://example.com/vlog → vLog.
+# Leave empty (default) when vLog is served at the root path.
+# base_path = "/vlog"
+
 # Path to the SQLite database file.
 # Default: $VPROX_HOME/data/vlog.db
 # db_path = "/home/user/.vProx/data/vlog.db"

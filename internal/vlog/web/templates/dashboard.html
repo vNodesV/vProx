@@ -25,7 +25,7 @@
   <header>
     <div style="display:flex;justify-content:space-between;align-items:center;">
       <h3 style="margin:0;">Archive Ingestion</h3>
-      <button hx-post="/api/v1/ingest" hx-target="#ingest-result" hx-swap="innerHTML">
+      <button hx-post="{{.BasePath}}/api/v1/ingest" hx-target="#ingest-result" hx-swap="innerHTML">
         Refresh Archives
       </button>
     </div>
@@ -61,7 +61,7 @@
         </td>
         <td><span class="badge badge-{{.Status}}">{{.Status}}</span></td>
         <td>{{.LastSeen}}</td>
-        <td><a href="/accounts/{{.IP}}" role="button" class="outline">View</a></td>
+        <td><a href="{{.BasePath}}/accounts/{{.IP}}" role="button" class="outline">View</a></td>
       </tr>
       {{end}}
     </tbody>
