@@ -36,13 +36,81 @@
       </tbody>
     </table>
 
-    <button hx-post="{{.BasePath}}/api/v1/enrich/{{.Account.IP}}"
-            hx-target="#threat-panel"
-            hx-swap="outerHTML">
-      Re-enrich
+    <button onclick="startEnrich('{{.Account.IP}}','{{.BasePath}}')">
+      UPDATE
     </button>
   </article>
 </div>
+
+<!-- Enrich progress modal — shown by startEnrich() -->
+<div id="enrich-modal" class="enrich-overlay" style="display:none;" role="dialog" aria-modal="true">
+  <div class="enrich-popup">
+    <h4>Updating Intelligence</h4>
+    <div id="enrich-status" class="enrich-status-text">Connecting to API&hellip;</div>
+    <div class="enrich-bar-wrap"><div id="enrich-bar" class="enrich-bar"></div></div>
+    <div id="enrich-detail" class="enrich-detail"></div>
+  </div>
+</div>
+
+<script>
+function startEnrich(ip, base) {
+  var modal  = document.getElementById('enrich-modal');
+  var bar    = document.getElementById('enrich-bar');
+  var stat   = document.getElementById('enrich-status');
+  var detail = document.getElementById('enrich-detail');
+
+  bar.className    = 'enrich-bar';
+  bar.style.width  = '0%';
+  stat.textContent = 'Connecting to API\u2026';
+  detail.textContent = '';
+  modal.style.display = 'flex';
+
+  function setProgress(pct, msg) {
+    bar.style.width  = pct + '%';
+    stat.textContent = msg;
+  }
+  function setDone() {
+    bar.style.width = '100%';
+    bar.classList.add('enrich-done');
+    stat.textContent   = 'Complete \u2713';
+    detail.textContent = 'Reloading\u2026';
+    setTimeout(function() { window.location.reload(); }, 1200);
+  }
+  function setError(msg) {
+    bar.style.width = '100%';
+    bar.classList.add('enrich-error');
+    stat.textContent   = 'Failed';
+    detail.textContent = msg;
+    setTimeout(function() { modal.style.display = 'none'; }, 5000);
+  }
+
+  var stages = [
+    [600,  20, 'Validating key\u2026'],
+    [1500, 45, 'Updating information\u2026'],
+    [3000, 65, 'Working\u2026'],
+    [5000, 80, 'Please wait\u2026'],
+  ];
+  var timers = stages.map(function(s) {
+    return setTimeout(function() { setProgress(s[1], s[2]); }, s[0]);
+  });
+
+  fetch(base + '/api/v1/enrich/' + ip, { method: 'POST' })
+    .then(function(res) {
+      timers.forEach(clearTimeout);
+      if (!res.ok) {
+        res.json()
+          .then(function(j) { setError((j && j.error) ? j.error : 'HTTP ' + res.status); })
+          .catch(function()  { setError('HTTP ' + res.status); });
+        return;
+      }
+      setDone();
+    })
+    .catch(function(err) {
+      timers.forEach(clearTimeout);
+      setError(err.message || 'Network error');
+    });
+}
+</script>
 
 <article>
   <header><strong>Account Details</strong></header>
