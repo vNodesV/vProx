@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/vNodesV/vProx/internal/vlog/db"
 	"github.com/vNodesV/vProx/internal/vlog/intel"
@@ -257,6 +258,10 @@ func (s *Server) handleAPIEnrich(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Accel-Buffering", "no") // tell nginx/apache not to buffer
 	w.WriteHeader(http.StatusOK)
 
+	// Remove write deadline — enrichment can take >30s at low rate-limit RPM.
+	rc := http.NewResponseController(w)
+	_ = rc.SetWriteDeadline(time.Time{})
+
 	flusher, canFlush := w.(http.Flusher)
 
 	emit := func(p intel.EnrichProgress) {
@@ -288,6 +293,10 @@ func (s *Server) handleAPIosint(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("X-Accel-Buffering", "no")
 	w.WriteHeader(http.StatusOK)
+
+	// Remove write deadline — OSINT scan can take >30s (port probes, latency).
+	rc := http.NewResponseController(w)
+	_ = rc.SetWriteDeadline(time.Time{})
 
 	flusher, canFlush := w.(http.Flusher)
 
