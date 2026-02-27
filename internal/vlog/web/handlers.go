@@ -356,6 +356,32 @@ func (s *Server) handleAPIInvestigate(w http.ResponseWriter, r *http.Request) {
 
 	flusher, canFlush := w.(http.Flusher)
 
+	flush := func() {
+		if canFlush {
+			flusher.Flush()
+		}
+	}
+
+	// Keepalive: send an SSE comment every 15s so Apache's idle-connection
+	// timer never fires during the silent gap between EnrichStream and
+	// OSINTStream (or during slow port-probe phases). SSE comments are
+	// ignored by browsers and the ReadableStream client.
+	kaDone := make(chan struct{})
+	go func() {
+		t := time.NewTicker(15 * time.Second)
+		defer t.Stop()
+		for {
+			select {
+			case <-kaDone:
+				return
+			case <-t.C:
+				fmt.Fprintf(w, ": ping\n\n")
+				flush()
+			}
+		}
+	}()
+	defer close(kaDone)
+
 	emitPhase := func(phase string) func(intel.EnrichProgress) {
 		return func(p intel.EnrichProgress) {
 			p.Step = phase + ":" + p.Step
@@ -365,9 +391,7 @@ func (s *Server) handleAPIInvestigate(w http.ResponseWriter, r *http.Request) {
 			}
 			data, _ := json.Marshal(p)
 			fmt.Fprintf(w, "data: %s\n\n", data)
-			if canFlush {
-				flusher.Flush()
-			}
+			flush()
 		}
 	}
 
