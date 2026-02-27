@@ -243,12 +243,29 @@ func resolveHome(flagVal string) string {
 	return config.FindHome()
 }
 
+// vlogConfigPath returns the canonical vlog.toml path under home.
+// New layout: $home/config/vlog/vlog.toml (isolated from vProx chain scanner).
+// Falls back to legacy $home/config/vlog.toml if the new path doesn't exist
+// and the old one does, printing a migration hint.
+func vlogConfigPath(home string) string {
+	newPath := filepath.Join(home, "config", "vlog", "vlog.toml")
+	if _, err := os.Stat(newPath); err == nil {
+		return newPath
+	}
+	oldPath := filepath.Join(home, "config", "vlog.toml")
+	if _, err := os.Stat(oldPath); err == nil {
+		fmt.Fprintf(os.Stderr, "vlog: WARNING: config at %s — move to %s to prevent vProx loading it as a chain\n", oldPath, newPath)
+		return oldPath
+	}
+	return newPath // neither exists; Load() will return defaults gracefully
+}
+
 func loadConfig(f flags) (cfg config.Config, home string, err error) {
 	home = resolveHome(f.home)
 
 	cfgPath := f.config
 	if cfgPath == "" {
-		cfgPath = filepath.Join(home, "config", "vlog.toml")
+		cfgPath = vlogConfigPath(home)
 	}
 
 	cfg, err = config.Load(cfgPath)
@@ -673,7 +690,7 @@ func cmdInfo(f flags) int {
 
 	cfgPath := f.config
 	if cfgPath == "" {
-		cfgPath = filepath.Join(home, "config", "vlog.toml")
+		cfgPath = vlogConfigPath(home)
 	}
 
 	cfg, err := config.Load(cfgPath)
