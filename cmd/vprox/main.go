@@ -645,12 +645,12 @@ func pathPrefix(dst string) string {
 
 // routeIDPrefix maps the resolved route to a 3-letter typed ID prefix.
 // WSS is assigned by ws.go before this handler; this covers RPC, API, and fallback.
-func routeIDPrefix(prefix string, isRPCvhost, isRESTvhost bool) string {
-	if isRPCvhost || prefix == rpcPrefix {
+func routeIDPrefix(prefix, route string, isRPCvhost, isRESTvhost bool) string {
+	if isRPCvhost || prefix == rpcPrefix || route == "rpc" {
 		return "RPC"
 	}
 	if isRESTvhost || prefix == restPrefix || prefix == apiPrefix ||
-		prefix == grpcPrefix || prefix == grpcWebPrefix {
+		prefix == grpcPrefix || prefix == grpcWebPrefix || route == "rest" {
 		return "API"
 	}
 	return "REQ"
@@ -1456,7 +1456,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	if forwardedID != "" {
 		requestID = forwardedID
 	} else {
-		requestID = applog.NewTypedID(routeIDPrefix(routePrefix, isRPCvhost, isRESTvhost))
+		requestID = applog.NewTypedID(routeIDPrefix(routePrefix, route, isRPCvhost, isRESTvhost))
 		r.Header.Set(applog.RequestIDHeader, requestID)
 	}
 	applog.SetResponseRequestID(w, requestID)
