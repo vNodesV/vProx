@@ -286,15 +286,40 @@
   window.loadChart    = loadChart;
   window.loadEndpoints = loadEndpoints;
 
-  function setProbeCell(cell, loc) {
-    if (!loc) { cell.style.color = '#6b7280'; cell.textContent = '—'; return; }
+  // Lookup table: short node name → human label for tooltip.
+  var nodeLabel = {
+    'ca1':'ca1 — Vancouver, CA',
+    'de1':'de1 — Nuremberg, DE', 'de4':'de4 — Frankfurt, DE',
+    'nl1':'nl1 — Amsterdam, NL', 'nl2':'nl2 — Meppel, NL',
+    'fr2':'fr2 — Paris, FR',
+    'uk1':'uk1 — Coventry, GB',
+    'fi1':'fi1 — Helsinki, FI',
+    'jp1':'jp1 — Tokyo, JP',
+    'sg1':'sg1 — Singapore',
+    'us1':'us1 — Los Angeles, US', 'us2':'us2 — Dallas, US',
+    'us3':'us3 — Atlanta, US',    'us4':'us4 — Miami, US',
+    'br1':'br1 — São Paulo, BR',  'br2':'br2 — São Paulo, BR',
+    'in1':'in1 — Mumbai, IN',     'in2':'in2 — Delhi, IN',
+  };
+
+  function spinnerHTML() {
+    return '<span class="probe-spinner"></span>';
+  }
+
+  function setProbeCell(cell, loc, tooltipExtra) {
+    if (!loc) { cell.style.color = '#6b7280'; cell.innerHTML = '—'; cell.title = ''; return; }
     if (loc.ok) {
       cell.style.color = '#22c55e';
-      cell.textContent = loc.latency_ms ? loc.latency_ms + 'ms' : '✓';
+      cell.innerHTML = loc.latency_ms ? loc.latency_ms + 'ms' : '✓';
     } else {
       cell.style.color = '#ef4444';
-      cell.textContent = loc.error || (loc.code ? loc.code : '✗');
+      cell.innerHTML = loc.error || (loc.code ? loc.code : '✗');
     }
+    // Tooltip: node source + probed URL (if available).
+    var tip = '';
+    if (loc.node) tip = nodeLabel[loc.node] || loc.node + '.node.check-host.net';
+    if (tooltipExtra) tip = (tip ? tip + '\n' : '') + tooltipExtra;
+    cell.title = tip;
   }
 
   window.probeHost = function(btn, host) {
@@ -303,18 +328,23 @@
     var cLocal = tr.querySelector('.probe-local');
     var cCA    = tr.querySelector('.probe-ca');
     var cWW    = tr.querySelector('.probe-ww');
-    [cLocal, cCA, cWW].forEach(function(c) { if (c) { c.style.color = '#6b7280'; c.textContent = '…'; } });
+    // Show spinner in each cell while loading.
+    [cLocal, cCA, cWW].forEach(function(c) {
+      if (c) { c.style.color = ''; c.innerHTML = spinnerHTML(); c.title = 'Probing…'; }
+    });
     fetch(BASE + '/api/v1/probe?host=' + encodeURIComponent(host))
       .then(function(r) { return r.json(); })
       .then(function(d) {
         btn.disabled = false; btn.textContent = 'Probe';
-        setProbeCell(cLocal, d.local);
-        setProbeCell(cCA,    d.ca);
-        setProbeCell(cWW,    d.ww);
+        setProbeCell(cLocal, d.local, (d.url ? 'URL: ' + d.url + '\n' : '') + 'Source: vLog server (local)');
+        setProbeCell(cCA,    d.ca,    d.url ? 'URL: ' + d.url : '');
+        setProbeCell(cWW,    d.ww,    d.url ? 'URL: ' + d.url : '');
       })
       .catch(function() {
         btn.disabled = false; btn.textContent = 'Probe';
-        [cLocal, cCA, cWW].forEach(function(c) { if (c) { c.style.color = '#ef4444'; c.textContent = 'err'; } });
+        [cLocal, cCA, cWW].forEach(function(c) {
+          if (c) { c.style.color = '#ef4444'; c.innerHTML = '✗'; c.title = 'Network error'; }
+        });
       });
   };
 

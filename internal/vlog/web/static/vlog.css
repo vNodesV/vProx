@@ -504,3 +504,18 @@ border-radius: 3px;
 /* ── Pagination ── */
 .pagination-nav ul { list-style: none; display: flex; gap: 0.5rem; padding: 0; margin-top: 0.75rem; }
 .pagination-nav a  { font-size: 0.8rem; padding: 0.25rem 0.6rem; border-radius: 3px; }
+
+/* ── Probe cell spinner ── */
+@keyframes probe-spin {
+  to { transform: rotate(360deg); }
+}
+.probe-spinner {
+  display: inline-block;
+  width: .75rem;
+  height: .75rem;
+  border: 2px solid rgba(156,163,175,.35);
+  border-top-color: #9ca3af;
+  border-radius: 50%;
+  animation: probe-spin .7s linear infinite;
+  vertical-align: middle;
+}
