@@ -56,7 +56,7 @@
   </thead>
   <tbody id="accounts-table">
     {{range .Accounts}}
-    <tr>
+    <tr data-ip="{{.IP}}">
       <td class="org-cell">{{if .Org}}<span class="org-name">{{.Org}}</span>{{else}}<span class="org-none">—</span>{{end}}</td>
       <td><code class="ip-code">{{.IP}}</code></td>
       <td>{{.Country}}</td>
@@ -122,10 +122,12 @@
 var investigateDone = false;
 var investigateES = null;
 var investigateBtn = null;
+var investigateBase = '';
 
 function openInvestigate(base, ip, btn) {
   investigateDone = false;
   investigateBtn = btn || null;
+  investigateBase = base;
   document.getElementById('investigate-overlay').style.display = 'flex';
   document.getElementById('inv-ip-label').textContent = ip;
   document.getElementById('inv-ti-msg').textContent = 'Starting…';
@@ -206,11 +208,46 @@ function finishInvestigate() {
   document.getElementById('inv-dismiss').className = 'enrich-dismiss visible';
 }
 
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function threatClass(score) {
+  return score <= 30 ? 'threat-fill-low' : (score <= 60 ? 'threat-fill-medium' : 'threat-fill-high');
+}
+
 function closeInvestigate() {
-  if (investigateDone && investigateBtn) {
-    investigateBtn.classList.add('btn-investigate-done');
-  }
   document.getElementById('investigate-overlay').style.display = 'none';
+  if (!investigateDone) return;
+
+  // Mark button green immediately.
+  if (investigateBtn) investigateBtn.classList.add('btn-investigate-done');
+
+  // Refresh the row from the API.
+  var ip = document.getElementById('inv-ip-label').textContent;
+  var row = document.querySelector('tr[data-ip="' + ip + '"]');
+  if (!row || !investigateBase) return;
+
+  fetch(investigateBase + '/api/v1/accounts/' + encodeURIComponent(ip))
+    .then(function(r) { return r.json(); })
+    .then(function(a) {
+      // Org (col 0)
+      row.cells[0].innerHTML = a.Org
+        ? '<span class="org-name">' + escHtml(a.Org) + '</span>'
+        : '<span class="org-none">—</span>';
+      // Requests (col 4), RateLimits (col 5)
+      row.cells[4].textContent = a.TotalRequests;
+      row.cells[5].textContent = a.RatelimitEvents;
+      // ThreatScore (col 6)
+      var cls = threatClass(a.ThreatScore);
+      row.cells[6].innerHTML =
+        '<div class="threat-bar" style="width:60px;display:inline-block;vertical-align:middle;">' +
+        '<div class="threat-fill ' + cls + '" style="width:' + a.ThreatScore + '%"></div>' +
+        '</div><span class="threat-num">' + a.ThreatScore + '</span>';
+      // LastSeen (col 7)
+      row.cells[7].textContent = a.LastSeen || '';
+    })
+    .catch(function() {}); // button already marked; row update is best-effort
 }
 </script>
 {{end}}
