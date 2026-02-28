@@ -460,7 +460,37 @@ func (d *DB) ListRateLimitEventsByIP(ip string, limit int) ([]*RateLimitEvent, e
 	return out, rows.Err()
 }
 
-// ListTopThreatAccounts returns the top limit accounts by threat_score descending.
+// ListBlockedAccounts returns all ip_accounts with status='blocked',
+// ordered by last_seen descending.
+func (d *DB) ListBlockedAccounts() ([]*IPAccount, error) {
+	const q = `SELECT
+		ip, first_seen, last_seen, total_requests, ratelimit_events,
+		country, asn, org, hostnames, open_ports, services,
+		vt_malicious, vt_data, abuse_score, abuse_data, shodan_data,
+		threat_score, threat_flags, intel_updated_at, notes, tags, status
+	FROM ip_accounts WHERE status = 'blocked' ORDER BY last_seen DESC`
+	rows, err := d.Query(q)
+	if err != nil {
+		return nil, fmt.Errorf("list blocked accounts: %w", err)
+	}
+	defer rows.Close()
+	var out []*IPAccount
+	for rows.Next() {
+		a := &IPAccount{}
+		if err := rows.Scan(
+			&a.IP, &a.FirstSeen, &a.LastSeen, &a.TotalRequests, &a.RatelimitEvents,
+			&a.Country, &a.ASN, &a.Org, &a.Hostnames, &a.OpenPorts, &a.Services,
+			&a.VTMalicious, &a.VTData, &a.AbuseScore, &a.AbuseData, &a.ShodanData,
+			&a.ThreatScore, &a.ThreatFlags, &a.IntelUpdatedAt, &a.Notes, &a.Tags, &a.Status,
+		); err != nil {
+			return nil, fmt.Errorf("scan blocked account: %w", err)
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
+
 // Only accounts with threat_score >= 0 are included.
 func (d *DB) ListTopThreatAccounts(limit int) ([]*IPAccount, error) {
 	const q = `SELECT
@@ -559,6 +589,7 @@ func (d *DB) Stats() (map[string]int64, error) {
 		"total_ratelimit_events": 0,
 		"total_archives":         0,
 		"flagged_ips":            0,
+		"blocked_ips":            0,
 	}
 
 	queries := []struct {
@@ -570,6 +601,7 @@ func (d *DB) Stats() (map[string]int64, error) {
 		{"total_ratelimit_events", `SELECT COUNT(*) FROM ratelimit_events`},
 		{"total_archives", `SELECT COUNT(*) FROM ingested_archives`},
 		{"flagged_ips", `SELECT COUNT(*) FROM ip_accounts WHERE threat_score > 0`},
+		{"blocked_ips", `SELECT COUNT(*) FROM ip_accounts WHERE status = 'blocked'`},
 	}
 
 	for _, q := range queries {

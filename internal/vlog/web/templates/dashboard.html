@@ -16,8 +16,8 @@
     <p>Rate Limit Events</p>
   </div>
   <div class="stat-card">
-    <h3>{{index .Stats "flagged_ips"}}</h3>
-    <p>Flagged IPs</p>
+    <h3>{{index .Stats "blocked_ips"}}</h3>
+    <p>Blocked IPs</p>
   </div>
 </div>
 
@@ -34,22 +34,21 @@
 </section>
 
 <section>
-  <h3>Top Flagged IPs</h3>
-  {{if .RecentFlags}}
-  <table id="flagged-tbl" role="grid">
+  <h3>Blocked IPs</h3>
+  {{if .BlockedAccounts}}
+  <table id="blocked-tbl" role="grid">
     <thead>
       <tr>
         <th class="sortable">IP</th>
         <th class="sortable">Country</th>
         <th class="sortable">Threat Score</th>
-        <th class="sortable">Access Count</th>
-        <th class="sortable">Status</th>
+        <th class="sortable">Requests</th>
         <th class="sortable">Last Seen</th>
         <th>Actions</th>
       </tr>
     </thead>
     <tbody>
-      {{range .RecentFlags}}
+      {{range .BlockedAccounts}}
       <tr>
         <td><code>{{.IP}}</code></td>
         <td>{{.Country}}</td>
@@ -61,16 +60,15 @@
           {{.ThreatScore}}
         </td>
         <td>{{.TotalRequests}}</td>
-        <td><span class="badge badge-{{.Status}}">{{.Status}}</span></td>
         <td>{{.LastSeen}}</td>
         <td><a href="{{$.BasePath}}/accounts/{{.IP}}" role="button" class="outline">View</a></td>
       </tr>
       {{end}}
     </tbody>
   </table>
-  <script>initSortableTable('flagged-tbl');</script>
+  <script>initSortableTable('blocked-tbl');</script>
   {{else}}
-  <p>No flagged IPs yet. Ingest some archives to get started.</p>
+  <p>No blocked IPs.</p>
   {{end}}
 </section>
 {{end}}

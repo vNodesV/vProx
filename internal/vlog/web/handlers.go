@@ -28,8 +28,8 @@ type pageBase struct {
 
 type dashboardData struct {
 	pageBase
-	Stats       map[string]int64
-	RecentFlags []*db.IPAccount
+	Stats           map[string]int64
+	BlockedAccounts []*db.IPAccount
 }
 
 type accountListData struct {
@@ -102,17 +102,17 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	flagged, err := s.db.ListTopThreatAccounts(10)
+	blocked, err := s.db.ListBlockedAccounts()
 	if err != nil {
-		log.Printf("[web] dashboard flagged: %v", err)
+		log.Printf("[web] dashboard blocked: %v", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 
 	data := dashboardData{
-		pageBase:    pageBase{BasePath: s.cfg.VLog.BasePath},
-		Stats:       stats,
-		RecentFlags: flagged,
+		pageBase:        pageBase{BasePath: s.cfg.VLog.BasePath},
+		Stats:           stats,
+		BlockedAccounts: blocked,
 	}
 	if err := s.pages["dashboard.html"].ExecuteTemplate(w, "base", data); err != nil {
 		log.Printf("[web] dashboard render: %v", err)
