@@ -52,7 +52,7 @@ func NewEnricher(cfg config.IntelConfig, d *db.DB) *Enricher {
 		cfg:        cfg,
 		db:         d,
 		httpClient: &http.Client{Timeout: 10 * time.Second},
-		limiter:    rate.NewLimiter(rate.Limit(rps), 1),
+		limiter:    rate.NewLimiter(rate.Limit(rps), 3), // burst=3 allows parallel provider queries
 		queue:      make(chan string, 100),
 		done:       make(chan struct{}),
 	}
@@ -119,93 +119,151 @@ type EnrichProgress struct {
 // EnrichStream synchronously enriches ip, calling emit for each progress step.
 //
 // If force is true, all sources are queried regardless of cache TTL.
-// This is the primary enrichment path; EnrichNow is a thin wrapper.
+// VirusTotal, AbuseIPDB, and Shodan are queried concurrently; results are
+// emitted sequentially after all three complete.
 func (e *Enricher) EnrichStream(ctx context.Context, ip string, force bool, emit func(EnrichProgress)) (*db.IPAccount, error) {
 	now := time.Now().UTC()
 	nowISO := now.Format(time.RFC3339)
 
-	// ---- VirusTotal ----
+	// ---- Parallel provider queries ----
+	type vtRes struct {
+		malicious int64
+		raw       string
+		err       error
+		cached    bool
+		skipped   bool
+	}
+	type abuseRes struct {
+		score   int64
+		raw     string
+		err     error
+		cached  bool
+		skipped bool
+	}
+	type shodanRes struct {
+		result  *ShodanResult
+		raw     string
+		err     error
+		cached  bool
+		skipped bool
+	}
+
+	vtCh := make(chan vtRes, 1)
+	abuseCh := make(chan abuseRes, 1)
+	shodanCh := make(chan shodanRes, 1)
+
+	go func() {
+		if e.cfg.Keys.VirusTotal == "" {
+			vtCh <- vtRes{malicious: -1, skipped: true}
+			return
+		}
+		if !force && e.cacheValid(ip, sourceVirusTotal, now) {
+			vtCh <- vtRes{malicious: -1, cached: true}
+			return
+		}
+		_ = e.limiter.Wait(ctx)
+		m, raw, err := CheckVirusTotal(e.cfg.Keys.VirusTotal, ip, e.httpClient)
+		vtCh <- vtRes{malicious: m, raw: raw, err: err}
+	}()
+
+	go func() {
+		if e.cfg.Keys.AbuseIPDB == "" {
+			abuseCh <- abuseRes{score: -1, skipped: true}
+			return
+		}
+		if !force && e.cacheValid(ip, sourceAbuseIPDB, now) {
+			abuseCh <- abuseRes{score: -1, cached: true}
+			return
+		}
+		_ = e.limiter.Wait(ctx)
+		s, raw, err := CheckAbuseIPDB(e.cfg.Keys.AbuseIPDB, ip, e.httpClient)
+		abuseCh <- abuseRes{score: s, raw: raw, err: err}
+	}()
+
+	go func() {
+		if e.cfg.Keys.Shodan == "" {
+			shodanCh <- shodanRes{skipped: true}
+			return
+		}
+		if !force && e.cacheValid(ip, sourceShodan, now) {
+			shodanCh <- shodanRes{cached: true}
+			return
+		}
+		_ = e.limiter.Wait(ctx)
+		sr, raw, err := CheckShodan(e.cfg.Keys.Shodan, ip, e.httpClient)
+		shodanCh <- shodanRes{result: sr, raw: raw, err: err}
+	}()
+
+	emit(EnrichProgress{Step: "querying", Msg: "Querying VirusTotal, AbuseIPDB, Shodan in parallel\u2026", Pct: 10})
+
+	vt := <-vtCh
+	abuse := <-abuseCh
+	shodan := <-shodanCh
+
+	// ---- VirusTotal result ----
 	var vtMalicious int64 = -1
 	var vtRaw string
-	if e.cfg.Keys.VirusTotal != "" {
-		if force || !e.cacheValid(ip, sourceVirusTotal, now) {
-			emit(EnrichProgress{Step: "vt_start", Msg: "Querying VirusTotal\u2026", Pct: 10})
-			_ = e.limiter.Wait(ctx)
-			m, raw, err := CheckVirusTotal(e.cfg.Keys.VirusTotal, ip, e.httpClient)
-			if err != nil {
-				emit(EnrichProgress{Step: "vt_err", Msg: "VirusTotal: " + err.Error(), Pct: 30, IsErr: true})
-				log.Printf("[intel] virustotal %s: %v", ip, err)
-			} else {
-				vtMalicious = m
-				vtRaw = raw
-				msg := fmt.Sprintf("VirusTotal: %d malicious detection(s)", m)
-				if m == 0 {
-					msg = "VirusTotal: clean"
-				}
-				emit(EnrichProgress{Step: "vt_done", Msg: msg, Pct: 30})
-				if err2 := e.db.UpsertIntelCache(ip, sourceVirusTotal, nowISO, raw); err2 != nil {
-					log.Printf("[intel] cache virustotal %s: %v", ip, err2)
-				}
-			}
-		} else {
-			emit(EnrichProgress{Step: "vt_cached", Msg: "VirusTotal: cached (TTL valid)", Pct: 30})
-		}
-	} else {
+	switch {
+	case vt.skipped:
 		emit(EnrichProgress{Step: "vt_skip", Msg: "VirusTotal: no API key", Pct: 30})
+	case vt.cached:
+		emit(EnrichProgress{Step: "vt_cached", Msg: "VirusTotal: cached (TTL valid)", Pct: 30})
+	case vt.err != nil:
+		emit(EnrichProgress{Step: "vt_err", Msg: "VirusTotal: " + vt.err.Error(), Pct: 30, IsErr: true})
+		log.Printf("[intel] virustotal %s: %v", ip, vt.err)
+	default:
+		vtMalicious = vt.malicious
+		vtRaw = vt.raw
+		msg := fmt.Sprintf("VirusTotal: %d malicious detection(s)", vt.malicious)
+		if vt.malicious == 0 {
+			msg = "VirusTotal: clean"
+		}
+		emit(EnrichProgress{Step: "vt_done", Msg: msg, Pct: 30})
+		if err2 := e.db.UpsertIntelCache(ip, sourceVirusTotal, nowISO, vt.raw); err2 != nil {
+			log.Printf("[intel] cache virustotal %s: %v", ip, err2)
+		}
 	}
 
-	// ---- AbuseIPDB ----
+	// ---- AbuseIPDB result ----
 	var abuseScore int64 = -1
 	var abuseRaw string
-	if e.cfg.Keys.AbuseIPDB != "" {
-		if force || !e.cacheValid(ip, sourceAbuseIPDB, now) {
-			emit(EnrichProgress{Step: "abuse_start", Msg: "Querying AbuseIPDB\u2026", Pct: 45})
-			_ = e.limiter.Wait(ctx)
-			s, raw, err := CheckAbuseIPDB(e.cfg.Keys.AbuseIPDB, ip, e.httpClient)
-			if err != nil {
-				emit(EnrichProgress{Step: "abuse_err", Msg: "AbuseIPDB: " + err.Error(), Pct: 60, IsErr: true})
-				log.Printf("[intel] abuseipdb %s: %v", ip, err)
-			} else {
-				abuseScore = s
-				abuseRaw = raw
-				emit(EnrichProgress{Step: "abuse_done", Msg: fmt.Sprintf("AbuseIPDB: confidence score %d", s), Pct: 60})
-				if err2 := e.db.UpsertIntelCache(ip, sourceAbuseIPDB, nowISO, raw); err2 != nil {
-					log.Printf("[intel] cache abuseipdb %s: %v", ip, err2)
-				}
-			}
-		} else {
-			emit(EnrichProgress{Step: "abuse_cached", Msg: "AbuseIPDB: cached (TTL valid)", Pct: 60})
-		}
-	} else {
+	switch {
+	case abuse.skipped:
 		emit(EnrichProgress{Step: "abuse_skip", Msg: "AbuseIPDB: no API key", Pct: 60})
+	case abuse.cached:
+		emit(EnrichProgress{Step: "abuse_cached", Msg: "AbuseIPDB: cached (TTL valid)", Pct: 60})
+	case abuse.err != nil:
+		emit(EnrichProgress{Step: "abuse_err", Msg: "AbuseIPDB: " + abuse.err.Error(), Pct: 60, IsErr: true})
+		log.Printf("[intel] abuseipdb %s: %v", ip, abuse.err)
+	default:
+		abuseScore = abuse.score
+		abuseRaw = abuse.raw
+		emit(EnrichProgress{Step: "abuse_done", Msg: fmt.Sprintf("AbuseIPDB: confidence score %d", abuse.score), Pct: 60})
+		if err2 := e.db.UpsertIntelCache(ip, sourceAbuseIPDB, nowISO, abuse.raw); err2 != nil {
+			log.Printf("[intel] cache abuseipdb %s: %v", ip, abuse.err)
+		}
 	}
 
-	// ---- Shodan ----
+	// ---- Shodan result ----
 	var shodanResult *ShodanResult
 	var shodanRaw string
-	if e.cfg.Keys.Shodan != "" {
-		if force || !e.cacheValid(ip, sourceShodan, now) {
-			emit(EnrichProgress{Step: "shodan_start", Msg: "Querying Shodan\u2026", Pct: 65})
-			_ = e.limiter.Wait(ctx)
-			sr, raw, err := CheckShodan(e.cfg.Keys.Shodan, ip, e.httpClient)
-			if err != nil {
-				emit(EnrichProgress{Step: "shodan_err", Msg: "Shodan: " + err.Error(), Pct: 80, IsErr: true})
-				log.Printf("[intel] shodan %s: %v", ip, err)
-			} else if sr == nil {
-				emit(EnrichProgress{Step: "shodan_none", Msg: "Shodan: no data for this IP", Pct: 80})
-			} else {
-				shodanResult = sr
-				shodanRaw = raw
-				emit(EnrichProgress{Step: "shodan_done", Msg: fmt.Sprintf("Shodan: %d open port(s)", len(sr.Ports)), Pct: 80})
-				if err2 := e.db.UpsertIntelCache(ip, sourceShodan, nowISO, raw); err2 != nil {
-					log.Printf("[intel] cache shodan %s: %v", ip, err2)
-				}
-			}
-		} else {
-			emit(EnrichProgress{Step: "shodan_cached", Msg: "Shodan: cached (TTL valid)", Pct: 80})
-		}
-	} else {
+	switch {
+	case shodan.skipped:
 		emit(EnrichProgress{Step: "shodan_skip", Msg: "Shodan: no API key", Pct: 80})
+	case shodan.cached:
+		emit(EnrichProgress{Step: "shodan_cached", Msg: "Shodan: cached (TTL valid)", Pct: 80})
+	case shodan.err != nil:
+		emit(EnrichProgress{Step: "shodan_err", Msg: "Shodan: " + shodan.err.Error(), Pct: 80, IsErr: true})
+		log.Printf("[intel] shodan %s: %v", ip, shodan.err)
+	case shodan.result == nil:
+		emit(EnrichProgress{Step: "shodan_none", Msg: "Shodan: no data for this IP", Pct: 80})
+	default:
+		shodanResult = shodan.result
+		shodanRaw = shodan.raw
+		emit(EnrichProgress{Step: "shodan_done", Msg: fmt.Sprintf("Shodan: %d open port(s)", len(shodan.result.Ports)), Pct: 80})
+		if err2 := e.db.UpsertIntelCache(ip, sourceShodan, nowISO, shodan.raw); err2 != nil {
+			log.Printf("[intel] cache shodan %s: %v", ip, err2)
+		}
 	}
 
 	// ---- Build / update IPAccount ----
