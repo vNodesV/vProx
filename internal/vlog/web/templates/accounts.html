@@ -52,6 +52,7 @@
       <th class="sortable">Threat Score</th>
       <th class="sortable">Last Seen</th>
       <th>Actions</th>
+      <th>Status</th>
     </tr>
   </thead>
   <tbody id="accounts-table">
@@ -75,9 +76,16 @@
         <button class="btn-investigate{{if .IntelUpdatedAt}} btn-investigate-done{{end}}" onclick="openInvestigate('{{$.BasePath}}', '{{.IP}}', this)" title="Run TI + OSINT investigation">Investigate</button>
         <a href="{{$.BasePath}}/accounts/{{.IP}}" role="button" class="btn-view outline">View</a>
       </td>
+      <td>
+        {{if eq .Status "blocked"}}
+          <span class="status-badge status-blocked">Blocked</span>
+        {{else}}
+          <span class="status-badge status-allowed">Allowed</span>
+        {{end}}
+      </td>
     </tr>
     {{else}}
-    <tr><td colspan="9">No accounts found.</td></tr>
+    <tr><td colspan="10">No accounts found.</td></tr>
     {{end}}
   </tbody>
 </table>
@@ -246,6 +254,11 @@ function closeInvestigate() {
         '</div><span class="threat-num">' + a.ThreatScore + '</span>';
       // LastSeen (col 7)
       row.cells[7].textContent = a.LastSeen || '';
+      // Status (col 8)
+      var isBlocked = (a.Status === 'blocked');
+      row.cells[8].innerHTML = isBlocked
+        ? '<span class="status-badge status-blocked">Blocked</span>'
+        : '<span class="status-badge status-allowed">Allowed</span>';
     })
     .catch(function() {}); // button already marked; row update is best-effort
 }
