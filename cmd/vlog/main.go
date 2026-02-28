@@ -37,6 +37,8 @@ Usage:
 
 Commands:
   start    Start vLog server (foreground)
+  stop     Stop vLog service (sudo service vLog stop)
+  restart  Restart vLog service (sudo service vLog restart)
   ingest   Run one-shot archive ingest and exit
   status   Show database stats and exit
 
@@ -221,6 +223,10 @@ func run() int {
 		return 0
 	case "start":
 		return cmdStart(f)
+	case "stop":
+		return runServiceCommand("stop")
+	case "restart":
+		return runServiceCommand("restart")
 	case "ingest":
 		return cmdIngest(f)
 	case "status":
