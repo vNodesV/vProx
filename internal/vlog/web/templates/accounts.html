@@ -254,9 +254,9 @@ function closeInvestigate() {
         '</div><span class="threat-num">' + a.ThreatScore + '</span>';
       // LastSeen (col 7)
       row.cells[7].textContent = a.LastSeen || '';
-      // Status (col 8)
+      // Status (col 9)
       var isBlocked = (a.Status === 'blocked');
-      row.cells[8].innerHTML = isBlocked
+      row.cells[9].innerHTML = isBlocked
         ? '<span class="status-badge status-blocked">Blocked</span>'
         : '<span class="status-badge status-allowed">Allowed</span>';
     })
