@@ -42,6 +42,24 @@ vProx stop            # stop the service
 vProx restart         # restart the service
 ```
 
+## 🔍 vLog — Log Archive Analyzer
+
+vLog is a companion binary that analyzes vProx log archives and provides a CRM-like security intelligence UI.
+
+```bash
+make install-vlog           # build + install vLog binary + config
+vlog start                  # foreground server (default: :8889)
+vlog start -d               # start as background service
+vlog stop                   # stop the service
+vlog restart                # restart the service
+vlog ingest                 # one-shot archive ingest and exit
+vlog status                 # show database stats
+```
+
+**Features:** Per-IP accounts, threat scoring (VirusTotal + AbuseIPDB + Shodan), full investigation UI with live SSE progress, org lookup, rate-limit event history, IP block/unblock.
+
+See [`MODULES.md §11`](./MODULES.md#11-vlog--log-archive-analyzer) for full documentation.
+
 ## 📚 Documentation
 
 | Document | Description |

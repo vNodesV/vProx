@@ -379,23 +379,31 @@ vProx --backup-status                 # Show scheduler status
 | Command | Action |
 |---|---|
 | `vlog start` | Start vLog server (foreground) |
+| `vlog start -d` | Start as background daemon (`sudo service vLog start`) |
+| `vlog stop` | Stop vLog service (`sudo service vLog stop`) |
+| `vlog restart` | Restart vLog service (`sudo service vLog restart`) |
 | `vlog ingest` | One-shot archive ingest and exit |
 | `vlog status` | Show database stats and exit |
 
-**Flags:** `--home`, `--config`, `--port`, `--quiet`, `--version`, `--help`
+**Runtime flags (start):** `--home`, `--port`, `--quiet`, `--no-watch`, `--no-enrich`, `--watch-interval`
+**One-shot flags:** `--list-archives`, `--list-accounts`, `--list-threats`, `--enrich <ip>`, `--purge-cache <ip|all>`, `--validate`, `--info`, `--dry-run`
 
 ### Web UI Routes
 
 | Route | Description |
 |---|---|
-| `/` | Dashboard: stats, recent flagged IPs |
-| `/accounts` | Paginated IP account list |
-| `/accounts/:ip` | CRM-like IP account detail |
-| `/api/v1/ingest` | POST: trigger archive ingest |
-| `/api/v1/accounts` | GET: JSON account list |
-| `/api/v1/accounts/:ip` | GET: JSON account detail |
-| `/api/v1/enrich/:ip` | POST: trigger IP enrichment |
-| `/api/v1/stats` | GET: JSON dashboard stats |
+| `GET /` | Dashboard: stats, recent flagged IPs |
+| `GET /accounts` | Paginated IP account list with search and sort |
+| `GET /accounts/:ip` | CRM-like IP account detail |
+| `POST /api/v1/ingest` | Trigger archive ingest |
+| `GET /api/v1/accounts` | JSON account list |
+| `GET /api/v1/accounts/:ip` | JSON account detail |
+| `POST /api/v1/enrich/:ip` | SSE: run threat intelligence (VirusTotal + AbuseIPDB + Shodan) |
+| `POST /api/v1/osint/:ip` | SSE: run OSINT scan |
+| `POST /api/v1/investigate/:ip` | SSE: full investigation (TI + OSINT, two-phase) |
+| `POST /api/v1/block/:ip` | Flag IP as blocked |
+| `POST /api/v1/unblock/:ip` | Remove block flag |
+| `GET /api/v1/stats` | JSON dashboard stats |
 
 ### Internal Packages
 

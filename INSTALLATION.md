@@ -16,6 +16,7 @@ This guide covers building, installing, and configuring vProx from source on a L
 - [Geo Database](#geo-database)
 - [Systemd Service](#systemd-service)
 - [Running vProx](#running-vprox)
+- [Installing vLog](#installing-vlog)
 - [Upgrading](#upgrading)
 - [Troubleshooting](#troubleshooting)
 
@@ -348,6 +349,65 @@ For the complete flag reference, see [`CLI_FLAGS_GUIDE.md`](./CLI_FLAGS_GUIDE.md
    ```
 
 For migration guidance when upgrading between major versions, see [`docs/UPGRADE.md`](./docs/UPGRADE.md).
+
+---
+
+## Installing vLog
+
+vLog is a companion binary for analyzing vProx log archives. It is built and installed separately from vProx.
+
+### Build and install
+
+```bash
+make install-vlog
+```
+
+This will:
+1. Build `vLog` binary to `.build/vLog` and install to `$GOPATH/bin/vLog`
+2. Copy `config/vlog/vlog.sample.toml` → `$VPROX_HOME/config/vlog/vlog.toml` (only if absent)
+3. Optionally install the systemd service unit
+
+### Configure
+
+Edit `$VPROX_HOME/config/vlog/vlog.toml`:
+
+```toml
+[vlog]
+port     = 8889
+db_path  = "~/.vProx/data/vlog.db"
+archives_dir = "~/.vProx/data/logs/archives"
+
+[intel]
+abuseipdb_key  = "your-key"
+virustotal_key = "your-key"
+shodan_key     = "your-key"
+auto_enrich    = true
+```
+
+### Run
+
+```bash
+vlog start            # foreground server on :8889
+vlog start -d         # background daemon (sudo service vLog start)
+vlog stop             # stop the service
+vlog restart          # restart the service
+vlog status           # show database stats
+vlog ingest           # one-shot: scan archives and ingest new entries
+```
+
+### Apache reverse proxy
+
+Proxy vLog behind Apache with IP restriction (admin-only). See `.vscode/vlog.apache2` in the repo for a validated configuration template.
+
+### vProx integration
+
+To enable automatic ingest after each vProx backup, add to `$VPROX_HOME/config/ports.toml`:
+
+```toml
+vlog_url = "http://localhost:8889"
+```
+
+vProx will POST to `$VLOG_URL/api/v1/ingest` after `--new-backup`. Non-fatal if vLog is unavailable.
 
 ---
 
