@@ -42,7 +42,7 @@ vProx stop            # stop the service
 vProx restart         # restart the service
 ```
 
-## 🔍 vLog — Log Archive Analyzer
+## 🔍 vLog — Log Archive Analyzer (v1.0.0)
 
 vLog is a companion binary that analyzes vProx log archives and provides a CRM-like security intelligence UI.
 
@@ -56,7 +56,13 @@ vlog ingest                 # one-shot archive ingest and exit
 vlog status                 # show database stats
 ```
 
-**Features:** Per-IP accounts, threat scoring (VirusTotal + AbuseIPDB + Shodan), full investigation UI with live SSE progress, org lookup, rate-limit event history, IP block/unblock.
+**Features:**
+- Per-IP accounts with request history, rate-limit events, block/unblock status
+- Threat scoring (VirusTotal + AbuseIPDB + Shodan) — parallel queries, composite score 0–100
+- Full OSINT suite — concurrent DNS, port scan, org/geo, protocol probe, Cosmos RPC (~5s)
+- Live investigation UI with SSE progress streams
+- **Multi-location endpoint probe** — local + 🇨🇦 Canada + 🌍 worldwide nodes (check-host.net), latency in ms, hover tooltips
+- Accounts page: search, sort (URL-persistent, back-nav safe), per-page 25–All, Status column
 
 See [`MODULES.md §11`](./MODULES.md#11-vlog--log-archive-analyzer) for full documentation.
 

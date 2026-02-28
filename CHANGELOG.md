@@ -7,20 +7,38 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [1.1.0] — Unreleased
+## [1.2.0] — Unreleased
 
-### Added
+This release ships **vProx v1.2.0** and **vLog v1.0.0** together as **vProxVL v1.2.0**.
+
+### Added — vLog v1.0.0
+
 - **vLog module**: standalone log archive analyzer binary (`vlog`)
   - SQLite database (`$VPROX_HOME/data/vlog.db`) for IP accounts, request events, and rate-limit events
-  - Ingests vProx log archives (`*.tar.gz`) from `$VPROX_HOME/data/logs/archives` — oldest-first, with deduplication
+  - Ingests vProx log archives (`*.tar.gz`) from `$VPROX_HOME/data/logs/archives` — oldest-first, with deduplication via `ingested_archives` table
   - Background FS watcher for automatic ingestion of new archives
-  - IP Security Assessment: AbuseIPDB v2 + VirusTotal v3 + Shodan — composite threat score (0–100)
-  - CRM-like IP account profiles with threat flags, notes, and enrichment history
-  - Embedded web UI: dashboard, IP account list, account detail with threat panel, htmx partial updates
-  - REST API: `/api/v1/ingest`, `/api/v1/accounts`, `/api/v1/enrich/:ip`, `/api/v1/stats`
-  - vProx integration: optional POST to vLog after `--new-backup` via `$VLOG_URL`
+  - **IP Security Assessment**: AbuseIPDB v2 + VirusTotal v3 + Shodan — composite threat score (0–100); parallelized (3 concurrent goroutines); ~10s vs former ~30s
+  - **OSINT engine**: 5 concurrent ops (DNS, port scan, ip-api.com, protocol probe, Cosmos RPC) via `sync.WaitGroup`; ~5s vs former ~23s
+  - CRM-like IP account profiles with threat flags, notes, enrichment history, block/unblock status
+  - **Accounts page**: server-side search (IP/country/row ID), per-page selector (25/50/100/200/All), sortable columns with URL-based sort persistence (back-nav safe), Status column (ALLOWED/BLOCKED), Org lookup via ip-api.com
+  - **Dashboard**: dual-line Chart.js request charts; standalone endpoint status panel with 3 probe columns (Local | 🇨🇦 | 🌍), CSS spinner, node hover tooltips
+  - **Multi-location endpoint probe** (`GET /api/v1/probe`): local SSRF-guarded probe discovers reachable URL; concurrent CA (Vancouver) + worldwide probes via check-host.net HTTP-check API (submit + poll); response: `{host, url, local, ca, ww}` per-location result with `{ok, code, latency_ms, error, node}`
+  - REST API: `/api/v1/ingest`, `/api/v1/accounts`, `/api/v1/probe`, `/api/v1/enrich/:ip`, `/api/v1/osint/:ip`, `/api/v1/investigate/:ip`, `/api/v1/stats`, `/api/v1/block/:ip`, `/api/v1/unblock/:ip`, `/api/v1/chart`
+  - CLI: `vlog start [-d]`, `vlog stop`, `vlog restart`, `vlog ingest`, `vlog status`
+  - vProx integration: optional POST to vLog after `--new-backup` via `vlog_url` in `config/ports.toml`
   - Config: `$VPROX_HOME/config/vlog.toml` (sample: `config/vlog.sample.toml`)
-- **`modernc.org/sqlite v1.46.1`** added as pure-Go SQLite driver (no CGO required)
+- **`modernc.org/sqlite v1.46.1`** — pure-Go SQLite driver (no CGO required)
+
+### Added — vProx v1.2.0
+
+- Chain log auto-discovery: backup `--new-backup` auto-includes per-chain `*.log` files from ingest
+- vLog push hook: vProx POSTs to `vlog_url` after `--new-backup` (non-fatal if vLog unreachable)
+- Typed request IDs: `RPC{24HEX}`, `API{24HEX}`, `REQ{24HEX}` stamped on every proxied request (vhost + alias routes included)
+
+### Fixed — vProx v1.2.0
+
+- Request ID missing on vhost-mode and alias routes (api.*, grpc) — now always assigned before log
+- REST probe path stripped `/api/` prefix incorrectly — now probes `/cosmos/base/tendermint/v1beta1/node_info` directly
 
 ---
 

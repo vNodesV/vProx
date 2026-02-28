@@ -362,7 +362,9 @@ vProx --backup-status                 # Show scheduler status
 
 ## 11) vLog — Log Archive Analyzer
 
-**Purpose**: Standalone binary that analyzes vProx log archives. Maintains a SQLite database of per-IP accounts, request events, and rate-limit events. Provides a CRM-like web UI and REST API for security intelligence and traffic analysis.
+**Version**: v1.0.0 (ships with vProxVL v1.2.0)
+
+**Purpose**: Standalone binary that analyzes vProx log archives. Maintains a SQLite database of per-IP accounts, request events, and rate-limit events. Provides a CRM-like web UI and REST API for security intelligence, traffic analysis, and multi-location endpoint health monitoring.
 
 **Location:**
 - `cmd/vlog/` — binary entry point
@@ -388,16 +390,46 @@ vProx --backup-status                 # Show scheduler status
 **Runtime flags (start):** `--home`, `--port`, `--quiet`, `--no-watch`, `--no-enrich`, `--watch-interval`
 **One-shot flags:** `--list-archives`, `--list-accounts`, `--list-threats`, `--enrich <ip>`, `--purge-cache <ip|all>`, `--validate`, `--info`, `--dry-run`
 
+### Dashboard
+
+The dashboard (`GET /`) provides:
+
+- **Stats cards**: total IPs, total requests, rate-limit events, flagged IPs
+- **Dual-line Chart.js charts**: requests over time (left block) and IPs/rate-limits (right block) with chart-type dropdown
+- **Endpoint status panel**: table of proxied hosts with request counts, unique IPs, last seen, and 3 live probe columns:
+
+| Column | Source | Description |
+|---|---|---|
+| **Live** | — | Probe trigger button |
+| **Local** | vLog server | Direct HTTP probe from the vLog host; shows latency in green or error in red |
+| **🇨🇦** | check-host.net — Vancouver | External probe from Canada node |
+| **🌍** | check-host.net — random WW node | External probe from Europe/Asia/Americas |
+
+During probing, each cell shows a CSS spinner ring. On completion, cells show `NNms` (green) or error text (red). Hovering shows the probe node label and probed URL.
+
+### Accounts Page
+
+`GET /accounts` — paginated, searchable, sortable IP account list:
+
+- **Search**: by IP, country code, or row ID
+- **Per-page**: 25 / 50 / 100 / 200 / All
+- **Sort**: any column; sort state persisted in URL (back-nav and direct URL sharing work correctly)
+- **Columns**: Org (ip-api.com) · IP · Country · ASN · Requests · Rate Limits · Threat Score · Last Seen · Actions · Status
+- **Status badge**: ALLOWED (green) / BLOCKED (red)
+- **Investigate button**: turns green (`.btn-investigate-done`) when threat intel exists for that IP
+
 ### Web UI Routes
 
 | Route | Description |
 |---|---|
-| `GET /` | Dashboard: stats, recent flagged IPs |
+| `GET /` | Dashboard: stats, charts, endpoint probe panel |
 | `GET /accounts` | Paginated IP account list with search and sort |
 | `GET /accounts/:ip` | CRM-like IP account detail |
 | `POST /api/v1/ingest` | Trigger archive ingest |
 | `GET /api/v1/accounts` | JSON account list |
 | `GET /api/v1/accounts/:ip` | JSON account detail |
+| `GET /api/v1/probe?host=HOST` | Multi-location HTTP probe (local + CA + WW) |
+| `GET /api/v1/chart?type=TYPE` | Chart data (requests, ips, endpoint_summary, …) |
 | `POST /api/v1/enrich/:ip` | SSE: run threat intelligence (VirusTotal + AbuseIPDB + Shodan) |
 | `POST /api/v1/osint/:ip` | SSE: run OSINT scan |
 | `POST /api/v1/investigate/:ip` | SSE: full investigation (TI + OSINT, two-phase) |
@@ -410,25 +442,39 @@ vProx --backup-status                 # Show scheduler status
 | Package | Description |
 |---|---|
 | `internal/vlog/config/` | TOML config loader (`vlog.toml`) |
-| `internal/vlog/db/` | SQLite schema, connection pool, query methods (5 tables) |
+| `internal/vlog/db/` | SQLite schema, connection pool, query methods (5 tables + 6 indexes) |
 | `internal/vlog/ingest/` | Archive scanner, log parser (`main.log` + `rate-limit.jsonl`), FS watcher |
-| `internal/vlog/intel/` | AbuseIPDB v2, VirusTotal v3, Shodan API clients; composite threat scoring (0–100) |
-| `internal/vlog/web/` | Embedded HTTP server, `html/template` + htmx UI |
+| `internal/vlog/intel/` | AbuseIPDB v2, VirusTotal v3, Shodan API clients; parallel queries (3 goroutines); composite threat scoring (0–100); ~10s vs former ~30s |
+| `internal/vlog/web/` | Embedded HTTP server, `html/template` + `go:embed` + htmx UI, SSE handlers, probe handler |
+
+### OSINT Engine
+
+5 operations run concurrently via `sync.WaitGroup` + `sync.Mutex`:
+
+| Operation | Source | Detail |
+|---|---|---|
+| Reverse DNS | stdlib | PTR lookup |
+| Port scan | stdlib | TCP dial on common ports (22, 80, 443, 26657, 1317, 9090, 9091) |
+| Org / geo | ip-api.com | Country, city, ISP, org, ASN |
+| Protocol probe | net/http | Cosmos RPC `/status`, REST `/cosmos/base/tendermint/v1beta1/node_info` |
+| Cosmos RPC | CometBFT | Node info if RPC port open |
+
+Typical completion: ~5s (concurrent) vs ~23s (sequential).
 
 ### vProx Integration
 
-After `--new-backup`, vProx optionally POSTs to `$VLOG_URL/api/v1/ingest` to trigger automatic ingest:
+After `--new-backup`, vProx optionally POSTs to `vlog_url/api/v1/ingest` to trigger automatic ingest:
 
-```bash
-# In $VPROX_HOME/config/ports.toml or environment
-VLOG_URL=http://localhost:8889   # Enable automatic ingest after each backup
+```toml
+# $VPROX_HOME/config/ports.toml
+vlog_url = "http://localhost:8889"
 ```
 
 The POST is non-fatal — if vLog is unavailable, vProx logs a warning and continues normally.
 
 ### Security Assessment
 
-vLog builds a composite threat score (0–100) for each IP using three external intelligence sources:
+vLog builds a composite threat score (0–100) for each IP using three external intelligence sources (queries run in parallel):
 
 | Source | Weight | API Version |
 |---|---|---|
