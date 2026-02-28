@@ -770,3 +770,101 @@ func (d *DB) labelCountQuery(q string, limit int) ([]ChartPoint, error) {
 	}
 	return out, rows.Err()
 }
+
+// ---------------------------------------------------------------------------
+// Multi-series chart data
+// ---------------------------------------------------------------------------
+
+// ChartSeries is a multi-line/multi-bar dataset for Chart.js.
+type ChartSeries struct {
+Labels []string     `json:"labels"`
+Series []SeriesLine `json:"series"`
+}
+
+// SeriesLine is one dataset within a ChartSeries.
+type SeriesLine struct {
+Name   string    `json:"name"`
+Color  string    `json:"color"`
+Values []float64 `json:"values"`
+}
+
+// IPsOverTimeMulti returns two series for the last days days:
+//   - "New IPs"   — daily new accounts (first_seen on that day)
+//   - "Total IPs" — true all-time running cumulative at end of each day
+func (d *DB) IPsOverTimeMulti(days int) (*ChartSeries, error) {
+const q = `
+WITH daily AS (
+SELECT date(first_seen) AS day, COUNT(*) AS n
+FROM ip_accounts GROUP BY day
+),
+cumul AS (
+SELECT day, n,
+SUM(n) OVER (ORDER BY day ROWS UNBOUNDED PRECEDING) AS total
+FROM daily
+)
+SELECT day, n, total FROM cumul
+WHERE day >= date('now', ?) ORDER BY day`
+rows, err := d.Query(q, fmt.Sprintf("-%d days", days))
+if err != nil {
+return nil, fmt.Errorf("ips over time multi: %w", err)
+}
+defer rows.Close()
+
+var labels []string
+var newVals, totalVals []float64
+for rows.Next() {
+var day string
+var n, total int64
+if err := rows.Scan(&day, &n, &total); err != nil {
+return nil, fmt.Errorf("scan ips over time multi: %w", err)
+}
+labels = append(labels, day)
+newVals = append(newVals, float64(n))
+totalVals = append(totalVals, float64(total))
+}
+if err := rows.Err(); err != nil {
+return nil, err
+}
+return &ChartSeries{
+Labels: labels,
+Series: []SeriesLine{
+{Name: "New IPs", Color: "#4e8cf7", Values: newVals},
+{Name: "Total IPs", Color: "#f97316", Values: totalVals},
+},
+}, nil
+}
+
+// ---------------------------------------------------------------------------
+// Endpoint summary
+// ---------------------------------------------------------------------------
+
+// EndpointStat holds aggregated per-host metrics from request_events.
+type EndpointStat struct {
+Host      string `json:"host"`
+Requests  int64  `json:"requests"`
+UniqueIPs int64  `json:"unique_ips"`
+LastSeen  string `json:"last_seen"`
+}
+
+// EndpointSummary returns per-host request stats ordered by request count.
+func (d *DB) EndpointSummary(limit int) ([]EndpointStat, error) {
+const q = `
+SELECT host, COUNT(*) AS reqs, COUNT(DISTINCT ip) AS ips, MAX(ts) AS last_seen
+FROM request_events
+WHERE host != ''
+GROUP BY host ORDER BY reqs DESC LIMIT ?`
+rows, err := d.Query(q, limit)
+if err != nil {
+return nil, fmt.Errorf("endpoint summary: %w", err)
+}
+defer rows.Close()
+var out []EndpointStat
+for rows.Next() {
+var e EndpointStat
+if err := rows.Scan(&e.Host, &e.Requests, &e.UniqueIPs, &e.LastSeen); err != nil {
+return nil, fmt.Errorf("scan endpoint stat: %w", err)
+}
+out = append(out, e)
+}
+return out, rows.Err()
+}

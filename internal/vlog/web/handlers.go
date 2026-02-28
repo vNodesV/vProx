@@ -480,13 +480,34 @@ func (s *Server) handleAPIChart(w http.ResponseWriter, r *http.Request) {
 		days = d
 	}
 
+	// Multi-series types return ChartSeries instead of []ChartPoint.
+	switch chartType {
+	case "ips_over_time":
+		series, err := s.db.IPsOverTimeMulti(days)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, series)
+		return
+	case "endpoint_summary":
+		stats, err := s.db.EndpointSummary(30)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		if stats == nil {
+			stats = []db.EndpointStat{}
+		}
+		writeJSON(w, http.StatusOK, stats)
+		return
+	}
+
 	var (
 		points []db.ChartPoint
 		err    error
 	)
 	switch chartType {
-	case "ips_over_time":
-		points, err = s.db.IPsOverTime(days)
 	case "requests_over_time":
 		points, err = s.db.RequestsOverTime(days)
 	case "ratelimits_over_time":
@@ -513,6 +534,75 @@ func (s *Server) handleAPIChart(w http.ResponseWriter, r *http.Request) {
 		points = []db.ChartPoint{}
 	}
 	writeJSON(w, http.StatusOK, points)
+}
+
+func (s *Server) handleAPIProbe(w http.ResponseWriter, r *http.Request) {
+	host := strings.TrimSpace(r.URL.Query().Get("host"))
+	if host == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "host required"})
+		return
+	}
+	// Reject anything that looks like a URL or contains path separators.
+	if strings.ContainsAny(host, "/:?#@") {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid host"})
+		return
+	}
+
+	// Only allow hosts that appear in ingested data (prevents arbitrary SSRF).
+	stats, err := s.db.EndpointSummary(500)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	known := false
+	for _, e := range stats {
+		if strings.EqualFold(e.Host, host) {
+			known = true
+			break
+		}
+	}
+	if !known {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "host not in dataset"})
+		return
+	}
+
+	// Try HTTPS first, then HTTP. Probe the /health endpoint (CometBFT RPC),
+	// fall back to / if no 2xx on /health.
+	probeClient := &http.Client{Timeout: 5 * time.Second}
+	type probeResult struct {
+		Host      string `json:"host"`
+		URL       string `json:"url"`
+		Code      int    `json:"code"`
+		LatencyMs int64  `json:"latency_ms"`
+		OK        bool   `json:"ok"`
+		Error     string `json:"error,omitempty"`
+	}
+
+	for _, target := range []string{
+		"https://" + host + "/health",
+		"https://" + host + "/",
+		"http://" + host + "/health",
+	} {
+		start := time.Now()
+		resp, err2 := probeClient.Get(target) //nolint:noctx
+		lat := time.Since(start).Milliseconds()
+		if err2 != nil {
+			continue
+		}
+		resp.Body.Close()
+		writeJSON(w, http.StatusOK, probeResult{
+			Host:      host,
+			URL:       target,
+			Code:      resp.StatusCode,
+			LatencyMs: lat,
+			OK:        resp.StatusCode < 400,
+		})
+		return
+	}
+	writeJSON(w, http.StatusOK, probeResult{
+		Host:  host,
+		Error: "unreachable",
+	})
 }
 
 func (s *Server) handleAPIBlock(w http.ResponseWriter, r *http.Request) {

@@ -27,6 +27,7 @@
     <div class="chart-header">
       <select id="chart-left-type" onchange="loadChart('left')">
         <option value="ips_over_time">IPs over time</option>
+        <option value="endpoint_summary">Endpoint status</option>
         <option value="top_countries">Top countries</option>
         <option value="status_breakdown">Status breakdown</option>
         <option value="threat_distribution">Threat distribution</option>
@@ -37,9 +38,10 @@
         <option value="90">90 days</option>
       </select>
     </div>
-    <div class="chart-canvas-wrap">
+    <div class="chart-canvas-wrap" id="chart-left-canvas-wrap">
       <canvas id="chart-left"></canvas>
     </div>
+    <div class="endpoint-table-wrap" id="chart-left-table-wrap" style="display:none;overflow:auto;max-height:260px;"></div>
   </div>
 
   <!-- RIGHT BLOCK -->
@@ -120,42 +122,165 @@
   var BASE = '{{.BasePath}}';
   var instances = {};
 
-  // Chart type → Chart.js type + options
+  // Chart type → Chart.js type + display options
   var chartMeta = {
-    ips_over_time:        { type: 'line',  label: 'New IPs',           color: '#4e8cf7', fill: true  },
-    top_countries:        { type: 'bar',   label: 'IPs',               color: '#4e8cf7', fill: false },
-    status_breakdown:     { type: 'doughnut', label: 'IPs',            color: null,      fill: false },
-    threat_distribution:  { type: 'bar',   label: 'IPs',               color: '#f97316', fill: false },
-    requests_over_time:   { type: 'line',  label: 'Requests',          color: '#22c55e', fill: true  },
-    ratelimits_over_time: { type: 'line',  label: 'Rate Limits',       color: '#ef4444', fill: true  },
-    top_ips_by_requests:  { type: 'bar',   label: 'Requests',          color: '#22c55e', fill: false },
-    requests_by_country:  { type: 'bar',   label: 'Requests',          color: '#a855f7', fill: false },
+    top_countries:        { type: 'bar',      label: 'IPs',         color: '#4e8cf7', fill: false },
+    status_breakdown:     { type: 'doughnut', label: 'IPs',         color: null,      fill: false },
+    threat_distribution:  { type: 'bar',      label: 'IPs',         color: '#f97316', fill: false },
+    requests_over_time:   { type: 'line',     label: 'Requests',    color: '#22c55e', fill: true  },
+    ratelimits_over_time: { type: 'line',     label: 'Rate Limits', color: '#ef4444', fill: true  },
+    top_ips_by_requests:  { type: 'bar',      label: 'Requests',    color: '#22c55e', fill: false },
+    requests_by_country:  { type: 'bar',      label: 'Requests',    color: '#a855f7', fill: false },
   };
 
   var doughnutColors = ['#4e8cf7','#22c55e','#ef4444','#f97316','#a855f7','#eab308','#14b8a6'];
+
+  function escH(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  // Render endpoint_summary as a table with live Probe buttons.
+  function renderEndpointTable(side, data) {
+    var wrap = document.getElementById('chart-' + side + '-table-wrap');
+    var canvasWrap = document.getElementById('chart-' + side + '-canvas-wrap');
+    if (!wrap) return;
+    canvasWrap.style.display = 'none';
+    wrap.style.display = '';
+    if (!data || data.length === 0) {
+      wrap.innerHTML = '<p style="padding:0.5rem;opacity:.6">No endpoint data ingested yet.</p>';
+      return;
+    }
+    var rows = data.map(function(e) {
+      var ts = e.last_seen ? e.last_seen.replace('T',' ').slice(0,16) : '—';
+      return '<tr data-host="' + escH(e.host) + '">' +
+        '<td><code style="font-size:.78rem">' + escH(e.host) + '</code></td>' +
+        '<td style="text-align:right">' + e.requests.toLocaleString() + '</td>' +
+        '<td style="text-align:right">' + e.unique_ips + '</td>' +
+        '<td style="font-size:.78rem;opacity:.7">' + ts + '</td>' +
+        '<td><button class="btn-probe outline" style="padding:.15rem .55rem;font-size:.75rem" ' +
+            'onclick="probeHost(this,\'' + escH(e.host) + '\')">' +
+            'Probe</button>' +
+            '<span class="probe-result" style="margin-left:.5rem;font-size:.75rem"></span></td>' +
+        '</tr>';
+    }).join('');
+    wrap.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:.82rem">' +
+      '<thead><tr>' +
+      '<th style="text-align:left;padding:.2rem .4rem">Host</th>' +
+      '<th style="text-align:right;padding:.2rem .4rem">Requests</th>' +
+      '<th style="text-align:right;padding:.2rem .4rem">Unique IPs</th>' +
+      '<th style="padding:.2rem .4rem">Last Seen</th>' +
+      '<th style="padding:.2rem .4rem">Live</th>' +
+      '</tr></thead><tbody>' + rows + '</tbody></table>';
+  }
+
+  window.probeHost = function(btn, host) {
+    btn.disabled = true;
+    btn.textContent = '…';
+    var resultEl = btn.parentElement.querySelector('.probe-result');
+    resultEl.textContent = '';
+    fetch(BASE + '/api/v1/probe?host=' + encodeURIComponent(host))
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        btn.disabled = false;
+        btn.textContent = 'Probe';
+        if (d.error) {
+          resultEl.style.color = '#ef4444';
+          resultEl.textContent = '✗ ' + d.error;
+        } else if (d.ok) {
+          resultEl.style.color = '#22c55e';
+          resultEl.textContent = '✓ ' + d.code + ' — ' + d.latency_ms + 'ms';
+        } else {
+          resultEl.style.color = '#f97316';
+          resultEl.textContent = '! ' + d.code + ' — ' + d.latency_ms + 'ms';
+        }
+      })
+      .catch(function() {
+        btn.disabled = false;
+        btn.textContent = 'Probe';
+        resultEl.style.color = '#ef4444';
+        resultEl.textContent = '✗ network error';
+      });
+  };
+
+  // Render a multi-series ChartSeries response (has .series key).
+  function renderMultiSeries(side, data) {
+    var canvasWrap = document.getElementById('chart-' + side + '-canvas-wrap');
+    var tableWrap = document.getElementById('chart-' + side + '-table-wrap');
+    if (canvasWrap) canvasWrap.style.display = '';
+    if (tableWrap) tableWrap.style.display = 'none';
+
+    if (instances[side]) { instances[side].destroy(); }
+    var canvas = document.getElementById('chart-' + side);
+    var datasets = data.series.map(function(s, i) {
+      var isOrange = s.color === '#f97316';
+      return {
+        label: s.name,
+        data: s.values,
+        borderColor: s.color,
+        backgroundColor: s.color + '22',
+        borderWidth: 2,
+        fill: false,
+        tension: 0.3,
+        pointRadius: 2,
+        yAxisID: isOrange ? 'y1' : 'y',
+      };
+    });
+    instances[side] = new Chart(canvas, {
+      type: 'line',
+      data: { labels: data.labels, datasets: datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { display: true, position: 'top' },
+          tooltip: { mode: 'index' },
+        },
+        scales: {
+          x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { maxRotation: 45 } },
+          y:  { position: 'left',  beginAtZero: true, grid: { color: 'rgba(255,255,255,0.07)' },
+                title: { display: true, text: 'New IPs' } },
+          y1: { position: 'right', beginAtZero: true, grid: { drawOnChartArea: false },
+                title: { display: true, text: 'Total IPs' } },
+        },
+      },
+    });
+  }
 
   function loadChart(side) {
     var typeEl = document.getElementById('chart-' + side + '-type');
     var daysEl = document.getElementById('chart-' + side + '-days');
     var chartType = typeEl.value;
     var days = daysEl.value;
-    var meta = chartMeta[chartType] || { type: 'bar', label: 'Count', color: '#4e8cf7', fill: false };
 
-    // Hide days selector for non-time-series charts
     var isTimeSeries = chartType.indexOf('_over_time') !== -1;
-    daysEl.style.display = isTimeSeries ? '' : 'none';
+    var isTableType  = chartType === 'endpoint_summary';
+    daysEl.style.display = (isTimeSeries && !isTableType) ? '' : 'none';
+
+    // Show canvas, hide table by default (endpoint_summary reverses this in render).
+    var canvasWrap = document.getElementById('chart-' + side + '-canvas-wrap');
+    var tableWrap  = document.getElementById('chart-' + side + '-table-wrap');
+    if (!isTableType && canvasWrap) { canvasWrap.style.display = ''; }
+    if (!isTableType && tableWrap)  { tableWrap.style.display  = 'none'; }
 
     var url = BASE + '/api/v1/chart?type=' + chartType + '&days=' + days;
     fetch(url)
       .then(function(r) { return r.json(); })
       .then(function(data) {
+        // Endpoint summary → table view
+        if (isTableType) { renderEndpointTable(side, data); return; }
+
+        // Multi-series response (has .series array)
+        if (data && !Array.isArray(data) && data.series) {
+          renderMultiSeries(side, data); return;
+        }
+
+        // Single-series fallback ([]ChartPoint)
+        var meta = chartMeta[chartType] || { type: 'bar', label: 'Count', color: '#4e8cf7', fill: false };
         var labels = data.map(function(p) { return p.label; });
         var values = data.map(function(p) { return p.value; });
-        var canvasId = 'chart-' + side;
-        var canvas = document.getElementById(canvasId);
-
-        // Destroy previous instance
         if (instances[side]) { instances[side].destroy(); }
+        var canvas = document.getElementById('chart-' + side);
 
         var datasets;
         if (meta.type === 'doughnut') {
@@ -165,7 +290,7 @@
             borderWidth: 1,
           }];
         } else {
-          var ds = {
+          datasets = [{
             label: meta.label,
             data: values,
             backgroundColor: meta.fill ? meta.color + '33' : meta.color,
@@ -174,8 +299,7 @@
             fill: meta.fill,
             tension: 0.3,
             pointRadius: isTimeSeries ? 2 : 4,
-          };
-          datasets = [ds];
+          }];
         }
 
         instances[side] = new Chart(canvas, {
@@ -200,7 +324,6 @@
 
   window.loadChart = loadChart;
 
-  // Initial load
   loadChart('left');
   loadChart('right');
 })();
