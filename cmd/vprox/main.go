@@ -1329,9 +1329,6 @@ func inList(list []string, needle string) bool {
 
 func handler(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
-	// Preserve any correlation ID forwarded by an upstream proxy.
-	// Typed ID (RPC/API/REQ) is assigned after routing is determined below.
-	forwardedID := applog.RequestIDFrom(r)
 	host := normalizeHost(r.Host)
 
 	chain, ok := chains[host]
@@ -1455,16 +1452,11 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Assign typed request ID now that the route is known.
-	// Preserve a forwarded correlation ID from an upstream proxy (e.g. Apache).
-	// Otherwise generate RPC/API/REQ based on route type.
-	var requestID string
-	if forwardedID != "" {
-		requestID = forwardedID
-	} else {
-		requestID = applog.NewTypedID(routeIDPrefix(routePrefix, route, isRPCvhost, isRESTvhost))
-		r.Header.Set(applog.RequestIDHeader, requestID)
-	}
+	// Always stamp a typed vProx request ID based on the resolved route.
+	// Apache has its own access log for upstream correlation; we own this ID space.
+	// If Apache forwarded an X-Request-ID, it is overwritten with the typed ID.
+	requestID := applog.NewTypedID(routeIDPrefix(routePrefix, route, isRPCvhost, isRESTvhost))
+	r.Header.Set(applog.RequestIDHeader, requestID)
 	applog.SetResponseRequestID(w, requestID)
 
 	if r.URL.RawQuery != "" {
