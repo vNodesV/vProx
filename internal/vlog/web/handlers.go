@@ -551,24 +551,24 @@ func (s *Server) handleAPIChart(w http.ResponseWriter, r *http.Request) {
 
 // caProbeNodes and wwProbeNodes are check-host.net node IDs used for external
 // probing. One is chosen at random each probe invocation.
+// Node list sourced from https://check-host.net/nodes/hosts (verified live).
 var caProbeNodes = []string{
-	"ca1.node.check-host.net",
-	"ca2.node.check-host.net",
+	"ca1.node.check-host.net", // Vancouver, CA
 }
 
 var wwProbeNodes = []string{
-	"de1.node.check-host.net",
-	"nl1.node.check-host.net",
-	"fr1.node.check-host.net",
-	"gb1.node.check-host.net",
-	"fi1.node.check-host.net",
-	"jp1.node.check-host.net",
-	"sg1.node.check-host.net",
-	"us1.node.check-host.net",
-	"us2.node.check-host.net",
-	"au1.node.check-host.net",
-	"br1.node.check-host.net",
-	"in1.node.check-host.net",
+	"fr2.node.check-host.net", // Paris, FR
+	"de1.node.check-host.net", // Nuremberg, DE
+	"de4.node.check-host.net", // Frankfurt, DE
+	"nl1.node.check-host.net", // Amsterdam, NL
+	"uk1.node.check-host.net", // Coventry, GB
+	"fi1.node.check-host.net", // Helsinki, FI
+	"jp1.node.check-host.net", // Tokyo, JP
+	"sg1.node.check-host.net", // Singapore
+	"us1.node.check-host.net", // Los Angeles, US
+	"us2.node.check-host.net", // Dallas, US
+	"br1.node.check-host.net", // Sao Paulo, BR
+	"in1.node.check-host.net", // Mumbai, IN
 }
 
 type locResult struct {
@@ -639,7 +639,8 @@ func checkHostProbe(ctx context.Context, targetURL, node string) locResult {
 		if !ok || string(raw) == "null" {
 			continue // not ready yet
 		}
-		// Result shape: [[status(1/0), http_code, msg, ...time_floats...]]
+		// Actual shape: [[status_int, latency_secs, msg_str, code_str|null, ip_str|null]]
+		// status==1 → success; status==0 → failure.
 		var rows [][]json.RawMessage
 		if err4 := json.Unmarshal(raw, &rows); err4 != nil || len(rows) == 0 || len(rows[0]) == 0 {
 			return locResult{Error: "parse error", Node: shortNode}
@@ -649,20 +650,26 @@ func checkHostProbe(ctx context.Context, targetURL, node string) locResult {
 		if json.Unmarshal(row[0], &status) != nil {
 			return locResult{Error: "bad status", Node: shortNode}
 		}
-		if status == 1 {
-			var code int
-			if len(row) > 1 {
-				json.Unmarshal(row[1], &code) //nolint:errcheck
+		// row[1] = latency (float seconds)
+		var latMs int64
+		if len(row) > 1 {
+			var lat float64
+			if json.Unmarshal(row[1], &lat) == nil && lat > 0 {
+				latMs = int64(lat * 1000)
 			}
-			var latMs int64
-			for i := 2; i < len(row); i++ { // take last numeric time value
-				var t float64
-				if json.Unmarshal(row[i], &t) == nil && t > 0 {
-					latMs = int64(t * 1000)
+		}
+		if status == 1 {
+			// row[3] = HTTP code as string (e.g. "200", "301")
+			var code int
+			if len(row) > 3 {
+				var codeStr string
+				if json.Unmarshal(row[3], &codeStr) == nil {
+					fmt.Sscanf(codeStr, "%d", &code) //nolint:errcheck
 				}
 			}
 			return locResult{OK: true, Code: code, LatencyMs: latMs, Node: shortNode}
 		}
+		// row[2] = error message string
 		var errMsg string
 		if len(row) > 2 {
 			json.Unmarshal(row[2], &errMsg) //nolint:errcheck

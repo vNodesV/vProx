@@ -250,6 +250,8 @@
           panel.innerHTML = '<p style="padding:.4rem;opacity:.6">No endpoint data ingested yet.</p>';
           return;
         }
+        var dash = '—';
+        var cellStyle = 'text-align:center;font-size:.78rem;min-width:3.5rem;color:#6b7280';
         var rows = data.map(function(e) {
           var ts = e.last_seen ? e.last_seen.replace('T',' ').slice(0,16) : '—';
           return '<tr data-host="' + escH(e.host) + '">' +
@@ -257,9 +259,11 @@
             '<td style="text-align:right">' + e.requests.toLocaleString() + '</td>' +
             '<td style="text-align:right">' + e.unique_ips + '</td>' +
             '<td style="font-size:.78rem;opacity:.7">' + ts + '</td>' +
-            '<td><button class="outline" style="padding:.15rem .55rem;font-size:.75rem" ' +
-                'onclick="probeHost(this,\'' + escH(e.host) + '\')">Probe</button>' +
-                '<span class="probe-result" style="margin-left:.5rem;font-size:.75rem"></span></td>' +
+            '<td style="text-align:center"><button class="outline" style="padding:.15rem .55rem;font-size:.75rem" ' +
+                'onclick="probeHost(this,\'' + escH(e.host) + '\')">Probe</button></td>' +
+            '<td class="probe-local" style="' + cellStyle + '">' + dash + '</td>' +
+            '<td class="probe-ca"    style="' + cellStyle + '">' + dash + '</td>' +
+            '<td class="probe-ww"    style="' + cellStyle + '">' + dash + '</td>' +
             '</tr>';
         }).join('');
         panel.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:.82rem">' +
@@ -268,7 +272,10 @@
           '<th style="text-align:right;padding:.2rem .4rem">Requests</th>' +
           '<th style="text-align:right;padding:.2rem .4rem">Unique IPs</th>' +
           '<th style="padding:.2rem .4rem">Last Seen</th>' +
-          '<th style="padding:.2rem .4rem">Live</th>' +
+          '<th style="text-align:center;padding:.2rem .4rem">Live</th>' +
+          '<th style="text-align:center;padding:.2rem .4rem;font-size:.9rem">Local</th>' +
+          '<th style="text-align:center;padding:.2rem .4rem;font-size:1rem" title="Canada (Vancouver)">🇨🇦</th>' +
+          '<th style="text-align:center;padding:.2rem .4rem;font-size:1rem" title="Worldwide (random node)">🌍</th>' +
           '</tr></thead><tbody>' + rows + '</tbody></table>';
       })
       .catch(function() {
@@ -279,43 +286,35 @@
   window.loadChart    = loadChart;
   window.loadEndpoints = loadEndpoints;
 
-  function fmtLoc(loc, label) {
-    var icon, col;
-    if (!loc) return '<span style="color:#6b7280">' + label + ':?</span>';
-    if (loc.ok)          { icon = '✓'; col = '#22c55e'; }
-    else if (loc.error)  { icon = '✗'; col = '#ef4444'; }
-    else                 { icon = '!'; col = '#f97316'; }
-    var txt = label + ':' + icon;
-    if (loc.ok || loc.code) txt += ' ' + (loc.code || '') + (loc.latency_ms ? ' ' + loc.latency_ms + 'ms' : '');
-    if (loc.error && !loc.ok) txt += ' ' + loc.error;
-    if (loc.node) txt += ' (' + loc.node + ')';
-    return '<span style="color:' + col + '">' + txt + '</span>';
+  function setProbeCell(cell, loc) {
+    if (!loc) { cell.style.color = '#6b7280'; cell.textContent = '—'; return; }
+    if (loc.ok) {
+      cell.style.color = '#22c55e';
+      cell.textContent = loc.latency_ms ? loc.latency_ms + 'ms' : '✓';
+    } else {
+      cell.style.color = '#ef4444';
+      cell.textContent = loc.error || (loc.code ? loc.code : '✗');
+    }
   }
 
   window.probeHost = function(btn, host) {
     btn.disabled = true; btn.textContent = '…';
-    var res = btn.parentElement.querySelector('.probe-result');
-    res.innerHTML = '';
+    var tr = btn.closest('tr');
+    var cLocal = tr.querySelector('.probe-local');
+    var cCA    = tr.querySelector('.probe-ca');
+    var cWW    = tr.querySelector('.probe-ww');
+    [cLocal, cCA, cWW].forEach(function(c) { if (c) { c.style.color = '#6b7280'; c.textContent = '…'; } });
     fetch(BASE + '/api/v1/probe?host=' + encodeURIComponent(host))
       .then(function(r) { return r.json(); })
       .then(function(d) {
         btn.disabled = false; btn.textContent = 'Probe';
-        if (d.local !== undefined) {
-          // multi-location response
-          res.style.cssText = 'margin-left:.5rem;font-size:.72rem;display:inline-flex;gap:.6rem;align-items:center';
-          res.innerHTML = fmtLoc(d.local, 'Local') + fmtLoc(d.ca, 'CA') + fmtLoc(d.ww, 'WW');
-          res.title = d.url || '';
-        } else {
-          // legacy single-location fallback
-          res.style.cssText = 'margin-left:.5rem;font-size:.75rem';
-          if (d.error)   { res.style.color = '#ef4444'; res.textContent = '✗ ' + d.error; }
-          else if (d.ok) { res.style.color = '#22c55e'; res.textContent = '✓ ' + d.code + ' — ' + d.latency_ms + 'ms'; res.title = d.url || ''; }
-          else           { res.style.color = '#f97316'; res.textContent = '! ' + d.code + ' — ' + d.latency_ms + 'ms'; res.title = d.url || ''; }
-        }
+        setProbeCell(cLocal, d.local);
+        setProbeCell(cCA,    d.ca);
+        setProbeCell(cWW,    d.ww);
       })
       .catch(function() {
         btn.disabled = false; btn.textContent = 'Probe';
-        res.style.color = '#ef4444'; res.textContent = '✗ network error';
+        [cLocal, cCA, cWW].forEach(function(c) { if (c) { c.style.color = '#ef4444'; c.textContent = 'err'; } });
       });
   };
 
