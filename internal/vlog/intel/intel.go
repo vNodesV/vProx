@@ -52,7 +52,7 @@ func NewEnricher(cfg config.IntelConfig, d *db.DB) *Enricher {
 		cfg:        cfg,
 		db:         d,
 		httpClient: &http.Client{Timeout: 10 * time.Second},
-		limiter:    rate.NewLimiter(rate.Limit(rps), 3), // burst=3 allows parallel provider queries
+		limiter:    rate.NewLimiter(rate.Limit(rps), 1), // 1 token = 1 investigation
 		queue:      make(chan string, 100),
 		done:       make(chan struct{}),
 	}
@@ -152,6 +152,10 @@ func (e *Enricher) EnrichStream(ctx context.Context, ip string, force bool, emit
 	abuseCh := make(chan abuseRes, 1)
 	shodanCh := make(chan shodanRes, 1)
 
+	// Rate-limit once per investigation (not per provider) — all 3 providers
+	// call different APIs so their individual quotas are independent.
+	_ = e.limiter.Wait(ctx)
+
 	go func() {
 		if e.cfg.Keys.VirusTotal == "" {
 			vtCh <- vtRes{malicious: -1, skipped: true}
@@ -161,7 +165,6 @@ func (e *Enricher) EnrichStream(ctx context.Context, ip string, force bool, emit
 			vtCh <- vtRes{malicious: -1, cached: true}
 			return
 		}
-		_ = e.limiter.Wait(ctx)
 		m, raw, err := CheckVirusTotal(e.cfg.Keys.VirusTotal, ip, e.httpClient)
 		vtCh <- vtRes{malicious: m, raw: raw, err: err}
 	}()
@@ -175,7 +178,6 @@ func (e *Enricher) EnrichStream(ctx context.Context, ip string, force bool, emit
 			abuseCh <- abuseRes{score: -1, cached: true}
 			return
 		}
-		_ = e.limiter.Wait(ctx)
 		s, raw, err := CheckAbuseIPDB(e.cfg.Keys.AbuseIPDB, ip, e.httpClient)
 		abuseCh <- abuseRes{score: s, raw: raw, err: err}
 	}()
@@ -189,7 +191,6 @@ func (e *Enricher) EnrichStream(ctx context.Context, ip string, force bool, emit
 			shodanCh <- shodanRes{cached: true}
 			return
 		}
-		_ = e.limiter.Wait(ctx)
 		sr, raw, err := CheckShodan(e.cfg.Keys.Shodan, ip, e.httpClient)
 		shodanCh <- shodanRes{result: sr, raw: raw, err: err}
 	}()
