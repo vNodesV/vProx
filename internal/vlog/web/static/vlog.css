@@ -372,6 +372,8 @@ background: transparent;
 padding: 0.3rem 0.6rem;
 font-size: 0.8rem;
 width: 400px;
+min-width: 400px;
+flex-shrink: 0;
 color: inherit;
 outline: none;
 }

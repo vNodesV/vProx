@@ -114,7 +114,7 @@
     <!-- Combined log -->
     <div class="enrich-log" id="inv-log"></div>
 
-    <button class="enrich-dismiss" id="inv-dismiss" onclick="closeInvestigate()">Dismiss &amp; Refresh</button>
+    <button class="enrich-dismiss" id="inv-dismiss" onclick="closeInvestigate()">Dismiss</button>
   </div>
 </div>
 
@@ -206,7 +206,6 @@ function finishInvestigate() {
 
 function closeInvestigate() {
   document.getElementById('investigate-overlay').style.display = 'none';
-  window.location.reload();
 }
 </script>
 {{end}}
