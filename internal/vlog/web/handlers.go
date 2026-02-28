@@ -472,6 +472,49 @@ func (s *Server) handleAPIStats(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, stats)
 }
 
+func (s *Server) handleAPIChart(w http.ResponseWriter, r *http.Request) {
+	chartType := r.URL.Query().Get("type")
+	daysStr := r.URL.Query().Get("days")
+	days := 30
+	if d, err := strconv.Atoi(daysStr); err == nil && d > 0 && d <= 365 {
+		days = d
+	}
+
+	var (
+		points []db.ChartPoint
+		err    error
+	)
+	switch chartType {
+	case "ips_over_time":
+		points, err = s.db.IPsOverTime(days)
+	case "requests_over_time":
+		points, err = s.db.RequestsOverTime(days)
+	case "ratelimits_over_time":
+		points, err = s.db.RateLimitsOverTime(days)
+	case "top_countries":
+		points, err = s.db.TopCountries(10)
+	case "status_breakdown":
+		points, err = s.db.StatusBreakdown()
+	case "threat_distribution":
+		points, err = s.db.ThreatDistribution()
+	case "top_ips_by_requests":
+		points, err = s.db.TopIPsByRequests(10)
+	case "requests_by_country":
+		points, err = s.db.RequestsByCountry(10)
+	default:
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "unknown chart type"})
+		return
+	}
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	if points == nil {
+		points = []db.ChartPoint{}
+	}
+	writeJSON(w, http.StatusOK, points)
+}
+
 func (s *Server) handleAPIBlock(w http.ResponseWriter, r *http.Request) {
 	ip := r.PathValue("ip")
 	if net.ParseIP(ip) == nil {

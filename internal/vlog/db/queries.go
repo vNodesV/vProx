@@ -613,3 +613,160 @@ func (d *DB) Stats() (map[string]int64, error) {
 	}
 	return m, nil
 }
+
+// ---------------------------------------------------------------------------
+// Chart data
+// ---------------------------------------------------------------------------
+
+// ChartPoint is a single label+value pair for chart rendering.
+type ChartPoint struct {
+	Label string  `json:"label"`
+	Value float64 `json:"value"`
+}
+
+// IPsOverTime returns daily new-IP counts for the last days days,
+// grouped by the date portion of first_seen.
+func (d *DB) IPsOverTime(days int) ([]ChartPoint, error) {
+	const q = `
+		SELECT date(first_seen) AS day, COUNT(*) AS n
+		FROM ip_accounts
+		WHERE first_seen >= date('now', ?)
+		GROUP BY day ORDER BY day`
+	return d.timeSeriesQuery(q, fmt.Sprintf("-%d days", days))
+}
+
+// RequestsOverTime returns daily request counts for the last days days,
+// grouped by the date portion of ts.
+func (d *DB) RequestsOverTime(days int) ([]ChartPoint, error) {
+	const q = `
+		SELECT date(ts) AS day, COUNT(*) AS n
+		FROM request_events
+		WHERE ts >= date('now', ?)
+		GROUP BY day ORDER BY day`
+	return d.timeSeriesQuery(q, fmt.Sprintf("-%d days", days))
+}
+
+// RateLimitsOverTime returns daily rate-limit event counts for the last days days.
+func (d *DB) RateLimitsOverTime(days int) ([]ChartPoint, error) {
+	const q = `
+		SELECT date(ts) AS day, COUNT(*) AS n
+		FROM ratelimit_events
+		WHERE ts >= date('now', ?)
+		GROUP BY day ORDER BY day`
+	return d.timeSeriesQuery(q, fmt.Sprintf("-%d days", days))
+}
+
+func (d *DB) timeSeriesQuery(q, arg string) ([]ChartPoint, error) {
+	rows, err := d.Query(q, arg)
+	if err != nil {
+		return nil, fmt.Errorf("time series query: %w", err)
+	}
+	defer rows.Close()
+	var out []ChartPoint
+	for rows.Next() {
+		var p ChartPoint
+		var v int64
+		if err := rows.Scan(&p.Label, &v); err != nil {
+			return nil, fmt.Errorf("scan time series: %w", err)
+		}
+		p.Value = float64(v)
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+// TopCountries returns the top limit countries by IP count.
+func (d *DB) TopCountries(limit int) ([]ChartPoint, error) {
+	const q = `
+		SELECT COALESCE(NULLIF(country,''), 'Unknown') AS c, COUNT(*) AS n
+		FROM ip_accounts GROUP BY c ORDER BY n DESC LIMIT ?`
+	return d.labelCountQuery(q, limit)
+}
+
+// StatusBreakdown returns the count of IPs per status value.
+func (d *DB) StatusBreakdown() ([]ChartPoint, error) {
+	const q = `
+		SELECT COALESCE(NULLIF(status,''), 'unknown') AS s, COUNT(*) AS n
+		FROM ip_accounts GROUP BY s ORDER BY n DESC`
+	rows, err := d.Query(q)
+	if err != nil {
+		return nil, fmt.Errorf("status breakdown: %w", err)
+	}
+	defer rows.Close()
+	var out []ChartPoint
+	for rows.Next() {
+		var p ChartPoint
+		var v int64
+		if err := rows.Scan(&p.Label, &v); err != nil {
+			return nil, fmt.Errorf("scan status breakdown: %w", err)
+		}
+		p.Value = float64(v)
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+// ThreatDistribution returns IP counts bucketed by threat score range.
+func (d *DB) ThreatDistribution() ([]ChartPoint, error) {
+	const q = `
+		SELECT
+			CASE
+				WHEN threat_score < 0  THEN 'No Data'
+				WHEN threat_score = 0  THEN 'Clean (0)'
+				WHEN threat_score < 25 THEN 'Low (1-24)'
+				WHEN threat_score < 50 THEN 'Medium (25-49)'
+				WHEN threat_score < 75 THEN 'High (50-74)'
+				ELSE 'Critical (75+)'
+			END AS bucket,
+			COUNT(*) AS n
+		FROM ip_accounts GROUP BY bucket`
+	rows, err := d.Query(q)
+	if err != nil {
+		return nil, fmt.Errorf("threat distribution: %w", err)
+	}
+	defer rows.Close()
+	var out []ChartPoint
+	for rows.Next() {
+		var p ChartPoint
+		var v int64
+		if err := rows.Scan(&p.Label, &v); err != nil {
+			return nil, fmt.Errorf("scan threat distribution: %w", err)
+		}
+		p.Value = float64(v)
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+// TopIPsByRequests returns the top limit IPs by total_requests.
+func (d *DB) TopIPsByRequests(limit int) ([]ChartPoint, error) {
+	const q = `SELECT ip, total_requests FROM ip_accounts ORDER BY total_requests DESC LIMIT ?`
+	return d.labelCountQuery(q, limit)
+}
+
+// RequestsByCountry returns the top 10 countries by request count.
+func (d *DB) RequestsByCountry(limit int) ([]ChartPoint, error) {
+	const q = `
+		SELECT COALESCE(NULLIF(country,''), 'Unknown') AS c, SUM(total_requests) AS n
+		FROM ip_accounts GROUP BY c ORDER BY n DESC LIMIT ?`
+	return d.labelCountQuery(q, limit)
+}
+
+func (d *DB) labelCountQuery(q string, limit int) ([]ChartPoint, error) {
+	rows, err := d.Query(q, limit)
+	if err != nil {
+		return nil, fmt.Errorf("label count query: %w", err)
+	}
+	defer rows.Close()
+	var out []ChartPoint
+	for rows.Next() {
+		var p ChartPoint
+		var v int64
+		if err := rows.Scan(&p.Label, &v); err != nil {
+			return nil, fmt.Errorf("scan label count: %w", err)
+		}
+		p.Value = float64(v)
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}

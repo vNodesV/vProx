@@ -95,6 +95,7 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 	mux.HandleFunc("POST /api/v1/block/{ip}", s.handleAPIBlock)
 	mux.HandleFunc("POST /api/v1/unblock/{ip}", s.handleAPIUnblock)
 	mux.HandleFunc("GET /api/v1/stats", s.handleAPIStats)
+	mux.HandleFunc("GET /api/v1/chart", s.handleAPIChart)
 
 	// Static assets (CSS, JS, etc.) served from embedded FS.
 	mux.Handle("GET /static/", http.FileServer(http.FS(webFS)))

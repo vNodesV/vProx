@@ -21,6 +21,48 @@
   </div>
 </div>
 
+<div class="chart-row">
+  <!-- LEFT BLOCK -->
+  <div class="chart-block">
+    <div class="chart-header">
+      <select id="chart-left-type" onchange="loadChart('left')">
+        <option value="ips_over_time">IPs over time</option>
+        <option value="top_countries">Top countries</option>
+        <option value="status_breakdown">Status breakdown</option>
+        <option value="threat_distribution">Threat distribution</option>
+      </select>
+      <select id="chart-left-days" onchange="loadChart('left')" class="chart-days-select">
+        <option value="7">7 days</option>
+        <option value="30" selected>30 days</option>
+        <option value="90">90 days</option>
+      </select>
+    </div>
+    <div class="chart-canvas-wrap">
+      <canvas id="chart-left"></canvas>
+    </div>
+  </div>
+
+  <!-- RIGHT BLOCK -->
+  <div class="chart-block">
+    <div class="chart-header">
+      <select id="chart-right-type" onchange="loadChart('right')">
+        <option value="requests_over_time">Requests over time</option>
+        <option value="ratelimits_over_time">Rate limits over time</option>
+        <option value="top_ips_by_requests">Top IPs by requests</option>
+        <option value="requests_by_country">Requests by country</option>
+      </select>
+      <select id="chart-right-days" onchange="loadChart('right')" class="chart-days-select">
+        <option value="7">7 days</option>
+        <option value="30" selected>30 days</option>
+        <option value="90">90 days</option>
+      </select>
+    </div>
+    <div class="chart-canvas-wrap">
+      <canvas id="chart-right"></canvas>
+    </div>
+  </div>
+</div>
+
 <section>
   <header>
     <div style="display:flex;justify-content:space-between;align-items:center;">
@@ -71,4 +113,96 @@
   <p>No blocked IPs.</p>
   {{end}}
 </section>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script>
+(function() {
+  var BASE = '{{.BasePath}}';
+  var instances = {};
+
+  // Chart type → Chart.js type + options
+  var chartMeta = {
+    ips_over_time:        { type: 'line',  label: 'New IPs',           color: '#4e8cf7', fill: true  },
+    top_countries:        { type: 'bar',   label: 'IPs',               color: '#4e8cf7', fill: false },
+    status_breakdown:     { type: 'doughnut', label: 'IPs',            color: null,      fill: false },
+    threat_distribution:  { type: 'bar',   label: 'IPs',               color: '#f97316', fill: false },
+    requests_over_time:   { type: 'line',  label: 'Requests',          color: '#22c55e', fill: true  },
+    ratelimits_over_time: { type: 'line',  label: 'Rate Limits',       color: '#ef4444', fill: true  },
+    top_ips_by_requests:  { type: 'bar',   label: 'Requests',          color: '#22c55e', fill: false },
+    requests_by_country:  { type: 'bar',   label: 'Requests',          color: '#a855f7', fill: false },
+  };
+
+  var doughnutColors = ['#4e8cf7','#22c55e','#ef4444','#f97316','#a855f7','#eab308','#14b8a6'];
+
+  function loadChart(side) {
+    var typeEl = document.getElementById('chart-' + side + '-type');
+    var daysEl = document.getElementById('chart-' + side + '-days');
+    var chartType = typeEl.value;
+    var days = daysEl.value;
+    var meta = chartMeta[chartType] || { type: 'bar', label: 'Count', color: '#4e8cf7', fill: false };
+
+    // Hide days selector for non-time-series charts
+    var isTimeSeries = chartType.indexOf('_over_time') !== -1;
+    daysEl.style.display = isTimeSeries ? '' : 'none';
+
+    var url = BASE + '/api/v1/chart?type=' + chartType + '&days=' + days;
+    fetch(url)
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        var labels = data.map(function(p) { return p.label; });
+        var values = data.map(function(p) { return p.value; });
+        var canvasId = 'chart-' + side;
+        var canvas = document.getElementById(canvasId);
+
+        // Destroy previous instance
+        if (instances[side]) { instances[side].destroy(); }
+
+        var datasets;
+        if (meta.type === 'doughnut') {
+          datasets = [{
+            data: values,
+            backgroundColor: doughnutColors.slice(0, values.length),
+            borderWidth: 1,
+          }];
+        } else {
+          var ds = {
+            label: meta.label,
+            data: values,
+            backgroundColor: meta.fill ? meta.color + '33' : meta.color,
+            borderColor: meta.color,
+            borderWidth: 2,
+            fill: meta.fill,
+            tension: 0.3,
+            pointRadius: isTimeSeries ? 2 : 4,
+          };
+          datasets = [ds];
+        }
+
+        instances[side] = new Chart(canvas, {
+          type: meta.type,
+          data: { labels: labels, datasets: datasets },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: meta.type === 'doughnut' },
+              tooltip: { mode: 'index', intersect: false },
+            },
+            scales: meta.type === 'doughnut' ? {} : {
+              x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { maxRotation: 45 } },
+              y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.07)' } },
+            },
+          },
+        });
+      })
+      .catch(function(e) { console.warn('chart error', side, e); });
+  }
+
+  window.loadChart = loadChart;
+
+  // Initial load
+  loadChart('left');
+  loadChart('right');
+})();
+</script>
 {{end}}
