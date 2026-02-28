@@ -571,3 +571,85 @@ wg.Wait()
 - [ ] Release vProxVL v1.2.0 (vProx v1.2.0 + vLog v1.0.0)
 - [ ] Docs: update CHANGELOG/MODULES/INSTALLATION/CLI_FLAGS_GUIDE for v1.2.0
 - [ ] Test multi-probe on prod RBX endpoint (confirm CA+WW resolve correctly)
+
+---
+
+## Session: 2026-02-28 — State audit + follow-up reconciliation
+
+### Branch: `vLog/v1.1.0` | HEAD: `0fa2546`
+
+### Corrections Applied (stale data found in prior entries)
+
+#### ✅ Previously listed as open — actually DONE
+
+| Item | Done in |
+|------|---------|
+| Search bar width −25% + half height | `f3ad051` |
+| vLog CLI `stop` and `restart` commands | `f3ad051` era → `cmd/vlog/main.go` lines 226-229, 752-768 |
+| CHANGELOG / MODULES / CLI_FLAGS_GUIDE / README v1.2.0 docs | `0fa2546` (last commit) |
+| Intel parallelization (3 goroutines, ~10s) | `594f0f5` |
+| OSINT parallelization (5 ops, ~5s) | `594f0f5` |
+| Rate limiter burst=3 regression → fixed back to burst=1 | `73d4b6d` |
+
+#### ⚠ Stale column index reference (ASN removed in `73d4b6d`)
+
+ASN column was removed. Correct accounts table column map (0-based, 9 cols):
+
+| Col | Field |
+|-----|-------|
+| 0 | Org |
+| 1 | IP |
+| 2 | Country |
+| 3 | Requests |
+| 4 | Rate Limits |
+| 5 | Threat Score |
+| 6 | Last Seen |
+| 7 | Actions |
+| 8 | Status |
+
+### Architecture in Focus (current, accurate)
+
+#### vLog — `vLog/v1.1.0` branch (29 commits ahead of `develop`)
+
+**Binary**: `vlog` — standalone, embedded HTTP server, Apache-proxied at `/vlog/`
+
+**CLI** (all implemented):
+```
+vlog start [-d]   vlog stop   vlog restart   vlog ingest   vlog status
+--home  --port  --quiet  --version
+```
+
+**Web UI**:
+- Dashboard: dual-line Chart.js (50/50 layout) + endpoint status panel with 3 probe columns (Local | 🇨🇦 | 🌍); CSS spinner + tooltips
+- Accounts: 9-col sortable table (Org/IP/Country/Requests/RateLimits/ThreatScore/LastSeen/Actions/Status); server-side search; per-page 25/50/100/200/All; URL sort persistence; row in-place refresh on investigate dismiss; `.btn-investigate-done` green when intel exists
+
+**Intel pipeline**:
+- EnrichStream: VT + AbuseIPDB + Shodan → 3 goroutines → buffered channels (cap 1); results collected then emitted sequentially; rate limiter burst=1; ~10s worst-case
+- OSINTStream: 5 ops concurrent via `sync.WaitGroup` + `sync.Mutex`; ~5s typical
+- SSE handlers: all use `context.Background()` + 15s keepalive goroutine (`: ping`) — never `r.Context()`
+
+**Endpoint probe** (`GET /api/v1/probe`):
+- `localProbe()` + concurrent `checkHostProbe(ca1)` + `checkHostProbe(random WW node)`
+- check-host.net API: submit → poll 2s interval, 12s deadline; parse `row[1]=latency_secs`, `row[3]=code_str`
+- Verified live nodes: ca1, fr2, de1, de4, nl1, uk1, fi1, jp1, sg1, us1, us2, br1, in1
+
+**DB tables**: `ip_accounts`, `request_events`, `ratelimit_events`, `ingested_archives`, `intel_cache`, `blocked_ips`
+
+**Block/Unblock**: `POST /api/v1/block/{ip}` + `POST /api/v1/unblock/{ip}`; UFW integration via `internal/vlog/ufw`; `net.ParseIP()` guard + `exec.Command` separate args; `make ufw-vlog` installs sudoers entry
+
+#### vProx — `develop` branch (HEAD: `4cb7c8c`)
+
+**Typed request IDs**: `RPC{24HEX}` / `API{24HEX}` / `REQ{24HEX}` stamped on every proxied request; vhost + alias routes included; Apache `X-Request-ID` header overwritten
+**Backup push**: POSTs to `vlog_url` (from `config/ports.toml`) after `--new-backup`; non-fatal
+**Chain log discovery**: `--new-backup` auto-includes per-chain `*.log` files
+**Makefile GOROOT**: auto-detects clean toolchain via `find $GOPATH/pkg/mod/golang.org -name 'toolchain@*'`; sets `EFFECTIVE_GOROOT` for all build commands
+
+### Actual Open Follow-ups (reconciled)
+
+- [ ] **PR**: open `vLog/v1.1.0` → `develop` → `main` (29 commits to merge; CI required)
+- [ ] **Prod deploy**: `git pull origin vLog/v1.1.0 && make install-vlog && sudo service vLog restart`
+- [ ] **Apply Apache config**: copy `.vscode/vlog.apache2` to prod + `sudo systemctl reload apache2`
+- [ ] **Test multi-probe** on prod RBX endpoint — confirm CA+WW resolve correctly
+- [ ] **Release tag**: cut `vProxVL-v1.2.0` after merge to main
+- [ ] **Shodan search UI**: future — requires Shodan Membership plan
+- [ ] **vProx IP deny list integration**: vLog block list → vProx polling (future P4)

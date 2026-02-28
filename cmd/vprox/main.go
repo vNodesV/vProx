@@ -62,9 +62,10 @@ type Services struct {
 }
 
 type Features struct {
-	InjectRPCIndex    bool   `toml:"inject_rpc_index"`
-	InjectRestSwagger bool   `toml:"inject_rest_swagger"`
-	AbsoluteLinks     string `toml:"absolute_links"` // auto | always | never
+	RPCAddressMasking bool   `toml:"rpc_address_masking"` // Mask local IP links on RPC index HTML
+	MaskRPC           string `toml:"mask_rpc"`            // Replacement label for masked IP (empty = remove)
+	SwaggerMasking    bool   `toml:"swagger_masking"`     // Rewrite Swagger Try-It URLs to public host
+	AbsoluteLinks     string `toml:"absolute_links"`      // auto | always | never
 }
 
 type LoggingCfg struct {
@@ -75,12 +76,6 @@ type LoggingCfg struct {
 type Message struct {
 	APIMsg string `toml:"api_msg"`
 	RPCMsg string `toml:"rpc_msg"`
-}
-
-type Aliases struct {
-	RPC  []string `toml:"rpc"`
-	REST []string `toml:"rest"`
-	API  []string `toml:"api"`
 }
 
 type WSConfig struct {
@@ -94,7 +89,10 @@ type ChainConfig struct {
 	Host          string `toml:"host"`
 	IP            string `toml:"ip"`
 
-	Aliases  Aliases    `toml:"aliases"`
+	RPCAliases  []string `toml:"rpc_aliases"`  // extra RPC hostnames; active only when expose.vhost = true
+	RESTAliases []string `toml:"rest_aliases"` // extra REST/API hostnames; active only when expose.vhost = true
+	APIAliases  []string `toml:"api_aliases"`  // extra /api hostnames; active only when expose.vhost = true
+
 	Expose   Expose     `toml:"expose"`
 	Services Services   `toml:"services"`
 	Ports    Ports      `toml:"ports"`
@@ -104,7 +102,8 @@ type ChainConfig struct {
 	Message  Message    `toml:"message"`
 
 	DefaultPorts bool `toml:"default_ports"`
-	Msg          bool `toml:"msg"`
+	MsgRPC       bool `toml:"msg_rpc"` // enable rpc_msg banner injection
+	MsgAPI       bool `toml:"msg_api"` // enable api_msg banner injection
 }
 
 // --------------------- GLOBALS ---------------------
@@ -255,20 +254,20 @@ func validateConfig(c *ChainConfig) error {
 		}
 	}
 
-	// Aliases
-	for _, a := range c.Aliases.RPC {
+	// Aliases (active only when expose.vhost = true)
+	for _, a := range c.RPCAliases {
 		if !isValidHostname(a) {
-			return fmt.Errorf("aliases.rpc contains invalid hostname: %q", a)
+			return fmt.Errorf("rpc_aliases contains invalid hostname: %q", a)
 		}
 	}
-	for _, a := range c.Aliases.REST {
+	for _, a := range c.RESTAliases {
 		if !isValidHostname(a) {
-			return fmt.Errorf("aliases.rest contains invalid hostname: %q", a)
+			return fmt.Errorf("rest_aliases contains invalid hostname: %q", a)
 		}
 	}
-	for _, a := range c.Aliases.API {
+	for _, a := range c.APIAliases {
 		if !isValidHostname(a) {
-			return fmt.Errorf("aliases.api contains invalid hostname: %q", a)
+			return fmt.Errorf("api_aliases contains invalid hostname: %q", a)
 		}
 	}
 
@@ -371,14 +370,14 @@ func loadChains(dir string) error {
 
 		base := c.Host // already normalized
 		// normalize alias lists
-		for i, a := range c.Aliases.RPC {
-			c.Aliases.RPC[i] = strings.ToLower(strings.TrimSpace(a))
+		for i, a := range c.RPCAliases {
+			c.RPCAliases[i] = strings.ToLower(strings.TrimSpace(a))
 		}
-		for i, a := range c.Aliases.REST {
-			c.Aliases.REST[i] = strings.ToLower(strings.TrimSpace(a))
+		for i, a := range c.RESTAliases {
+			c.RESTAliases[i] = strings.ToLower(strings.TrimSpace(a))
 		}
-		for i, a := range c.Aliases.API {
-			c.Aliases.API[i] = strings.ToLower(strings.TrimSpace(a))
+		for i, a := range c.APIAliases {
+			c.APIAliases[i] = strings.ToLower(strings.TrimSpace(a))
 		}
 
 		// register base host
@@ -398,22 +397,22 @@ func loadChains(dir string) error {
 			}
 		}
 
-		// register explicit alias hosts
-		for _, h := range c.Aliases.RPC {
+		// register explicit alias hosts (active only when expose.vhost = true)
+		for _, h := range c.RPCAliases {
 			if h != "" {
 				if err := registerHost(h, &c); err != nil {
 					return fmt.Errorf("%s: %w", entry.Name(), err)
 				}
 			}
 		}
-		for _, h := range c.Aliases.REST {
+		for _, h := range c.RESTAliases {
 			if h != "" {
 				if err := registerHost(h, &c); err != nil {
 					return fmt.Errorf("%s: %w", entry.Name(), err)
 				}
 			}
 		}
-		for _, h := range c.Aliases.API {
+		for _, h := range c.APIAliases {
 			if h != "" {
 				if err := registerHost(h, &c); err != nil {
 					return fmt.Errorf("%s: %w", entry.Name(), err)
@@ -1369,8 +1368,8 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		if ap == "" {
 			ap = "api"
 		}
-		isRPCvhost = strings.HasPrefix(host, rp+".") || inList(chain.Aliases.RPC, host)
-		isRESTvhost = strings.HasPrefix(host, ap+".") || inList(chain.Aliases.REST, host) || inList(chain.Aliases.API, host)
+		isRPCvhost = strings.HasPrefix(host, rp+".") || inList(chain.RPCAliases, host)
+		isRESTvhost = strings.HasPrefix(host, ap+".") || inList(chain.RESTAliases, host) || inList(chain.APIAliases, host)
 	}
 
 	var (
@@ -1387,20 +1386,17 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		targetURL = fmt.Sprintf("http://%s:%d%s", chain.IP, eff.RPC, r.URL.Path)
 		route = "direct"
 		routePrefix = rpcPrefix
-		if chain.Features.InjectRPCIndex && (r.URL.Path == "/" || r.URL.Path == "") {
-			bannerHTML = chain.Message.RPCMsg
-			bannerFile = bannerPath(chain.ChainName, rpcPrefix)
+		if chain.Features.RPCAddressMasking && (r.URL.Path == "/" || r.URL.Path == "") {
 			injectHTML = true
+			if chain.MsgRPC {
+				bannerHTML = chain.Message.RPCMsg
+				bannerFile = bannerPath(chain.ChainName, rpcPrefix)
+			}
 		}
 	} else if isRESTvhost && chain.Services.REST {
 		targetURL = fmt.Sprintf("http://%s:%d%s", chain.IP, eff.REST, r.URL.Path)
 		route = "direct"
 		routePrefix = restPrefix
-		if chain.Features.InjectRestSwagger && r.URL.Path == "/swagger/" {
-			bannerHTML = chain.Message.APIMsg
-			bannerFile = bannerPath(chain.ChainName, restPrefix)
-			injectHTML = true
-		}
 
 	} else {
 		// 2) PATH-based routing on base host (if exposed)
@@ -1410,21 +1406,18 @@ func handler(w http.ResponseWriter, r *http.Request) {
 				targetURL = fmt.Sprintf("http://%s:%d%s", chain.IP, eff.RPC, strings.TrimPrefix(r.URL.Path, rpcPrefix))
 				route = "rpc"
 				routePrefix = rpcPrefix
-				if chain.Features.InjectRPCIndex && (r.URL.Path == "/rpc" || r.URL.Path == "/rpc/") {
-					bannerHTML = chain.Message.RPCMsg
-					bannerFile = bannerPath(chain.ChainName, rpcPrefix)
+				if chain.Features.RPCAddressMasking && (r.URL.Path == "/rpc" || r.URL.Path == "/rpc/") {
 					injectHTML = true
+					if chain.MsgRPC {
+						bannerHTML = chain.Message.RPCMsg
+						bannerFile = bannerPath(chain.ChainName, rpcPrefix)
+					}
 				}
 
 			case strings.HasPrefix(r.URL.Path, restPrefix) && chain.Services.REST:
 				targetURL = fmt.Sprintf("http://%s:%d%s", chain.IP, eff.REST, strings.TrimPrefix(r.URL.Path, restPrefix))
 				route = "rest"
 				routePrefix = restPrefix
-				if chain.Features.InjectRestSwagger && r.URL.Path == "/rest/swagger/" {
-					bannerHTML = chain.Message.APIMsg
-					bannerFile = bannerPath(chain.ChainName, restPrefix)
-					injectHTML = true
-				}
 
 			case strings.HasPrefix(r.URL.Path, grpcPrefix) && chain.Services.GRPC:
 				targetURL = fmt.Sprintf("http://%s:%d%s", chain.IP, eff.GRPC, strings.TrimPrefix(r.URL.Path, grpcPrefix))
