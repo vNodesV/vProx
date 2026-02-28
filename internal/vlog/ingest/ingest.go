@@ -63,6 +63,23 @@ func (ing *Ingester) IngestAll() (processed int, err error) {
 // IngestOne
 // ---------------------------------------------------------------------------
 
+// IngestAllForce re-ingests all *.tar.gz archives in archivesDir regardless
+// of prior ingestion state, overwriting existing records.
+func (ing *Ingester) IngestAllForce() (processed int, err error) {
+	matches, err := filepath.Glob(filepath.Join(ing.archivesDir, "*.tar.gz"))
+	if err != nil {
+		return 0, fmt.Errorf("ingest: glob %s: %w", ing.archivesDir, err)
+	}
+	sort.Strings(matches)
+	for _, path := range matches {
+		if err := ing.ingestCore(path); err != nil {
+			return processed, fmt.Errorf("ingest %s: %w", filepath.Base(path), err)
+		}
+		processed++
+	}
+	return processed, nil
+}
+
 // IngestOne ingests a single archive file by absolute path.
 // If the archive has already been ingested it returns (true, nil).
 func (ing *Ingester) IngestOne(path string) (skipped bool, err error) {
@@ -76,10 +93,17 @@ func (ing *Ingester) IngestOne(path string) (skipped bool, err error) {
 		return true, nil
 	}
 
+	return false, ing.ingestCore(path)
+}
+
+// ingestCore performs the full ingestion of a single archive (no dedup check).
+func (ing *Ingester) ingestCore(path string) error {
+	name := filepath.Base(path)
+
 	// File size for bookkeeping.
 	info, err := os.Stat(path)
 	if err != nil {
-		return false, fmt.Errorf("stat %s: %w", name, err)
+		return fmt.Errorf("stat %s: %w", name, err)
 	}
 	sizeBytes := info.Size()
 
@@ -92,13 +116,13 @@ func (ing *Ingester) IngestOne(path string) (skipped bool, err error) {
 	// Open archive.
 	f, err := os.Open(path)
 	if err != nil {
-		return false, fmt.Errorf("open %s: %w", name, err)
+		return fmt.Errorf("open %s: %w", name, err)
 	}
 	defer f.Close()
 
 	gz, err := gzip.NewReader(f)
 	if err != nil {
-		return false, fmt.Errorf("gzip %s: %w", name, err)
+		return fmt.Errorf("gzip %s: %w", name, err)
 	}
 	defer gz.Close()
 
@@ -113,7 +137,7 @@ func (ing *Ingester) IngestOne(path string) (skipped bool, err error) {
 			break
 		}
 		if err != nil {
-			return false, fmt.Errorf("tar next %s: %w", name, err)
+			return fmt.Errorf("tar next %s: %w", name, err)
 		}
 
 		entryName := filepath.Base(hdr.Name)
@@ -122,7 +146,7 @@ func (ing *Ingester) IngestOne(path string) (skipped bool, err error) {
 		case entryName == "main.log":
 			data, err := io.ReadAll(tr)
 			if err != nil {
-				return false, fmt.Errorf("read main.log in %s: %w", name, err)
+				return fmt.Errorf("read main.log in %s: %w", name, err)
 			}
 			for _, line := range strings.Split(string(data), "\n") {
 				if ev := ParseLogLine(line, name, archiveTS); ev != nil {
@@ -133,7 +157,7 @@ func (ing *Ingester) IngestOne(path string) (skipped bool, err error) {
 		case entryName == "rate-limit.jsonl":
 			data, err := io.ReadAll(tr)
 			if err != nil {
-				return false, fmt.Errorf("read rate-limit.jsonl in %s: %w", name, err)
+				return fmt.Errorf("read rate-limit.jsonl in %s: %w", name, err)
 			}
 			for _, line := range strings.Split(string(data), "\n") {
 				if ev := ParseRateLimitLine(line, name); ev != nil {
@@ -146,7 +170,7 @@ func (ing *Ingester) IngestOne(path string) (skipped bool, err error) {
 	// --- Insert all events inside a transaction. ---
 	tx, err := ing.db.Begin()
 	if err != nil {
-		return false, fmt.Errorf("begin tx %s: %w", name, err)
+		return fmt.Errorf("begin tx %s: %w", name, err)
 	}
 	defer tx.Rollback() // no-op after commit
 
@@ -159,7 +183,7 @@ func (ing *Ingester) IngestOne(path string) (skipped bool, err error) {
 			e.Archive, e.Ts, e.RequestID, e.IP, e.Method, e.Path, e.Host, e.Route,
 			e.Status, e.Country, e.ASN, e.UserAgent,
 		); err != nil {
-			return false, fmt.Errorf("insert request_event in %s: %w", name, err)
+			return fmt.Errorf("insert request_event in %s: %w", name, err)
 		}
 	}
 
@@ -173,32 +197,28 @@ func (ing *Ingester) IngestOne(path string) (skipped bool, err error) {
 			e.Method, e.Path, e.Host,
 			e.Country, e.ASN, e.UserAgent, e.RPS, e.Burst,
 		); err != nil {
-			return false, fmt.Errorf("insert ratelimit_event in %s: %w", name, err)
+			return fmt.Errorf("insert ratelimit_event in %s: %w", name, err)
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		return false, fmt.Errorf("commit tx %s: %w", name, err)
+		return fmt.Errorf("commit tx %s: %w", name, err)
 	}
 
 	// --- Upsert IP accounts outside the event-insert tx. ---
 	if err := ing.upsertAccounts(requests, ratelimits, archiveTS); err != nil {
-		return false, fmt.Errorf("upsert accounts %s: %w", name, err)
+		return fmt.Errorf("upsert accounts %s: %w", name, err)
 	}
 
 	// --- Mark archive as ingested. ---
 	now := time.Now().UTC().Format(time.RFC3339)
-	if err := ing.db.MarkArchiveIngested(&db.IngestedArchive{
+	return ing.db.MarkArchiveIngested(&db.IngestedArchive{
 		Filename:       name,
 		IngestedAt:     now,
 		RequestCount:   int64(len(requests)),
 		RatelimitCount: int64(len(ratelimits)),
 		SizeBytes:      sizeBytes,
-	}); err != nil {
-		return false, err
-	}
-
-	return false, nil
+	})
 }
 
 // ---------------------------------------------------------------------------
@@ -307,6 +327,32 @@ func (ing *Ingester) upsertAccounts(reqs []*db.RequestEvent, rls []*db.RateLimit
 		}
 	}
 	return nil
+}
+
+// ---------------------------------------------------------------------------
+// ListPending
+// ---------------------------------------------------------------------------
+
+// ListPending returns absolute paths of *.tar.gz files in archivesDir that
+// have not yet been ingested, sorted oldest-first by filename.
+func (ing *Ingester) ListPending() ([]string, error) {
+	matches, err := filepath.Glob(filepath.Join(ing.archivesDir, "*.tar.gz"))
+	if err != nil {
+		return nil, fmt.Errorf("ingest: glob %s: %w", ing.archivesDir, err)
+	}
+	sort.Strings(matches) // oldest first
+
+	var pending []string
+	for _, path := range matches {
+		already, err := ing.db.IsArchiveIngested(filepath.Base(path))
+		if err != nil {
+			return nil, err
+		}
+		if !already {
+			pending = append(pending, path)
+		}
+	}
+	return pending, nil
 }
 
 // ---------------------------------------------------------------------------
