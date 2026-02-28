@@ -582,14 +582,20 @@ func logRequestSummary(r *http.Request, proxied bool, route string, host string,
 		country = "--"
 	}
 
-	// For WS routes, reuse the WSS-prefixed ID already set on the request.
-	// For all others, generate a typed log ID based on path prefix.
+	// Prefer the typed request ID already set on the request header.
+	// For WS routes, ws.go sets WSS{hex} before handler() runs.
+	// For RPC/API vhost routes, handler() sets RPC/API{hex} based on resolved route.
+	// For early error paths (pre-routing), fall back to path-prefix heuristic.
 	var logID string
 	switch {
 	case strings.HasPrefix(route, "ws") || strings.HasPrefix(route, "websocket"):
 		logID = applog.EnsureRequestID(r) // WSS{hex} set by ws.go
 	default:
-		logID = applog.NewTypedID(pathPrefix(dst))
+		if id := applog.RequestIDFrom(r); id != "" {
+			logID = id
+		} else {
+			logID = applog.NewTypedID(pathPrefix(dst))
+		}
 	}
 
 	// status: map limiter status to lifecycle token
