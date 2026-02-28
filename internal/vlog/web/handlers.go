@@ -584,10 +584,16 @@ func (s *Server) handleAPIProbe(w http.ResponseWriter, r *http.Request) {
 		Error     string `json:"error,omitempty"`
 	}
 
+	// Candidates ordered from most-specific (vProx RPC) to generic fallback.
+	// Prefer 2xx; if no 2xx found, report the first reachable (non-network-error) result.
+	var fallback *probeResult
 	for _, target := range []string{
+		"https://" + host + "/rpc/health",
 		"https://" + host + "/health",
 		"https://" + host + "/",
+		"http://" + host + "/rpc/health",
 		"http://" + host + "/health",
+		"http://" + host + "/",
 	} {
 		start := time.Now()
 		resp, err2 := probeClient.Get(target) //nolint:noctx
@@ -596,13 +602,20 @@ func (s *Server) handleAPIProbe(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		resp.Body.Close()
-		writeJSON(w, http.StatusOK, probeResult{
-			Host:      host,
-			URL:       target,
-			Code:      resp.StatusCode,
-			LatencyMs: lat,
-			OK:        resp.StatusCode < 400,
-		})
+		if resp.StatusCode < 400 {
+			writeJSON(w, http.StatusOK, probeResult{
+				Host: host, URL: target,
+				Code: resp.StatusCode, LatencyMs: lat, OK: true,
+			})
+			return
+		}
+		if fallback == nil {
+			fb := probeResult{Host: host, URL: target, Code: resp.StatusCode, LatencyMs: lat}
+			fallback = &fb
+		}
+	}
+	if fallback != nil {
+		writeJSON(w, http.StatusOK, *fallback)
 		return
 	}
 	writeJSON(w, http.StatusOK, probeResult{

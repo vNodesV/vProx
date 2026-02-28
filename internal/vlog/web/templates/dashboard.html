@@ -285,8 +285,8 @@
       .then(function(d) {
         btn.disabled = false; btn.textContent = 'Probe';
         if (d.error)    { res.style.color = '#ef4444'; res.textContent = '✗ ' + d.error; }
-        else if (d.ok)  { res.style.color = '#22c55e'; res.textContent = '✓ ' + d.code + ' — ' + d.latency_ms + 'ms'; }
-        else            { res.style.color = '#f97316'; res.textContent = '! ' + d.code + ' — ' + d.latency_ms + 'ms'; }
+        else if (d.ok)  { res.style.color = '#22c55e'; res.textContent = '✓ ' + d.code + ' — ' + d.latency_ms + 'ms'; res.title = d.url || ''; }
+        else            { res.style.color = '#f97316'; res.textContent = '! ' + d.code + ' — ' + d.latency_ms + 'ms'; res.title = d.url || ''; }
       })
       .catch(function() {
         btn.disabled = false; btn.textContent = 'Probe';
