@@ -1,7 +1,13 @@
 {{define "title"}}Account — {{.Account.IP}}{{end}}
 {{define "content"}}
+<div class="page-header">
+  <h2>{{.Account.IP}}</h2>
+  <nav class="page-nav">
+    <a href="{{.BasePath}}/">Dashboard</a>
+    <a href="{{.BasePath}}/accounts" class="active">Accounts</a>
+  </nav>
+</div>
 <div class="detail-header">
-  <h2 style="margin:0;">{{.Account.IP}}</h2>
   <span class="badge badge-{{.Account.Status}}">{{.Account.Status}}</span>
   {{if eq .Account.Status "blocked"}}
   <button class="btn-block btn-unblock" onclick="doBlock('{{.Account.IP}}','{{.BasePath}}',false)">⊘ UNBLOCK</button>

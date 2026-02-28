@@ -22,7 +22,7 @@ import (
 	"github.com/vNodesV/vProx/internal/vlog/web"
 )
 
-const version = "0.1.0"
+const version = "1.0.0"
 
 // ---------------------------------------------------------------------------
 // Help / usage

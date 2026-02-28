@@ -1,6 +1,12 @@
 {{define "title"}}Dashboard{{end}}
 {{define "content"}}
-<h2>Dashboard</h2>
+<div class="page-header">
+  <h2>Dashboard</h2>
+  <nav class="page-nav">
+    <a href="{{.BasePath}}/" class="active">Dashboard</a>
+    <a href="{{.BasePath}}/accounts">Accounts</a>
+  </nav>
+</div>
 
 <div class="stats-grid">
   <div class="stat-card">
