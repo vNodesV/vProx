@@ -849,10 +849,10 @@ LastSeen  string `json:"last_seen"`
 // EndpointSummary returns per-host request stats ordered by request count.
 func (d *DB) EndpointSummary(limit int) ([]EndpointStat, error) {
 const q = `
-SELECT host, COUNT(*) AS reqs, COUNT(DISTINCT ip) AS ips, MAX(ts) AS last_seen
+SELECT LOWER(host) AS host, COUNT(*) AS reqs, COUNT(DISTINCT ip) AS ips, MAX(ts) AS last_seen
 FROM request_events
 WHERE host != ''
-GROUP BY host ORDER BY reqs DESC LIMIT ?`
+GROUP BY LOWER(host) ORDER BY reqs DESC LIMIT ?`
 rows, err := d.Query(q, limit)
 if err != nil {
 return nil, fmt.Errorf("endpoint summary: %w", err)
