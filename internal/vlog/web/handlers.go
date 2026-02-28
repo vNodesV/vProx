@@ -589,11 +589,11 @@ func (s *Server) handleAPIProbe(w http.ResponseWriter, r *http.Request) {
 	var fallback *probeResult
 	for _, target := range []string{
 		"https://" + host + "/rpc/status",
-		"https://" + host + "/api/cosmos/base/tendermint/v1beta1/node_info",
+		"https://" + host + "/cosmos/base/tendermint/v1beta1/node_info",
 		"https://" + host + "/rpc/health",
 		"https://" + host + "/",
 		"http://" + host + "/rpc/status",
-		"http://" + host + "/api/cosmos/base/tendermint/v1beta1/node_info",
+		"http://" + host + "/cosmos/base/tendermint/v1beta1/node_info",
 		"http://" + host + "/rpc/health",
 		"http://" + host + "/",
 	} {
