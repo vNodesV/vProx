@@ -490,6 +490,14 @@ func (s *Server) handleAPIChart(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, http.StatusOK, series)
 		return
+	case "requests_over_time":
+		series, err := s.db.RequestsOverTimeMulti(days)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, series)
+		return
 	case "endpoint_summary":
 		stats, err := s.db.EndpointSummary(30)
 		if err != nil {
@@ -508,8 +516,6 @@ func (s *Server) handleAPIChart(w http.ResponseWriter, r *http.Request) {
 		err    error
 	)
 	switch chartType {
-	case "requests_over_time":
-		points, err = s.db.RequestsOverTime(days)
 	case "ratelimits_over_time":
 		points, err = s.db.RateLimitsOverTime(days)
 	case "top_countries":

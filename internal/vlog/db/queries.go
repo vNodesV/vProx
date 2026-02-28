@@ -868,3 +868,49 @@ out = append(out, e)
 }
 return out, rows.Err()
 }
+
+// RequestsOverTimeMulti returns two series for the last days days:
+//   - "New Requests"   — daily request count
+//   - "Total Requests" — true all-time running cumulative at end of each day
+func (d *DB) RequestsOverTimeMulti(days int) (*ChartSeries, error) {
+const q = `
+WITH daily AS (
+SELECT date(ts) AS day, COUNT(*) AS n
+FROM request_events GROUP BY day
+),
+cumul AS (
+SELECT day, n,
+SUM(n) OVER (ORDER BY day ROWS UNBOUNDED PRECEDING) AS total
+FROM daily
+)
+SELECT day, n, total FROM cumul
+WHERE day >= date('now', ?) ORDER BY day`
+rows, err := d.Query(q, fmt.Sprintf("-%d days", days))
+if err != nil {
+return nil, fmt.Errorf("requests over time multi: %w", err)
+}
+defer rows.Close()
+
+var labels []string
+var newVals, totalVals []float64
+for rows.Next() {
+var day string
+var n, total int64
+if err := rows.Scan(&day, &n, &total); err != nil {
+return nil, fmt.Errorf("scan requests over time multi: %w", err)
+}
+labels = append(labels, day)
+newVals = append(newVals, float64(n))
+totalVals = append(totalVals, float64(total))
+}
+if err := rows.Err(); err != nil {
+return nil, err
+}
+return &ChartSeries{
+Labels: labels,
+Series: []SeriesLine{
+{Name: "New Requests", Color: "#22c55e", Values: newVals},
+{Name: "Total Requests", Color: "#a855f7", Values: totalVals},
+},
+}, nil
+}
