@@ -22,7 +22,7 @@ nav strong { font-size: 0.95rem; letter-spacing: 0.02em; }
 nav a      { font-size: 0.82rem; }
 
 /* ── Page nav (replaces title row) ── */
-.page-nav { display: flex; gap: 1.25rem; margin-bottom: 0.75rem; }
+.page-nav { display: flex; justify-content: flex-start; gap: 1.25rem; margin-bottom: 0.75rem; }
 .page-nav a {
   font-size: 1.15rem;
   font-weight: 500;
