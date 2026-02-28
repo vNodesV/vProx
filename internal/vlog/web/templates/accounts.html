@@ -72,7 +72,7 @@
       </td>
       <td class="lastseen-cell">{{.LastSeen}}</td>
       <td class="actions-cell">
-        <button class="btn-investigate{{if .IntelUpdatedAt}} btn-investigate-done{{end}}" onclick="openInvestigate('{{$.BasePath}}', '{{.IP}}')" title="Run TI + OSINT investigation">Investigate</button>
+        <button class="btn-investigate{{if .IntelUpdatedAt}} btn-investigate-done{{end}}" onclick="openInvestigate('{{$.BasePath}}', '{{.IP}}', this)" title="Run TI + OSINT investigation">Investigate</button>
         <a href="{{$.BasePath}}/accounts/{{.IP}}" role="button" class="btn-view outline">View</a>
       </td>
     </tr>
@@ -121,9 +121,11 @@
 <script>
 var investigateDone = false;
 var investigateES = null;
+var investigateBtn = null;
 
-function openInvestigate(base, ip) {
+function openInvestigate(base, ip, btn) {
   investigateDone = false;
+  investigateBtn = btn || null;
   document.getElementById('investigate-overlay').style.display = 'flex';
   document.getElementById('inv-ip-label').textContent = ip;
   document.getElementById('inv-ti-msg').textContent = 'Starting…';
@@ -205,6 +207,9 @@ function finishInvestigate() {
 }
 
 function closeInvestigate() {
+  if (investigateDone && investigateBtn) {
+    investigateBtn.classList.add('btn-investigate-done');
+  }
   document.getElementById('investigate-overlay').style.display = 'none';
 }
 </script>
