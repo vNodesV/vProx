@@ -584,15 +584,17 @@ func (s *Server) handleAPIProbe(w http.ResponseWriter, r *http.Request) {
 		Error     string `json:"error,omitempty"`
 	}
 
-	// Candidates ordered from most-specific (vProx RPC) to generic fallback.
+	// Candidates ordered from most-specific to generic fallback.
 	// Prefer 2xx; if no 2xx found, report the first reachable (non-network-error) result.
 	var fallback *probeResult
 	for _, target := range []string{
+		"https://" + host + "/rpc/status",
+		"https://" + host + "/api/cosmos/base/tendermint/v1beta1/node_info",
 		"https://" + host + "/rpc/health",
-		"https://" + host + "/health",
 		"https://" + host + "/",
+		"http://" + host + "/rpc/status",
+		"http://" + host + "/api/cosmos/base/tendermint/v1beta1/node_info",
 		"http://" + host + "/rpc/health",
-		"http://" + host + "/health",
 		"http://" + host + "/",
 	} {
 		start := time.Now()
