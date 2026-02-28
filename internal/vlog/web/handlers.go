@@ -121,7 +121,15 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleAccountList(w http.ResponseWriter, r *http.Request) {
 	page, pageSize := parsePagination(r, 1, 50)
+	// pageSize=0 means "all": use SQLite LIMIT -1 (no limit), offset=0.
+	limit := pageSize
+	if limit == 0 {
+		limit = -1
+	}
 	offset := (page - 1) * pageSize
+	if pageSize == 0 {
+		offset = 0
+	}
 	search := strings.TrimSpace(r.URL.Query().Get("q"))
 
 	var (
@@ -130,7 +138,7 @@ func (s *Server) handleAccountList(w http.ResponseWriter, r *http.Request) {
 		err      error
 	)
 	if search != "" {
-		accounts, err = s.db.SearchIPAccounts(search, pageSize, offset)
+		accounts, err = s.db.SearchIPAccounts(search, limit, offset)
 		if err != nil {
 			log.Printf("[web] account search: %v", err)
 			http.Error(w, "internal error", http.StatusInternalServerError)
@@ -138,7 +146,7 @@ func (s *Server) handleAccountList(w http.ResponseWriter, r *http.Request) {
 		}
 		total, err = s.db.CountSearchIPAccounts(search)
 	} else {
-		accounts, err = s.db.ListIPAccounts(pageSize, offset)
+		accounts, err = s.db.ListIPAccounts(limit, offset)
 		if err != nil {
 			log.Printf("[web] account list: %v", err)
 			http.Error(w, "internal error", http.StatusInternalServerError)
@@ -551,7 +559,8 @@ func parsePagination(r *http.Request, defaultPage, defaultSize int) (page, pageS
 	if page < 1 {
 		page = 1
 	}
-	if pageSize < 1 || pageSize > 200 {
+	// pageSize=0 means "all" (passed as LIMIT -1 to SQLite); negative values reset to default.
+	if pageSize < 0 || (pageSize > 200 && pageSize != 0) {
 		pageSize = defaultSize
 	}
 	return page, pageSize
