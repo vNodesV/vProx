@@ -143,10 +143,11 @@ func (ing *Ingester) ingestCore(path string) error {
 		entryName := filepath.Base(hdr.Name)
 
 		switch {
-		case entryName == "main.log":
+		case strings.HasSuffix(entryName, ".log"):
+			// Handles main.log and any chain-specific *.log files.
 			data, err := io.ReadAll(tr)
 			if err != nil {
-				return fmt.Errorf("read main.log in %s: %w", name, err)
+				return fmt.Errorf("read %s in %s: %w", entryName, name, err)
 			}
 			for _, line := range strings.Split(string(data), "\n") {
 				if ev := ParseLogLine(line, name, archiveTS); ev != nil {

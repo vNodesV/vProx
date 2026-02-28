@@ -1189,12 +1189,15 @@ func printBackupStatus(cfgPath, statePath, archiveDir string) {
 	}
 }
 
-// resolveBackupExtraFiles builds the list of additional (non-LogPath) absolute
-// paths to include in a backup archive from backup.toml config.
+// resolveBackupExtraFiles returns two lists of absolute file paths:
+//   - rotate: files to snapshot AND truncate (chain *.log files in logsDir).
+//     Auto-discovery adds all *.log files in logsDir except mainLogPath.
+//   - extra: files to snapshot only, not truncated (data, config, non-log files).
+//
 // main.log is always handled via Options.LogPath; it is excluded here.
 // Each config entry may contain comma-separated filenames as a convenience
 // for users who write ["file1,file2"] instead of ["file1","file2"].
-func resolveBackupExtraFiles(cfg backup.BackupConfig, dataDir, logsDir, configDir, mainLogPath string) []string {
+func resolveBackupExtraFiles(cfg backup.BackupConfig, dataDir, logsDir, configDir, mainLogPath string) (rotate, extra []string) {
 	splitNames := func(entries []string) []string {
 		var out []string
 		for _, entry := range entries {
@@ -1208,20 +1211,55 @@ func resolveBackupExtraFiles(cfg backup.BackupConfig, dataDir, logsDir, configDi
 		return out
 	}
 
-	var files []string
-	for _, name := range splitNames(cfg.Backup.Files.Logs) {
-		p := filepath.Join(logsDir, name)
-		if p != filepath.Clean(mainLogPath) {
-			files = append(files, p)
+	mainLogClean := filepath.Clean(mainLogPath)
+
+	// Auto-discover *.log files in logsDir (except main.log).
+	if entries, err := os.ReadDir(logsDir); err == nil {
+		for _, e := range entries {
+			if e.IsDir() || !strings.HasSuffix(e.Name(), ".log") {
+				continue
+			}
+			p := filepath.Join(logsDir, e.Name())
+			if filepath.Clean(p) == mainLogClean {
+				continue
+			}
+			rotate = append(rotate, p)
 		}
 	}
+
+	// Explicit log files from backup.toml: *.log → rotate, others → extra.
+	for _, name := range splitNames(cfg.Backup.Files.Logs) {
+		p := filepath.Join(logsDir, name)
+		if filepath.Clean(p) == mainLogClean {
+			continue
+		}
+		if strings.HasSuffix(name, ".log") {
+			// Avoid duplicates with auto-discovered paths.
+			if !containsString(rotate, p) {
+				rotate = append(rotate, p)
+			}
+		} else {
+			extra = append(extra, p)
+		}
+	}
+
 	for _, name := range splitNames(cfg.Backup.Files.Data) {
-		files = append(files, filepath.Join(dataDir, name))
+		extra = append(extra, filepath.Join(dataDir, name))
 	}
 	for _, name := range splitNames(cfg.Backup.Files.Config) {
-		files = append(files, filepath.Join(configDir, name))
+		extra = append(extra, filepath.Join(configDir, name))
 	}
-	return files
+	return rotate, extra
+}
+
+// containsString reports whether s is in the slice.
+func containsString(slice []string, s string) bool {
+	for _, v := range slice {
+		if v == s {
+			return true
+		}
+	}
+	return false
 }
 
 func hasChainConfigs(dir string) bool {
@@ -1751,14 +1789,15 @@ func main() {
 		if bupLoaded {
 			listSrc = "loaded"
 		}
-		extraFiles := resolveBackupExtraFiles(bupCfg, dataDir, logsDir, configDir, mainLogPath)
+		rotateExtra, extraFiles := resolveBackupExtraFiles(bupCfg, dataDir, logsDir, configDir, mainLogPath)
 		if err := backup.RunOnce(backup.Options{
-			LogPath:    mainLogPath,
-			ArchiveDir: archiveDir,
-			StatePath:  filepath.Join(dataDir, "backup.last"),
-			Method:     "MANUAL",
-			ExtraFiles: extraFiles,
-			ListSource: listSrc,
+			LogPath:     mainLogPath,
+			ArchiveDir:  archiveDir,
+			StatePath:   filepath.Join(dataDir, "backup.last"),
+			Method:      "MANUAL",
+			RotateExtra: rotateExtra,
+			ExtraFiles:  extraFiles,
+			ListSource:  listSrc,
 		}); err != nil {
 			log.Fatalf("Backup failed: %v", err)
 		}
@@ -1977,7 +2016,7 @@ func main() {
 		if bupLoaded {
 			listSrc = "loaded"
 		}
-		extraFiles := resolveBackupExtraFiles(bupCfg, dataDir, logsDir, configDir, mainLogPath)
+		rotateExtra, extraFiles := resolveBackupExtraFiles(bupCfg, dataDir, logsDir, configDir, mainLogPath)
 
 		// Env vars override backup.toml for interval/size (backward compat).
 		intervalDays := envInt("VPROX_BACKUP_INTERVAL_DAYS", bupCfg.Backup.IntervalDays)
@@ -1995,6 +2034,7 @@ func main() {
 			IntervalDays:  intervalDays,
 			MaxBytes:      maxBytes,
 			CheckInterval: time.Duration(checkMin) * time.Minute,
+			RotateExtra:   rotateExtra,
 			ExtraFiles:    extraFiles,
 			ListSource:    listSrc,
 		})

@@ -38,6 +38,11 @@ type Options struct {
 	// Method is "AUTO" or "MANUAL" — written to the log line.
 	Method string
 
+	// RotateExtra is a list of absolute paths that are snapshotted AND
+	// truncated after snapshot (copy-truncate), just like LogPath.
+	// Use for chain-specific *.log files discovered in data/logs/.
+	RotateExtra []string
+
 	// ExtraFiles is a list of absolute paths to include in the archive
 	// (snapshotted but NOT truncated — e.g. access-counts.json).
 	ExtraFiles []string
@@ -107,7 +112,8 @@ func RunOnce(opts Options) error {
 	}
 
 	// Gather source files that exist.
-	allSources := append([]string{logPath}, opts.ExtraFiles...)
+	allSources := append([]string{logPath}, opts.RotateExtra...)
+	allSources = append(allSources, opts.ExtraFiles...)
 	var presentSources []string
 	var totalSize int64
 	for _, p := range allSources {
@@ -146,12 +152,14 @@ func RunOnce(opts Options) error {
 		tmpPaths = append(tmpPaths, copyPath)
 	}
 
-	// Truncate only the primary log file (if it was part of the snapshot).
-	if containsPath(presentSources, logPath) {
-		if err := os.Truncate(logPath, 0); err != nil {
-			_ = cleanupTemps(tmpPaths)
-			emitFailed(id, method, err.Error())
-			return fmt.Errorf("backup: truncate log: %w", err)
+	// Truncate log files after snapshot: primary log + RotateExtra (chain logs).
+	for _, p := range append([]string{logPath}, opts.RotateExtra...) {
+		if containsPath(presentSources, filepath.Clean(p)) {
+			if err := os.Truncate(filepath.Clean(p), 0); err != nil {
+				_ = cleanupTemps(tmpPaths)
+				emitFailed(id, method, err.Error())
+				return fmt.Errorf("backup: truncate %s: %w", filepath.Base(p), err)
+			}
 		}
 	}
 
