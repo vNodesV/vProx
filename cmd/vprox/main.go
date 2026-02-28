@@ -643,6 +643,19 @@ func pathPrefix(dst string) string {
 	}
 }
 
+// routeIDPrefix maps the resolved route to a 3-letter typed ID prefix.
+// WSS is assigned by ws.go before this handler; this covers RPC, API, and fallback.
+func routeIDPrefix(prefix string, isRPCvhost, isRESTvhost bool) string {
+	if isRPCvhost || prefix == rpcPrefix {
+		return "RPC"
+	}
+	if isRESTvhost || prefix == restPrefix || prefix == apiPrefix ||
+		prefix == grpcPrefix || prefix == grpcWebPrefix {
+		return "API"
+	}
+	return "REQ"
+}
+
 func loadAccessCounts(path string) {
 	if strings.TrimSpace(path) == "" {
 		return
@@ -1310,8 +1323,9 @@ func inList(list []string, needle string) bool {
 
 func handler(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
-	requestID := applog.EnsureRequestID(r)
-	applog.SetResponseRequestID(w, requestID)
+	// Preserve any correlation ID forwarded by an upstream proxy.
+	// Typed ID (RPC/API/REQ) is assigned after routing is determined below.
+	forwardedID := applog.RequestIDFrom(r)
 	host := normalizeHost(r.Host)
 
 	chain, ok := chains[host]
@@ -1435,6 +1449,18 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Assign typed request ID now that the route is known.
+	// Preserve a forwarded correlation ID from an upstream proxy (e.g. Apache).
+	// Otherwise generate RPC/API/REQ based on route type.
+	var requestID string
+	if forwardedID != "" {
+		requestID = forwardedID
+	} else {
+		requestID = applog.NewTypedID(routeIDPrefix(routePrefix, isRPCvhost, isRESTvhost))
+		r.Header.Set(applog.RequestIDHeader, requestID)
+	}
+	applog.SetResponseRequestID(w, requestID)
+
 	if r.URL.RawQuery != "" {
 		targetURL += "?" + r.URL.RawQuery
 	}
@@ -1447,7 +1473,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.Header = r.Header.Clone()
-	// Ensure correlation id is forwarded to upstream.
+	// Forward typed correlation ID to upstream.
 	if requestID != "" {
 		req.Header.Set(applog.RequestIDHeader, requestID)
 	}
