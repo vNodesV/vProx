@@ -279,17 +279,39 @@
   window.loadChart    = loadChart;
   window.loadEndpoints = loadEndpoints;
 
+  function fmtLoc(loc, label) {
+    var icon, col;
+    if (!loc) return '<span style="color:#6b7280">' + label + ':?</span>';
+    if (loc.ok)          { icon = '✓'; col = '#22c55e'; }
+    else if (loc.error)  { icon = '✗'; col = '#ef4444'; }
+    else                 { icon = '!'; col = '#f97316'; }
+    var txt = label + ':' + icon;
+    if (loc.ok || loc.code) txt += ' ' + (loc.code || '') + (loc.latency_ms ? ' ' + loc.latency_ms + 'ms' : '');
+    if (loc.error && !loc.ok) txt += ' ' + loc.error;
+    if (loc.node) txt += ' (' + loc.node + ')';
+    return '<span style="color:' + col + '">' + txt + '</span>';
+  }
+
   window.probeHost = function(btn, host) {
     btn.disabled = true; btn.textContent = '…';
     var res = btn.parentElement.querySelector('.probe-result');
-    res.textContent = '';
+    res.innerHTML = '';
     fetch(BASE + '/api/v1/probe?host=' + encodeURIComponent(host))
       .then(function(r) { return r.json(); })
       .then(function(d) {
         btn.disabled = false; btn.textContent = 'Probe';
-        if (d.error)    { res.style.color = '#ef4444'; res.textContent = '✗ ' + d.error; }
-        else if (d.ok)  { res.style.color = '#22c55e'; res.textContent = '✓ ' + d.code + ' — ' + d.latency_ms + 'ms'; res.title = d.url || ''; }
-        else            { res.style.color = '#f97316'; res.textContent = '! ' + d.code + ' — ' + d.latency_ms + 'ms'; res.title = d.url || ''; }
+        if (d.local !== undefined) {
+          // multi-location response
+          res.style.cssText = 'margin-left:.5rem;font-size:.72rem;display:inline-flex;gap:.6rem;align-items:center';
+          res.innerHTML = fmtLoc(d.local, 'Local') + fmtLoc(d.ca, 'CA') + fmtLoc(d.ww, 'WW');
+          res.title = d.url || '';
+        } else {
+          // legacy single-location fallback
+          res.style.cssText = 'margin-left:.5rem;font-size:.75rem';
+          if (d.error)   { res.style.color = '#ef4444'; res.textContent = '✗ ' + d.error; }
+          else if (d.ok) { res.style.color = '#22c55e'; res.textContent = '✓ ' + d.code + ' — ' + d.latency_ms + 'ms'; res.title = d.url || ''; }
+          else           { res.style.color = '#f97316'; res.textContent = '! ' + d.code + ' — ' + d.latency_ms + 'ms'; res.title = d.url || ''; }
+        }
       })
       .catch(function() {
         btn.disabled = false; btn.textContent = 'Probe';

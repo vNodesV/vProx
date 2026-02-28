@@ -5,10 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math/rand"
 	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/vNodesV/vProx/internal/vlog/db"
@@ -542,19 +545,148 @@ func (s *Server) handleAPIChart(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, points)
 }
 
+// ---------------------------------------------------------------------------
+// Multi-location probe
+// ---------------------------------------------------------------------------
+
+// caProbeNodes and wwProbeNodes are check-host.net node IDs used for external
+// probing. One is chosen at random each probe invocation.
+var caProbeNodes = []string{
+	"ca1.node.check-host.net",
+	"ca2.node.check-host.net",
+}
+
+var wwProbeNodes = []string{
+	"de1.node.check-host.net",
+	"nl1.node.check-host.net",
+	"fr1.node.check-host.net",
+	"gb1.node.check-host.net",
+	"fi1.node.check-host.net",
+	"jp1.node.check-host.net",
+	"sg1.node.check-host.net",
+	"us1.node.check-host.net",
+	"us2.node.check-host.net",
+	"au1.node.check-host.net",
+	"br1.node.check-host.net",
+	"in1.node.check-host.net",
+}
+
+type locResult struct {
+	Code      int    `json:"code,omitempty"`
+	LatencyMs int64  `json:"latency_ms,omitempty"`
+	OK        bool   `json:"ok"`
+	Error     string `json:"error,omitempty"`
+	Node      string `json:"node,omitempty"`
+}
+
+type multiProbeResult struct {
+	Host  string    `json:"host"`
+	URL   string    `json:"url"`
+	Local locResult `json:"local"`
+	CA    locResult `json:"ca"`
+	WW    locResult `json:"ww"`
+}
+
+// checkHostProbe submits an HTTP probe via check-host.net and polls for the
+// result. Blocks for up to ~10 s. ctx cancellation is respected.
+func checkHostProbe(ctx context.Context, targetURL, node string) locResult {
+	shortNode := strings.TrimSuffix(node, ".node.check-host.net")
+	client := &http.Client{Timeout: 5 * time.Second}
+
+	// Submit.
+	q := url.Values{"host": {targetURL}, "node": {node}}
+	submitURL := "https://check-host.net/check-http?" + q.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, submitURL, nil)
+	if err != nil {
+		return locResult{Error: "bad req", Node: shortNode}
+	}
+	req.Header.Set("Accept", "application/json")
+	resp, err := client.Do(req)
+	if err != nil {
+		return locResult{Error: "submit failed", Node: shortNode}
+	}
+	var submit struct {
+		RequestID string `json:"request_id"`
+	}
+	json.NewDecoder(resp.Body).Decode(&submit) //nolint:errcheck
+	resp.Body.Close()
+	if submit.RequestID == "" {
+		return locResult{Error: "no request id", Node: shortNode}
+	}
+
+	// Poll until result or deadline.
+	pollURL := "https://check-host.net/check-result/" + submit.RequestID
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		select {
+		case <-ctx.Done():
+			return locResult{Error: "cancelled", Node: shortNode}
+		case <-time.After(2 * time.Second):
+		}
+		req2, _ := http.NewRequestWithContext(ctx, http.MethodGet, pollURL, nil)
+		req2.Header.Set("Accept", "application/json")
+		resp2, err2 := client.Do(req2)
+		if err2 != nil {
+			continue
+		}
+		var result map[string]json.RawMessage
+		decErr := json.NewDecoder(resp2.Body).Decode(&result)
+		resp2.Body.Close()
+		if decErr != nil {
+			continue
+		}
+		raw, ok := result[node]
+		if !ok || string(raw) == "null" {
+			continue // not ready yet
+		}
+		// Result shape: [[status(1/0), http_code, msg, ...time_floats...]]
+		var rows [][]json.RawMessage
+		if err4 := json.Unmarshal(raw, &rows); err4 != nil || len(rows) == 0 || len(rows[0]) == 0 {
+			return locResult{Error: "parse error", Node: shortNode}
+		}
+		row := rows[0]
+		var status float64
+		if json.Unmarshal(row[0], &status) != nil {
+			return locResult{Error: "bad status", Node: shortNode}
+		}
+		if status == 1 {
+			var code int
+			if len(row) > 1 {
+				json.Unmarshal(row[1], &code) //nolint:errcheck
+			}
+			var latMs int64
+			for i := 2; i < len(row); i++ { // take last numeric time value
+				var t float64
+				if json.Unmarshal(row[i], &t) == nil && t > 0 {
+					latMs = int64(t * 1000)
+				}
+			}
+			return locResult{OK: true, Code: code, LatencyMs: latMs, Node: shortNode}
+		}
+		var errMsg string
+		if len(row) > 2 {
+			json.Unmarshal(row[2], &errMsg) //nolint:errcheck
+		}
+		if errMsg == "" {
+			errMsg = "probe error"
+		}
+		return locResult{Error: errMsg, Node: shortNode}
+	}
+	return locResult{Error: "timeout", Node: shortNode}
+}
+
 func (s *Server) handleAPIProbe(w http.ResponseWriter, r *http.Request) {
 	host := strings.TrimSpace(r.URL.Query().Get("host"))
 	if host == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "host required"})
 		return
 	}
-	// Reject anything that looks like a URL or contains path separators.
 	if strings.ContainsAny(host, "/:?#@") {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid host"})
 		return
 	}
 
-	// Only allow hosts that appear in ingested data (prevents arbitrary SSRF).
+	// SSRF guard — only hosts present in ingested data.
 	stats, err := s.db.EndpointSummary(500)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
@@ -572,21 +704,42 @@ func (s *Server) handleAPIProbe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Try HTTPS first, then HTTP. Probe the /health endpoint (CometBFT RPC),
-	// fall back to / if no 2xx on /health.
-	probeClient := &http.Client{Timeout: 5 * time.Second}
-	type probeResult struct {
-		Host      string `json:"host"`
-		URL       string `json:"url"`
-		Code      int    `json:"code"`
-		LatencyMs int64  `json:"latency_ms"`
-		OK        bool   `json:"ok"`
-		Error     string `json:"error,omitempty"`
+	ctx, cancel := context.WithTimeout(r.Context(), 14*time.Second)
+	defer cancel()
+
+	// Step 1: local probe — discovers the best reachable URL.
+	localR, bestURL := localProbe(host)
+
+	// Step 2: fire external probes concurrently using the discovered URL.
+	var caR, wwR locResult
+	if bestURL == "" {
+		caR = locResult{Error: "no reachable URL"}
+		wwR = locResult{Error: "no reachable URL"}
+	} else {
+		caNode := caProbeNodes[rand.Intn(len(caProbeNodes))]
+		wwNode := wwProbeNodes[rand.Intn(len(wwProbeNodes))]
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() { defer wg.Done(); caR = checkHostProbe(ctx, bestURL, caNode) }()
+		go func() { defer wg.Done(); wwR = checkHostProbe(ctx, bestURL, wwNode) }()
+		wg.Wait()
 	}
 
-	// Candidates ordered from most-specific to generic fallback.
-	// Prefer 2xx; if no 2xx found, report the first reachable (non-network-error) result.
-	var fallback *probeResult
+	writeJSON(w, http.StatusOK, multiProbeResult{
+		Host:  host,
+		URL:   bestURL,
+		Local: localR,
+		CA:    caR,
+		WW:    wwR,
+	})
+}
+
+// localProbe tries candidate URLs for host in order, returning the first 2xx
+// result (or first reachable non-2xx as fallback) plus the URL that was used.
+func localProbe(host string) (locResult, string) {
+	client := &http.Client{Timeout: 5 * time.Second}
+	var fallbackR *locResult
+	var fallbackURL string
 	for _, target := range []string{
 		"https://" + host + "/rpc/status",
 		"https://" + host + "/cosmos/base/tendermint/v1beta1/node_info",
@@ -598,32 +751,26 @@ func (s *Server) handleAPIProbe(w http.ResponseWriter, r *http.Request) {
 		"http://" + host + "/",
 	} {
 		start := time.Now()
-		resp, err2 := probeClient.Get(target) //nolint:noctx
+		resp, err := client.Get(target) //nolint:noctx
 		lat := time.Since(start).Milliseconds()
-		if err2 != nil {
+		if err != nil {
 			continue
 		}
+		code := resp.StatusCode
 		resp.Body.Close()
-		if resp.StatusCode < 400 {
-			writeJSON(w, http.StatusOK, probeResult{
-				Host: host, URL: target,
-				Code: resp.StatusCode, LatencyMs: lat, OK: true,
-			})
-			return
+		if code < 400 {
+			return locResult{OK: true, Code: code, LatencyMs: lat}, target
 		}
-		if fallback == nil {
-			fb := probeResult{Host: host, URL: target, Code: resp.StatusCode, LatencyMs: lat}
-			fallback = &fb
+		if fallbackR == nil {
+			r := locResult{Code: code, LatencyMs: lat}
+			fallbackR = &r
+			fallbackURL = target
 		}
 	}
-	if fallback != nil {
-		writeJSON(w, http.StatusOK, *fallback)
-		return
+	if fallbackR != nil {
+		return *fallbackR, fallbackURL
 	}
-	writeJSON(w, http.StatusOK, probeResult{
-		Host:  host,
-		Error: "unreachable",
-	})
+	return locResult{Error: "unreachable"}, ""
 }
 
 func (s *Server) handleAPIBlock(w http.ResponseWriter, r *http.Request) {
