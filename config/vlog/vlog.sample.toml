@@ -5,6 +5,12 @@
 # TCP port for the embedded vLog web UI. Default: 8889.
 port = 8889
 
+# IP address vLog binds to. Default: "127.0.0.1" (localhost only — most secure).
+# → If Apache is on the SAME machine: keep 127.0.0.1, point ProxyPass to http://127.0.0.1:8889/
+# → If Apache is on a DIFFERENT machine: set to this server's LAN IP (e.g. "10.0.0.65")
+#   and restrict with UFW: ufw allow from <apache-ip> to any port 8889
+# bind_address = "127.0.0.1"
+
 # URL base path when vLog is served behind a reverse proxy at a sub-path.
 # Example: set to "/vlog" if Apache proxies https://example.com/vlog → vLog.
 # Leave empty (default) when vLog is served at the root path.

@@ -137,7 +137,7 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 	writeTimeout := time.Duration(cfg.VLog.Server.WriteTimeoutSec) * time.Second
 
 	s.httpSrv = &http.Server{
-		Addr:         fmt.Sprintf("127.0.0.1:%d", cfg.VLog.Port),
+		Addr:         fmt.Sprintf("%s:%d", cfg.VLog.BindAddress, cfg.VLog.Port),
 		Handler:      securityHeaders(mux),
 		ReadTimeout:  readTimeout,
 		WriteTimeout: writeTimeout,
@@ -237,7 +237,7 @@ func securityHeaders(next http.Handler) http.Handler {
 		h.Set("Content-Security-Policy",
 			"default-src 'self';"+
 				" script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com;"+
-				" style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;"+
+				" style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com;"+
 				" font-src 'self' https://fonts.gstatic.com;"+
 				" img-src 'self' data:;"+
 				" connect-src 'self'")

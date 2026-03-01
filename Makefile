@@ -303,13 +303,32 @@ config-vlog: dirs
 			echo "  Edit $(CFG_DIR)/vlog/vlog.toml to set your API keys."; \
 		else \
 			echo "✓ $(CFG_DIR)/vlog/vlog.toml already exists — checking for missing fields..."; \
-			if ! grep -q "api_key" "$(CFG_DIR)/vlog/vlog.toml"; then \
+			if ! grep -qE "^[[:space:]]*api_key[[:space:]]*=" "$(CFG_DIR)/vlog/vlog.toml" || grep -qE "^[[:space:]]*#.*api_key" "$(CFG_DIR)/vlog/vlog.toml"; then \
 				echo ""; \
-				echo "  ⚠ ACTION REQUIRED: api_key is missing from your vlog.toml."; \
-				echo "    Block/unblock endpoints are disabled until you add it."; \
-				echo "    Generate a key:  openssl rand -hex 32"; \
-				echo "    Then add to $(CFG_DIR)/vlog/vlog.toml under [vlog]:"; \
-				echo "      api_key = \"your-generated-key\""; \
+				echo "┌─────────────────────────────────────────────────────────────────┐"; \
+				echo "│  ⚠  ACTION REQUIRED — vLog API Key not configured               │"; \
+				echo "├─────────────────────────────────────────────────────────────────┤"; \
+				echo "│  vLog uses HMAC-SHA256 to authenticate block/unblock requests.  │"; \
+				echo "│  These endpoints manipulate UFW firewall rules and MUST be      │"; \
+				echo "│  protected with a secret key before use.                        │"; \
+				echo "│                                                                 │"; \
+				echo "│  1. Generate your key:                                          │"; \
+				echo "│       openssl rand -hex 32                                      │"; \
+				echo "│                                                                 │"; \
+				echo "│  2. Add it to your config:                                      │"; \
+				echo "│       $(CFG_DIR)/vlog/vlog.toml"; \
+				echo "│     under [vlog]:                                               │"; \
+				echo "│       api_key = \"your-generated-key\"                            │"; \
+				echo "│                                                                 │"; \
+				echo "│  Until this is set, block/unblock endpoints return 503.         │"; \
+				echo "└─────────────────────────────────────────────────────────────────┘"; \
+				echo ""; \
+			fi; \
+			if ! grep -qE "^[[:space:]]*base_path[[:space:]]*=" "$(CFG_DIR)/vlog/vlog.toml"; then \
+				echo "  ℹ  base_path not set — if vLog is served at a sub-path (e.g. /vlog)"; \
+				echo "     add to $(CFG_DIR)/vlog/vlog.toml under [vlog]:"; \
+				echo "       base_path = \"/vlog\""; \
+				echo "     See .vscode/vlog.apache2 for the matching Apache config."; \
 				echo ""; \
 			fi; \
 		fi; \

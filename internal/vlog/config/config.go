@@ -47,6 +47,14 @@ type VLogSection struct {
 	// Server holds HTTP server tuning parameters.
 	Server ServerConfig `toml:"server"`
 
+	// BindAddress is the IP address vLog binds to. Default: "127.0.0.1" (localhost only).
+	// If Apache runs on the same machine, leave this as 127.0.0.1 and point
+	// your Apache ProxyPass to http://127.0.0.1:<port>/.
+	// If Apache is on a different machine, set this to the server's LAN IP
+	// (e.g. "10.0.0.65") and restrict access with UFW:
+	//   ufw allow from <apache-ip> to any port <port>
+	BindAddress string `toml:"bind_address"`
+
 	// Auth holds login credentials for the web dashboard.
 	Auth AuthConfig `toml:"auth"`
 }
@@ -167,6 +175,9 @@ func Load(path string) (Config, error) {
 	}
 	if cfg.VLog.Auth.Username == "" {
 		cfg.VLog.Auth.Username = "admin"
+	}
+	if strings.TrimSpace(cfg.VLog.BindAddress) == "" {
+		cfg.VLog.BindAddress = "127.0.0.1"
 	}
 
 	return cfg, nil
