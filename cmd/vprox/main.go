@@ -1823,7 +1823,7 @@ func main() {
 		if p, err := loadPorts(filepath.Join(configDir, "ports.toml")); err == nil && p.VLogURL != "" {
 			vlogURL = p.VLogURL
 		}
-		go notifyVLog(vlogURL)
+		notifyVLog(vlogURL)
 		return
 	}
 
@@ -2145,8 +2145,8 @@ func main() {
 	}
 }
 
-// notifyVLog sends a non-blocking POST to vLog's ingest endpoint after a successful backup.
-// Called in a goroutine; errors are silently ignored (vLog may not be running).
+// notifyVLog sends a POST to vLog's ingest endpoint after a successful backup.
+// Errors are silently ignored (vLog may not be running). The HTTP client has a 5s timeout.
 func notifyVLog(vlogURL string) {
 	if vlogURL == "" {
 		return

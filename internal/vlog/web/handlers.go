@@ -26,7 +26,8 @@ import (
 // pageBase is embedded in every template data struct to provide common
 // values available to all templates, such as the URL base path.
 type pageBase struct {
-	BasePath string
+	BasePath    string
+	AuthEnabled bool
 }
 
 type dashboardData struct {
@@ -87,6 +88,14 @@ func buildPortInfo(openPortsJSON string) []portInfo {
 	return out
 }
 
+// newPageBase returns a pageBase initialised from server config.
+func (s *Server) newPageBase() pageBase {
+	return pageBase{
+		BasePath:    s.cfg.VLog.BasePath,
+		AuthEnabled: s.authEnabled(),
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Page handlers
 // ---------------------------------------------------------------------------
@@ -113,7 +122,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := dashboardData{
-		pageBase:        pageBase{BasePath: s.cfg.VLog.BasePath},
+		pageBase:        s.newPageBase(),
 		Stats:           stats,
 		BlockedAccounts: blocked,
 	}
@@ -164,7 +173,7 @@ func (s *Server) handleAccountList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := accountListData{
-		pageBase: pageBase{BasePath: s.cfg.VLog.BasePath},
+		pageBase: s.newPageBase(),
 		Accounts: accounts,
 		Total:    total,
 		Page:     page,
@@ -212,7 +221,7 @@ func (s *Server) handleAccountDetail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := accountDetailData{
-		pageBase:       pageBase{BasePath: s.cfg.VLog.BasePath},
+		pageBase:       s.newPageBase(),
 		Account:        account,
 		RecentRequests: reqs,
 		RecentLimits:   rls,
@@ -232,7 +241,8 @@ func (s *Server) handleAccountDetail(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleAPIIngest(w http.ResponseWriter, _ *http.Request) {
 	processed, err := s.ingester.IngestAll()
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		log.Printf("[web] internal error: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]int{"processed": processed})
@@ -244,7 +254,8 @@ func (s *Server) handleAPIAccountList(w http.ResponseWriter, r *http.Request) {
 
 	accounts, err := s.db.ListIPAccounts(limit, offset)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		log.Printf("[web] internal error: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 		return
 	}
 	writeJSON(w, http.StatusOK, accounts)
@@ -259,7 +270,8 @@ func (s *Server) handleAPIAccountDetail(w http.ResponseWriter, r *http.Request) 
 
 	account, err := s.db.GetIPAccount(ip)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		log.Printf("[web] internal error: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 		return
 	}
 	if account == nil {
@@ -271,8 +283,12 @@ func (s *Server) handleAPIAccountDetail(w http.ResponseWriter, r *http.Request) 
 
 func (s *Server) handleAPIEnrich(w http.ResponseWriter, r *http.Request) {
 	ip := r.PathValue("ip")
-	if ip == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "missing ip"})
+	if net.ParseIP(ip) == nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid IP"})
+		return
+	}
+	if isPrivateIP(ip) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid IP"})
 		return
 	}
 
@@ -293,6 +309,7 @@ func (s *Server) handleAPIEnrich(w http.ResponseWriter, r *http.Request) {
 
 	flusher, canFlush := w.(http.Flusher)
 
+	var wMu sync.Mutex
 	flush := func() {
 		if canFlush {
 			flusher.Flush()
@@ -310,8 +327,10 @@ func (s *Server) handleAPIEnrich(w http.ResponseWriter, r *http.Request) {
 			case <-kaDone:
 				return
 			case <-t.C:
+				wMu.Lock()
 				fmt.Fprintf(w, ": ping\n\n")
 				flush()
+				wMu.Unlock()
 			}
 		}
 	}()
@@ -319,8 +338,10 @@ func (s *Server) handleAPIEnrich(w http.ResponseWriter, r *http.Request) {
 
 	emit := func(p intel.EnrichProgress) {
 		data, _ := json.Marshal(p)
+		wMu.Lock()
 		fmt.Fprintf(w, "data: %s\n\n", data)
 		flush()
+		wMu.Unlock()
 	}
 
 	// Use context.Background() so provider saves complete even if the Apache
@@ -332,8 +353,12 @@ func (s *Server) handleAPIEnrich(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleAPIosint(w http.ResponseWriter, r *http.Request) {
 	ip := r.PathValue("ip")
-	if ip == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "missing ip"})
+	if net.ParseIP(ip) == nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid IP"})
+		return
+	}
+	if isPrivateIP(ip) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid IP"})
 		return
 	}
 
@@ -353,6 +378,7 @@ func (s *Server) handleAPIosint(w http.ResponseWriter, r *http.Request) {
 
 	flusher, canFlush := w.(http.Flusher)
 
+	var wMu sync.Mutex
 	flush := func() {
 		if canFlush {
 			flusher.Flush()
@@ -370,8 +396,10 @@ func (s *Server) handleAPIosint(w http.ResponseWriter, r *http.Request) {
 			case <-kaDone:
 				return
 			case <-t.C:
+				wMu.Lock()
 				fmt.Fprintf(w, ": ping\n\n")
 				flush()
+				wMu.Unlock()
 			}
 		}
 	}()
@@ -379,8 +407,10 @@ func (s *Server) handleAPIosint(w http.ResponseWriter, r *http.Request) {
 
 	emit := func(p intel.EnrichProgress) {
 		data, _ := json.Marshal(p)
+		wMu.Lock()
 		fmt.Fprintf(w, "data: %s\n\n", data)
 		flush()
+		wMu.Unlock()
 	}
 
 	// Use context.Background() so the OSINT scan completes and saves even if
@@ -396,6 +426,10 @@ func (s *Server) handleAPIosint(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleAPIInvestigate(w http.ResponseWriter, r *http.Request) {
 	ip := r.PathValue("ip")
 	if net.ParseIP(ip) == nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid IP"})
+		return
+	}
+	if isPrivateIP(ip) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid IP"})
 		return
 	}
@@ -415,6 +449,7 @@ func (s *Server) handleAPIInvestigate(w http.ResponseWriter, r *http.Request) {
 
 	flusher, canFlush := w.(http.Flusher)
 
+	var wMu sync.Mutex
 	flush := func() {
 		if canFlush {
 			flusher.Flush()
@@ -434,8 +469,10 @@ func (s *Server) handleAPIInvestigate(w http.ResponseWriter, r *http.Request) {
 			case <-kaDone:
 				return
 			case <-t.C:
+				wMu.Lock()
 				fmt.Fprintf(w, ": ping\n\n")
 				flush()
+				wMu.Unlock()
 			}
 		}
 	}()
@@ -449,8 +486,10 @@ func (s *Server) handleAPIInvestigate(w http.ResponseWriter, r *http.Request) {
 				p.Pct += 50 // shift OSINT phase to 50-100
 			}
 			data, _ := json.Marshal(p)
+			wMu.Lock()
 			fmt.Fprintf(w, "data: %s\n\n", data)
 			flush()
+			wMu.Unlock()
 		}
 	}
 
@@ -469,7 +508,8 @@ func (s *Server) handleAPIInvestigate(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleAPIStats(w http.ResponseWriter, _ *http.Request) {
 	stats, err := s.db.Stats()
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		log.Printf("[web] internal error: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 		return
 	}
 	writeJSON(w, http.StatusOK, stats)
@@ -488,7 +528,8 @@ func (s *Server) handleAPIChart(w http.ResponseWriter, r *http.Request) {
 	case "ips_over_time":
 		series, err := s.db.IPsOverTimeMulti(days)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			log.Printf("[web] internal error: %v", err)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 			return
 		}
 		writeJSON(w, http.StatusOK, series)
@@ -496,7 +537,8 @@ func (s *Server) handleAPIChart(w http.ResponseWriter, r *http.Request) {
 	case "requests_over_time":
 		series, err := s.db.RequestsOverTimeMulti(days)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			log.Printf("[web] internal error: %v", err)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 			return
 		}
 		writeJSON(w, http.StatusOK, series)
@@ -504,7 +546,8 @@ func (s *Server) handleAPIChart(w http.ResponseWriter, r *http.Request) {
 	case "endpoint_summary":
 		stats, err := s.db.EndpointSummary(30)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			log.Printf("[web] internal error: %v", err)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 			return
 		}
 		if stats == nil {
@@ -536,7 +579,8 @@ func (s *Server) handleAPIChart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		log.Printf("[web] internal error: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 		return
 	}
 	if points == nil {
@@ -696,7 +740,8 @@ func (s *Server) handleAPIProbe(w http.ResponseWriter, r *http.Request) {
 	// SSRF guard — only hosts present in ingested data.
 	stats, err := s.db.EndpointSummary(500)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		log.Printf("[web] internal error: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 		return
 	}
 	known := false
@@ -794,7 +839,8 @@ func (s *Server) handleAPIBlock(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.db.BlockIP(ip, reason); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		log.Printf("[web] internal error: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 		return
 	}
 
@@ -820,7 +866,8 @@ func (s *Server) handleAPIUnblock(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.db.UnblockIP(ip); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		log.Printf("[web] internal error: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 		return
 	}
 
@@ -849,6 +896,36 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	}
 }
 
+// isPrivateIP reports whether the given IP string is a loopback, link-local,
+// or private RFC1918/RFC4193 address. Used to prevent SSRF attacks.
+func isPrivateIP(ipStr string) bool {
+	ip := net.ParseIP(ipStr)
+	if ip == nil {
+		return false
+	}
+	private := []string{
+		"127.0.0.0/8",    // loopback
+		"::1/128",        // IPv6 loopback
+		"10.0.0.0/8",     // RFC1918
+		"172.16.0.0/12",  // RFC1918
+		"192.168.0.0/16", // RFC1918
+		"169.254.0.0/16", // link-local
+		"fe80::/10",      // IPv6 link-local
+		"fc00::/7",       // IPv6 unique local (RFC4193)
+		"100.64.0.0/10",  // shared address space (RFC6598)
+	}
+	for _, cidr := range private {
+		_, network, err := net.ParseCIDR(cidr)
+		if err != nil {
+			continue
+		}
+		if network.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
 func queryInt(r *http.Request, key string, fallback int) int {
 	raw := strings.TrimSpace(r.URL.Query().Get(key))
 	if raw == "" {
@@ -872,4 +949,72 @@ func parsePagination(r *http.Request, defaultPage, defaultSize int) (page, pageS
 		pageSize = defaultSize
 	}
 	return page, pageSize
+}
+
+// ---------------------------------------------------------------------------
+// Auth handlers
+// ---------------------------------------------------------------------------
+
+// handleLoginPage renders the login form.
+func (s *Server) handleLoginPage(w http.ResponseWriter, r *http.Request) {
+	// If auth not configured, redirect to dashboard.
+	if !s.authEnabled() {
+		http.Redirect(w, r, s.cfg.VLog.BasePath+"/", http.StatusFound)
+		return
+	}
+	// If already logged in, redirect to dashboard.
+	if cookie, err := r.Cookie("vlog_session"); err == nil && s.validSession(cookie.Value) {
+		http.Redirect(w, r, s.cfg.VLog.BasePath+"/", http.StatusFound)
+		return
+	}
+	data := struct {
+		BasePath string
+		Error    string
+	}{
+		BasePath: s.cfg.VLog.BasePath,
+		Error:    r.URL.Query().Get("error"),
+	}
+	if err := s.pages["login.html"].Execute(w, data); err != nil {
+		log.Printf("[web] login render: %v", err)
+	}
+}
+
+// handleLoginSubmit processes login form submission.
+func (s *Server) handleLoginSubmit(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	username := r.FormValue("username")
+	password := r.FormValue("password")
+
+	if !s.checkCredentials(username, password) {
+		http.Redirect(w, r, s.cfg.VLog.BasePath+"/login?error=invalid", http.StatusFound)
+		return
+	}
+
+	token := s.newSession()
+	http.SetCookie(w, &http.Cookie{
+		Name:     "vlog_session",
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteStrictMode,
+		MaxAge:   86400, // 24h
+	})
+	http.Redirect(w, r, s.cfg.VLog.BasePath+"/", http.StatusFound)
+}
+
+// handleLogout invalidates the session and redirects to login.
+func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
+	if cookie, err := r.Cookie("vlog_session"); err == nil {
+		s.deleteSession(cookie.Value)
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:   "vlog_session",
+		Value:  "",
+		Path:   "/",
+		MaxAge: -1,
+	})
+	http.Redirect(w, r, s.cfg.VLog.BasePath+"/login", http.StatusFound)
 }

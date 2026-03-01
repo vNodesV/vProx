@@ -26,6 +26,10 @@ type VLogSection struct {
 	// Leave empty (default) when served at the root path.
 	BasePath string `toml:"base_path"`
 
+	// APIKey is a shared secret required for mutating API endpoints (block/unblock).
+	// If empty, mutating endpoints are disabled. Set via vlog.toml [vlog] api_key.
+	APIKey string `toml:"api_key"`
+
 	// DBPath is the path to the SQLite database file.
 	// Default: $VPROX_HOME/data/vlog.db
 	DBPath string `toml:"db_path"`
@@ -42,6 +46,9 @@ type VLogSection struct {
 
 	// Server holds HTTP server tuning parameters.
 	Server ServerConfig `toml:"server"`
+
+	// Auth holds login credentials for the web dashboard.
+	Auth AuthConfig `toml:"auth"`
 }
 
 // IntelConfig controls automatic IP intelligence enrichment.
@@ -64,6 +71,18 @@ type IntelKeys struct {
 	AbuseIPDB  string `toml:"abuseipdb"`
 	VirusTotal string `toml:"virustotal"`
 	Shodan     string `toml:"shodan"`
+}
+
+// AuthConfig holds dashboard login credentials.
+// If PasswordHash is empty, the dashboard is accessible without login.
+type AuthConfig struct {
+	// Username is the login username (default: "admin").
+	Username string `toml:"username"`
+
+	// PasswordHash is a bcrypt hash of the password.
+	// Generate with: htpasswd -nbBC 12 admin yourpassword | cut -d: -f2
+	// Or: vlog setup (wizard, coming in v1.3.0)
+	PasswordHash string `toml:"password_hash"`
 }
 
 // ServerConfig holds HTTP server timeout parameters.
@@ -92,6 +111,9 @@ func DefaultConfig(home string) Config {
 			Server: ServerConfig{
 				ReadTimeoutSec:  30,
 				WriteTimeoutSec: 30,
+			},
+			Auth: AuthConfig{
+				Username: "admin",
 			},
 		},
 	}
@@ -142,6 +164,9 @@ func Load(path string) (Config, error) {
 	}
 	if cfg.VLog.Server.WriteTimeoutSec <= 0 {
 		cfg.VLog.Server.WriteTimeoutSec = 30
+	}
+	if cfg.VLog.Auth.Username == "" {
+		cfg.VLog.Auth.Username = "admin"
 	}
 
 	return cfg, nil

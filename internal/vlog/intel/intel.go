@@ -49,12 +49,15 @@ func NewEnricher(cfg config.IntelConfig, d *db.DB) *Enricher {
 	rps := float64(rpm) / 60.0
 
 	return &Enricher{
-		cfg:        cfg,
-		db:         d,
-		httpClient: &http.Client{Timeout: 10 * time.Second},
-		limiter:    rate.NewLimiter(rate.Limit(rps), 1), // 1 token = 1 investigation
-		queue:      make(chan string, 100),
-		done:       make(chan struct{}),
+		cfg: cfg,
+		db:  d,
+		httpClient: &http.Client{
+			Timeout:       10 * time.Second,
+			CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse },
+		},
+		limiter: rate.NewLimiter(rate.Limit(rps), 1), // 1 token = 1 investigation
+		queue:   make(chan string, 100),
+		done:    make(chan struct{}),
 	}
 }
 

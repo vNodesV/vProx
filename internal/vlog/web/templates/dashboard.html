@@ -144,7 +144,7 @@
   var doughnutColors = ['#4e8cf7','#22c55e','#ef4444','#f97316','#a855f7','#eab308','#14b8a6'];
 
   function escH(s) {
-    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   }
 
   // Render ChartSeries (multi-line) on dual y-axes.
@@ -313,7 +313,7 @@
       cell.innerHTML = loc.latency_ms ? loc.latency_ms + 'ms' : '✓';
     } else {
       cell.style.color = '#ef4444';
-      cell.innerHTML = loc.error || (loc.code ? loc.code : '✗');
+      cell.textContent = loc.error || (loc.code ? loc.code : '✗');
     }
     // Tooltip: node source + probed URL (if available).
     var tip = '';

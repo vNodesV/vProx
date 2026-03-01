@@ -73,9 +73,9 @@ type archiveEntry struct {
 //  1. Collect all source files (LogPath + ExtraFiles that exist)
 //  2. Compute total pre-compressed size
 //  3. Snapshot all files to temp copies
-//  4. Truncate LogPath only (preserves ExtraFiles intact)
-//  5. Emit NEW STARTED log line
-//  6. Compress all snapshots into a single tar.gz archive
+//  4. Emit NEW STARTED log line
+//  5. Compress all snapshots into a single tar.gz archive
+//  6. Truncate source logs (only after archive write succeeds; best-effort)
 //  7. Remove temp copies
 //  8. Emit UPD COMPLETED (or UPD FAILED) log line
 func RunOnce(opts Options) error {
@@ -152,17 +152,6 @@ func RunOnce(opts Options) error {
 		tmpPaths = append(tmpPaths, copyPath)
 	}
 
-	// Truncate log files after snapshot: primary log + RotateExtra (chain logs).
-	for _, p := range append([]string{logPath}, opts.RotateExtra...) {
-		if containsPath(presentSources, filepath.Clean(p)) {
-			if err := os.Truncate(filepath.Clean(p), 0); err != nil {
-				_ = cleanupTemps(tmpPaths)
-				emitFailed(id, method, err.Error())
-				return fmt.Errorf("backup: truncate %s: %w", filepath.Base(p), err)
-			}
-		}
-	}
-
 	// Emit NEW STARTED line.
 	applog.PrintLifecycle("NEW", "backup",
 		applog.F("ID", id),
@@ -180,6 +169,19 @@ func RunOnce(opts Options) error {
 		_ = cleanupTemps(tmpPaths)
 		emitFailed(id, method, err.Error())
 		return err
+	}
+
+	// Truncate source logs AFTER archive write succeeds.
+	// If truncation fails the archive is already safe; log and continue.
+	for _, p := range append([]string{logPath}, opts.RotateExtra...) {
+		if containsPath(presentSources, filepath.Clean(p)) {
+			if err := os.Truncate(filepath.Clean(p), 0); err != nil {
+				applog.Print("WARN", "backup", "truncate failed after archive write",
+					applog.F("file", filepath.Base(p)),
+					applog.F("error", err.Error()),
+				)
+			}
+		}
 	}
 	_ = cleanupTemps(tmpPaths)
 

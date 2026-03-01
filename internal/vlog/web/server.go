@@ -8,11 +8,18 @@ package web
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha256"
 	"embed"
+	"encoding/hex"
 	"fmt"
 	"html/template"
 	"net/http"
+	"sync"
 	"time"
+
+	"golang.org/x/crypto/bcrypt"
 
 	"github.com/vNodesV/vProx/internal/vlog/config"
 	"github.com/vNodesV/vProx/internal/vlog/db"
@@ -51,6 +58,11 @@ type Server struct {
 	cfg      config.Config
 	httpSrv  *http.Server
 	pages    map[string]*template.Template
+
+	// Session state for dashboard login.
+	sessions   map[string]time.Time // token → expiry
+	sessionMu  sync.RWMutex
+	sessionKey []byte // 32-byte HMAC key, generated at startup
 }
 
 // New creates a Server, parses embedded templates, registers all routes,
@@ -70,43 +82,63 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 		pages[pf] = t
 	}
 
+	// Parse standalone login template (not based on base.html).
+	loginTmpl, err := template.New("login.html").Funcs(templateFuncs).ParseFS(webFS, "templates/login.html")
+	if err != nil {
+		return nil, fmt.Errorf("web: parse template login.html: %w", err)
+	}
+	pages["login.html"] = loginTmpl
+
+	// Generate session HMAC key.
+	sessionKey := make([]byte, 32)
+	if _, err := rand.Read(sessionKey); err != nil {
+		return nil, fmt.Errorf("web: generate session key: %w", err)
+	}
+
 	s := &Server{
-		db:       d,
-		enricher: enricher,
-		ingester: ingester,
-		cfg:      cfg,
-		pages:    pages,
+		db:         d,
+		enricher:   enricher,
+		ingester:   ingester,
+		cfg:        cfg,
+		pages:      pages,
+		sessions:   make(map[string]time.Time),
+		sessionKey: sessionKey,
 	}
 
 	mux := http.NewServeMux()
 
-	// Page routes.
-	mux.HandleFunc("GET /", s.handleDashboard)
-	mux.HandleFunc("GET /accounts", s.handleAccountList)
-	mux.HandleFunc("GET /accounts/{ip}", s.handleAccountDetail)
+	// Login/logout routes — exempt from session check.
+	mux.HandleFunc("GET /login", s.handleLoginPage)
+	mux.HandleFunc("POST /login", s.handleLoginSubmit)
+	mux.HandleFunc("POST /logout", s.handleLogout)
 
-	// API routes.
-	mux.HandleFunc("POST /api/v1/ingest", s.handleAPIIngest)
-	mux.HandleFunc("GET /api/v1/accounts", s.handleAPIAccountList)
-	mux.HandleFunc("GET /api/v1/accounts/{ip}", s.handleAPIAccountDetail)
-	mux.HandleFunc("POST /api/v1/enrich/{ip}", s.handleAPIEnrich)
-	mux.HandleFunc("POST /api/v1/osint/{ip}", s.handleAPIosint)
-	mux.HandleFunc("POST /api/v1/investigate/{ip}", s.handleAPIInvestigate)
-	mux.HandleFunc("POST /api/v1/block/{ip}", s.handleAPIBlock)
-	mux.HandleFunc("POST /api/v1/unblock/{ip}", s.handleAPIUnblock)
-	mux.HandleFunc("GET /api/v1/stats", s.handleAPIStats)
-	mux.HandleFunc("GET /api/v1/chart", s.handleAPIChart)
-	mux.HandleFunc("GET /api/v1/probe", s.handleAPIProbe)
-
-	// Static assets (CSS, JS, etc.) served from embedded FS.
+	// Static assets — exempt from session check.
 	mux.Handle("GET /static/", http.FileServer(http.FS(webFS)))
+
+	// Page routes — session-protected.
+	mux.Handle("GET /", s.requireSession(http.HandlerFunc(s.handleDashboard)))
+	mux.Handle("GET /accounts", s.requireSession(http.HandlerFunc(s.handleAccountList)))
+	mux.Handle("GET /accounts/{ip}", s.requireSession(http.HandlerFunc(s.handleAccountDetail)))
+
+	// API routes — session-protected.
+	mux.Handle("POST /api/v1/ingest", s.requireSession(http.HandlerFunc(s.handleAPIIngest)))
+	mux.Handle("GET /api/v1/accounts", s.requireSession(http.HandlerFunc(s.handleAPIAccountList)))
+	mux.Handle("GET /api/v1/accounts/{ip}", s.requireSession(http.HandlerFunc(s.handleAPIAccountDetail)))
+	mux.Handle("POST /api/v1/enrich/{ip}", s.requireSession(http.HandlerFunc(s.handleAPIEnrich)))
+	mux.Handle("POST /api/v1/osint/{ip}", s.requireSession(http.HandlerFunc(s.handleAPIosint)))
+	mux.Handle("POST /api/v1/investigate/{ip}", s.requireSession(http.HandlerFunc(s.handleAPIInvestigate)))
+	mux.Handle("POST /api/v1/block/{ip}", s.requireSession(s.requireAPIKey(http.HandlerFunc(s.handleAPIBlock))))
+	mux.Handle("POST /api/v1/unblock/{ip}", s.requireSession(s.requireAPIKey(http.HandlerFunc(s.handleAPIUnblock))))
+	mux.Handle("GET /api/v1/stats", s.requireSession(http.HandlerFunc(s.handleAPIStats)))
+	mux.Handle("GET /api/v1/chart", s.requireSession(http.HandlerFunc(s.handleAPIChart)))
+	mux.Handle("GET /api/v1/probe", s.requireSession(http.HandlerFunc(s.handleAPIProbe)))
 
 	readTimeout := time.Duration(cfg.VLog.Server.ReadTimeoutSec) * time.Second
 	writeTimeout := time.Duration(cfg.VLog.Server.WriteTimeoutSec) * time.Second
 
 	s.httpSrv = &http.Server{
-		Addr:         fmt.Sprintf(":%d", cfg.VLog.Port),
-		Handler:      mux,
+		Addr:         fmt.Sprintf("127.0.0.1:%d", cfg.VLog.Port),
+		Handler:      securityHeaders(mux),
 		ReadTimeout:  readTimeout,
 		WriteTimeout: writeTimeout,
 	}
@@ -118,6 +150,99 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 // server is shut down or encounters a fatal error.
 func (s *Server) Start() error {
 	return s.httpSrv.ListenAndServe()
+}
+
+// requireSession redirects to /login if no valid session cookie is present.
+// If auth is not configured (PasswordHash empty), this is a no-op pass-through.
+func (s *Server) requireSession(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s.cfg.VLog.Auth.PasswordHash == "" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		cookie, err := r.Cookie("vlog_session")
+		if err != nil || !s.validSession(cookie.Value) {
+			http.Redirect(w, r, s.cfg.VLog.BasePath+"/login", http.StatusFound)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// newSession creates a new HMAC-signed session token with 24h TTL.
+func (s *Server) newSession() string {
+	raw := make([]byte, 32)
+	rand.Read(raw) //nolint:errcheck // crypto/rand.Read never errors
+	mac := hmac.New(sha256.New, s.sessionKey)
+	mac.Write(raw)
+	token := hex.EncodeToString(raw) + "." + hex.EncodeToString(mac.Sum(nil))
+	s.sessionMu.Lock()
+	s.sessions[token] = time.Now().Add(24 * time.Hour)
+	s.sessionMu.Unlock()
+	return token
+}
+
+// validSession reports whether token exists and has not expired.
+func (s *Server) validSession(token string) bool {
+	s.sessionMu.RLock()
+	expiry, ok := s.sessions[token]
+	s.sessionMu.RUnlock()
+	return ok && time.Now().Before(expiry)
+}
+
+// deleteSession removes a session token.
+func (s *Server) deleteSession(token string) {
+	s.sessionMu.Lock()
+	delete(s.sessions, token)
+	s.sessionMu.Unlock()
+}
+
+// authEnabled reports whether dashboard login is configured.
+func (s *Server) authEnabled() bool {
+	return s.cfg.VLog.Auth.PasswordHash != ""
+}
+
+// checkCredentials validates username + password against the stored config.
+func (s *Server) checkCredentials(username, password string) bool {
+	if username != s.cfg.VLog.Auth.Username {
+		return false
+	}
+	return bcrypt.CompareHashAndPassword([]byte(s.cfg.VLog.Auth.PasswordHash), []byte(password)) == nil
+}
+
+// requireAPIKey is middleware that enforces API key authentication.
+// The key must be provided via the X-API-Key request header.
+// If the server's configured APIKey is empty, all requests are rejected (key not configured).
+func (s *Server) requireAPIKey(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s.cfg.VLog.APIKey == "" {
+			http.Error(w, "endpoint disabled: api_key not configured in vlog.toml", http.StatusServiceUnavailable)
+			return
+		}
+		if r.Header.Get("X-API-Key") != s.cfg.VLog.APIKey {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// securityHeaders adds standard HTTP security headers to every response.
+func securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h := w.Header()
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("X-Frame-Options", "DENY")
+		h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		h.Set("Content-Security-Policy",
+			"default-src 'self';"+
+				" script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com;"+
+				" style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;"+
+				" font-src 'self' https://fonts.gstatic.com;"+
+				" img-src 'self' data:;"+
+				" connect-src 'self'")
+		next.ServeHTTP(w, r)
+	})
 }
 
 // Shutdown performs a graceful shutdown, waiting for in-flight requests
