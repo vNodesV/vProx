@@ -791,3 +791,81 @@ When converting chain TOML files to new format:
 - [ ] **Create GitHub release `v1.2.0`** pre-release "vProxVL Backup Module, Log Analyzer and Threat Intelligence Dashboard"
 - [ ] Fix P0 items before tagging (SEC-C1 esp. critical for prod deployment)
 - [ ] Remove tracked binaries (`vprox`, `vlog`) from git (future cleanup)
+
+---
+
+## Session: 2026-03-01 (afternoon) — Security Audit Fixes Applied
+
+### Active Branch
+`vLog/v1.1.0` — HEAD: `55bbf80`
+
+### Work Completed This Session
+
+**All P0 + P1 security and correctness fixes from the 2026-03-01 audit applied and verified.**
+`go build ./...` ✅  `go vet ./...` ✅ — clean across all packages.
+
+Fixes applied via 5 parallel agents:
+
+| Fix ID | Severity | File | What changed |
+|--------|----------|------|--------------|
+| **CR-1** | CRITICAL | `internal/backup/backup.go` | Log truncation moved to AFTER successful `writeTarGz`. Truncation failure after successful write is now WARN (non-fatal). Data loss on write failure eliminated. |
+| **CR-3** | HIGH | `cmd/vprox/main.go` | `go notifyVLog()` → `notifyVLog()` — HTTP POST now completes (5s timeout) before process exits. Comment updated. |
+| **CR-4** | HIGH | `internal/ws/ws.go` | `var cMu, bMu sync.Mutex` guard all `WriteMessage` + `WriteControl` calls per connection — concurrent write race eliminated. |
+| **CR-5** | HIGH | `internal/vlog/web/handlers.go` | `var wMu sync.Mutex` in all 3 SSE handlers (enrich/osint/investigate) — keepalive goroutine and emit() no longer race on `ResponseWriter`. |
+| **SEC-C1** | CRITICAL | `internal/vlog/web/server.go` | `Addr` changed `":port"` → `"127.0.0.1:port"` — vLog no longer exposed on all network interfaces. |
+| **SEC-C2** | CRITICAL | `server.go` + `config.go` | `requireAPIKey` middleware on `/block/{ip}` + `/unblock/{ip}`. `APIKey string \`toml:"api_key"\`` added to `VLogSection`. Returns 503 if key not configured, 401 if mismatched. |
+| **SEC-H1/CR-7** | HIGH | `handlers.go` | `net.ParseIP` + `isPrivateIP()` helper (9 CIDR ranges: loopback, RFC1918, link-local, RFC4193, RFC6598) added to handleAPIEnrich + handleAPIosint + handleAPIInvestigate — SSRF blocked. |
+| **SEC-H2** | HIGH | `internal/vlog/intel/intel.go` | `CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }` — API keys no longer leak to redirect targets. |
+| **SEC-H4** | HIGH | `handlers.go` | All 11 `err.Error()` in JSON responses → `"internal error"` + `log.Printf("[web] internal error: %v", err)` — DB internals no longer leaked. |
+| **SEC-M1** | MEDIUM | `dashboard.html` | `escH()` now escapes `"` (`&quot;`) and `'` (`&#39;`) — onclick attribute injection prevented. |
+| **SEC-M2** | MEDIUM | `internal/ws/ws.go` | `const wsMaxMessageBytes = 512 * 1024` + `SetReadLimit` on client and backend connections — OOM DoS via oversized frames blocked. |
+| **SEC-M3** | MEDIUM | `internal/ws/ws.go` | `const wsMaxConnections = 1000` + `var wsActiveConns int64` atomic counter with cap check before upgrade — FD exhaustion blocked. |
+| **SEC-M5** | MEDIUM | `server.go` | `securityHeaders` middleware wraps mux — adds `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Content-Security-Policy`. |
+| **SEC-L5** | LOW | `dashboard.html` | `innerHTML = loc.error` → `textContent` — third-party API response (check-host.net) can no longer inject HTML. |
+
+### Deployment Action Required
+Add to `$VPROX_HOME/config/vlog.toml` to enable block/unblock endpoints:
+```toml
+[vlog]
+api_key = "your-secret-key-here"
+```
+Callers must include `X-API-Key: your-secret-key-here` header. Without key configured → 503.
+
+### Open Items (carry forward)
+
+#### Remaining Audit Findings (P2/P3 — not yet fixed)
+| ID | Severity | File | Issue |
+|----|----------|------|-------|
+| CR-2 | HIGH | `internal/backup/backup.go:144` | Nil pointer: `os.Stat` error discarded; `info.Mode()` panics on TOCTOU |
+| CR-6 | MEDIUM | `internal/geo/geo.go:320-334` | `geo.Close()` sets nil without lock; concurrent `Lookup()` nil dereference |
+| CR-8 | MEDIUM | `internal/geo/geo.go:174-187` | `time.Tick` in `init()` unleakable — can't be stopped by `Close()` |
+| SEC-H3 | HIGH | `internal/limit/limiter.go:420-462` | Rate limiter: X-Forwarded-For trusted without CIDR allowlist; spoofable |
+| SEC-M4 | MEDIUM | `internal/ws/ws.go:34` | WS origin validation disabled (`CheckOrigin: always true`) |
+| SEC-M6 | MEDIUM | `internal/limit/limiter.go:556` | `autoState` map memory leak: below-threshold IPs never swept |
+| SEC-L1 | LOW | `internal/vlog/db/queries.go:202` | SQL LIKE `%`/`_` metacharacters not escaped |
+| SEC-L2 | LOW | `internal/vlog/intel/virustotal.go:45` | Unbounded `io.ReadAll` on VT/AbuseIPDB responses |
+| SEC-L3 | LOW | `internal/vlog/ingest/ingest.go:148` | Unbounded `io.ReadAll` on tar entries (decompression bomb) |
+| SEC-L4 | LOW | `internal/limit/limiter.go:267` | `X-RateLimit-Policy` header leaks detected IP + exact rate limit config |
+
+#### Agent File Updates (in-progress)
+- [ ] `au-skills`: Patch jarvis5.0_skills.md (in_progress)
+- [ ] `au-agent`: Patch jarvis5.0.agent.md
+- [ ] `au-resources`: Patch jarvis5.0_resources.md
+- [ ] `au-reviewer`: Patch reviewer.agent.md
+- [ ] `au-state`: Patch jarvis5.0_state.md
+
+#### Release Gate
+- [ ] **PR `vLog/v1.1.0` → `develop`** (31+ commits ahead)
+- [ ] **Create GitHub release `v1.2.0`** — "vProxVL Backup Module, Log Analyzer and Threat Intelligence Dashboard"
+- [ ] Remove tracked binaries (`vprox`, `vlog`) from git
+
+#### Network / fail2ban (active on server)
+- **`188.40.110.49`** (Hetzner, AS24940) — UA unknown; query vLog SQLite on server:
+  ```sql
+  SELECT DISTINCT user_agent, count(*) FROM request_events WHERE ip = '188.40.110.49' GROUP BY user_agent ORDER BY 2 DESC LIMIT 5;
+  ```
+  If UA = `hermes/` → add to fail2ban `ignoreip`. Otherwise leave flood filter to handle.
+- **`.vscode/f2b-fix.tar.gz`** — ready to deploy; deploy checklist:
+  1. `sudo tar -xzf f2b-fix.tar.gz -C /`
+  2. Run manual UFW commands from `jail.local` comments for 5 confirmed-malicious IPs
+  3. `sudo fail2ban-client check` → `sudo systemctl restart fail2ban`
