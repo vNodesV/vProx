@@ -16,7 +16,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      background: #0a0a0a;
+      background: #000000;
       color: #e0e0e0;
       overflow: hidden;
     }
@@ -43,14 +43,14 @@
       max-width: 420px;
       margin: 1rem;
       padding: 2.5rem 2rem 2rem;
-      background: rgba(18, 24, 18, 0.75);
+      background: rgba(0, 8, 0, 0.85);
       backdrop-filter: blur(12px);
       -webkit-backdrop-filter: blur(12px);
-      border: 1px solid rgba(76, 175, 80, 0.25);
+      border: 1px solid rgba(0, 255, 0, 0.20);
       border-radius: 16px;
       box-shadow:
-        0 0 40px rgba(76, 175, 80, 0.08),
-        0 8px 32px rgba(0, 0, 0, 0.4);
+        0 0 40px rgba(0, 255, 0, 0.06),
+        0 8px 32px rgba(0, 0, 0, 0.5);
       text-align: center;
     }
 
@@ -76,7 +76,7 @@
     .login-subtitle {
       font-size: 0.85rem;
       font-weight: 500;
-      color: rgba(76, 175, 80, 0.8);
+      color: rgba(0, 255, 0, 0.75);
       text-transform: uppercase;
       letter-spacing: 0.15em;
       margin-bottom: 1.75rem;
@@ -120,8 +120,8 @@
     }
     .input-group input::placeholder { color: rgba(255, 255, 255, 0.25); }
     .input-group input:focus {
-      border-color: #4caf50;
-      box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.5);
+      border-color: #00ff00;
+      box-shadow: 0 0 0 2px rgba(0, 255, 0, 0.30);
     }
 
     /* Submit button */
@@ -129,23 +129,24 @@
       width: 100%;
       padding: 0.75rem;
       margin-top: 0.5rem;
-      background: #4caf50;
-      border: none;
+      background: #001700;
+      border: 1px solid #00ff00;
       border-radius: 8px;
-      color: #fff;
+      color: #00ff00;
       font-size: 0.95rem;
-      font-weight: 600;
+      font-weight: 700;
       font-family: 'Inter', sans-serif;
       cursor: pointer;
       transition: background 0.2s, box-shadow 0.2s;
       letter-spacing: 0.02em;
     }
     .btn-submit:hover {
-      background: #3e8e41;
-      box-shadow: 0 0 16px rgba(76, 175, 80, 0.3);
+      background: rgba(0,255,0,0.10);
+      border-color: #00ff00;
+      box-shadow: 0 0 16px rgba(0, 255, 0, 0.35);
     }
     .btn-submit:active {
-      background: #357a38;
+      background: #009900;
     }
 
     /* Footer */

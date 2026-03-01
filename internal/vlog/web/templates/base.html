@@ -1,5 +1,5 @@
 {{define "base"}}<!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -106,9 +106,9 @@
   <main class="container">
     {{if .AuthEnabled}}<div style="display:flex;justify-content:flex-end;padding:0.5rem 0">
       <form method="POST" action="{{.BasePath}}/logout" style="margin:0">
-        <button type="submit" class="btn-logout" style="background:none;border:1px solid rgba(76,175,80,0.4);color:#4caf50;padding:0.3rem 0.8rem;border-radius:4px;cursor:pointer;font-size:0.8rem;font-family:Inter,sans-serif;transition:all 0.2s"
-          onmouseover="this.style.background='rgba(76,175,80,0.15)';this.style.borderColor='#4caf50'"
-          onmouseout="this.style.background='none';this.style.borderColor='rgba(76,175,80,0.4)'">↪ Logout</button>
+        <button type="submit" class="btn-logout" style="background:none;border:1px solid rgba(0,255,0,0.35);color:#00ff00;padding:0.3rem 0.8rem;border-radius:4px;cursor:pointer;font-size:0.8rem;font-family:Inter,sans-serif;transition:all 0.2s"
+          onmouseover="this.style.background='rgba(0,255,0,0.10)';this.style.borderColor='#00ff00'"
+          onmouseout="this.style.background='none';this.style.borderColor='rgba(0,255,0,0.35)'">↪ Logout</button>
       </form>
     </div>{{end}}
     {{block "content" .}}{{end}}
