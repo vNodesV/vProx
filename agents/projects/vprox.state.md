@@ -646,10 +646,148 @@ vlog start [-d]   vlog stop   vlog restart   vlog ingest   vlog status
 
 ### Actual Open Follow-ups (reconciled)
 
-- [ ] **PR**: open `vLog/v1.1.0` → `develop` → `main` (29 commits to merge; CI required)
+- [ ] **PR**: open `vLog/v1.1.0` → `develop` → `main` (30 commits to merge; CI required)
 - [ ] **Prod deploy**: `git pull origin vLog/v1.1.0 && make install-vlog && sudo service vLog restart`
 - [ ] **Apply Apache config**: copy `.vscode/vlog.apache2` to prod + `sudo systemctl reload apache2`
 - [ ] **Test multi-probe** on prod RBX endpoint — confirm CA+WW resolve correctly
 - [ ] **Release tag**: cut `vProxVL-v1.2.0` after merge to main
 - [ ] **Shodan search UI**: future — requires Shodan Membership plan
 - [ ] **vProx IP deny list integration**: vLog block list → vProx polling (future P4)
+- [ ] **`mask_rpc` implementation**: string substitution in `rewriteLinks` — replace `10.0.0.x/` with `mask_rpc` value (future)
+- [ ] **`swagger_masking` implementation**: rewrite Swagger Try-It base URL to public chain host (future)
+
+---
+
+## Session: 2026-02-28 — Chain Config Refactor + TOML Conversions
+
+### Active Branch
+`vLog/v1.1.0` — HEAD: `a6ec535` (30 commits ahead of `develop`)
+
+### Completed This Session
+
+#### Chain Config Refactor (`cmd/vprox/main.go` + `config/chains/chain.sample.toml`) — committed `a6ec535`
+
+**Root bug fixed**: Banner injection (`rpc_msg`) appeared on page even when `msg = false`.  
+Cause: `injectHTML` was gated only on `Features.InjectRPCIndex`, never on `Msg`. Now decoupled:
+- `rpc_address_masking` (bool) → controls whether the HTML rewrite path runs (link masking)
+- `msg_rpc` / `msg_api` (bool) → controls whether `bannerHTML`/`bannerFile` are populated
+
+**Struct changes**:
+| Old | New |
+|-----|-----|
+| `Msg bool` (top-level) | `MsgRPC bool`, `MsgAPI bool` (top-level) |
+| `type Aliases struct { RPC, REST, API []string }` | Deleted; replaced by flat `RPCAliases`, `RESTAliases`, `APIAliases []string` on `ChainConfig` |
+| `Features.InjectRPCIndex bool` | `Features.RPCAddressMasking bool` |
+| `Features.InjectRESTSwagger bool` | Removed |
+| — | `Features.MaskRPC string` (added, not yet implemented) |
+| — | `Features.SwaggerMasking bool` (added, not yet implemented) |
+
+**TOML key renames** (chain configs must be updated):
+| Old key | New key |
+|---------|---------|
+| `msg` | `msg_rpc` |
+| — | `msg_api` (new) |
+| `[aliases].rpc` | `rpc_aliases` (top-level) |
+| `[aliases].rest` | `rest_aliases` (top-level) |
+| `[aliases].api` | `api_aliases` (top-level) |
+| `features.inject_rpc_index` | `features.rpc_address_masking` |
+| `features.inject_rest_swagger` | removed |
+
+**`chain.sample.toml`**: fully rewritten — new key names, `[ports]` commented out, flat aliases, updated features section.
+
+#### TOML Conversions (`.vscode/` scratch files — NOT committed)
+
+| File | Status | Notes |
+|------|--------|-------|
+| `.vscode/pre-mods-cheqd.toml` | ✅ Converted | `msg→msg_rpc/msg_api`, HTML blob removed from `rpc_msg`, `inject_rpc_index→rpc_address_masking`, ports commented out, aliases flattened; log path corrected `logs/cheqd.log→cheqd.log` |
+| `.vscode/pre-mods-meme.toml` | ✅ Converted | `msg=true→msg_rpc=true/msg_api=false`, `[aliases]` with actual hostnames flattened to `rpc_aliases`/`rest_aliases`, `inject_rpc_index=true→rpc_address_masking=true`, `[ws]` block kept |
+
+### Convention: Chain Config Migration (old → new format)
+
+When converting chain TOML files to new format:
+1. `msg = bool` → `msg_rpc = bool` + `msg_api = false` (split on intent)
+2. `[aliases]` section → flat `rpc_aliases`, `rest_aliases`, `api_aliases` arrays (preserve values)
+3. `features.inject_rpc_index` → `features.rpc_address_masking`
+4. Remove `features.inject_rest_swagger`; add `swagger_masking = false` + `mask_rpc = ""`
+5. `[ports]` comment out if `default_ports = true`; keep uncommented with values if `default_ports = false`
+6. `go-toml/v2` silently ignores unknown keys — old-format keys are harmless but inert
+
+### Open Follow-ups (added this session)
+
+- [ ] **Prod chain config migration**: update `/home/vnodesv/.vProx/config/chains/*.toml` to new key names (old keys are ignored but config intent is lost)
+- [ ] **Apply `.vscode/pre-mods-cheqd.toml`** to prod `config/chains/cheqd.toml`
+- [ ] **Apply `.vscode/pre-mods-meme.toml`** to prod `config/chains/meme_devnet.toml` (or equivalent)
+
+---
+
+## Session: 2026-03-01 — Code & Security Audit (vLog/v1.1.0 branch)
+
+### Active Branch
+`vLog/v1.1.0` — HEAD: `2df956c` (31 commits ahead of develop)
+
+### Work Completed This Session
+1. **Documentation audit + release prep** — committed `2df956c` — README, CHANGELOG, INSTALLATION, MODULES, chain.sample.toml, backup.sample.toml all corrected for v1.2.0 readiness
+2. **Full code review** (claude-opus-4.6 code-review agent, 302s)
+3. **Full security audit** (claude-opus-4.6 jarvis5.0 agent, 572s)
+4. **`caffeinate` running** PID 26773 (Mac sleep prevention)
+
+### Code Review Findings
+
+| ID | Severity | File | Issue |
+|----|----------|------|-------|
+| CR-1 | **CRITICAL** | `internal/backup/backup.go:155-182` | Backup data loss: logs truncated BEFORE writeTarGz; if archive write fails, logs permanently lost |
+| CR-2 | HIGH | `internal/backup/backup.go:144` | Nil pointer dereference: `os.Stat` error discarded; `info.Mode()` panics on TOCTOU race |
+| CR-3 | HIGH | `cmd/vprox/main.go:1826-1827` | `notifyVLog` goroutine killed before HTTP POST completes — `go notifyVLog()` immediately followed by `return` |
+| CR-4 | HIGH | `internal/ws/ws.go:194-195` | WebSocket concurrent write race: `WriteControl` races with pump goroutine `WriteMessage` on same connection |
+| CR-5 | HIGH | `internal/vlog/web/handlers.go:305-317` | SSE keepalive goroutine writes to `http.ResponseWriter` concurrently with `emit()` — not safe |
+| CR-6 | MEDIUM | `internal/geo/geo.go:320-334` | `geo.Close()` sets DB handles to nil without lock; concurrent `Lookup()` causes nil dereference |
+| CR-7 | MEDIUM | `internal/vlog/web/handlers.go:272-278` | `handleAPIEnrich`/`handleAPIosint` missing `net.ParseIP` validation (unlike `handleAPIInvestigate`) |
+| CR-8 | MEDIUM | `internal/geo/geo.go:174-187` | `time.Tick` goroutine in `init()` unleakable — cache sweeper cannot be stopped by `Close()` |
+
+### Security Audit Findings
+
+**Supply chain: CLEAN ✅ | Command injection: CLEAN ✅ | SQL injection: CLEAN ✅** (govulncheck: no vulnerabilities)
+
+| ID | Severity | CWE | File | Issue |
+|----|----------|-----|------|-------|
+| SEC-C1 | **CRITICAL** | CWE-306 | `internal/vlog/web/server.go:81-99` | Zero auth on ALL vLog endpoints incl. `POST /api/v1/block/{ip}` (sudo ufw deny). vLog binds `0.0.0.0`. |
+| SEC-C2 | **CRITICAL** | CWE-862 | `internal/vlog/web/handlers.go:783-838` | Unauthenticated OS firewall manipulation via block/unblock handlers |
+| SEC-H1 | HIGH | CWE-918 | `internal/vlog/web/handlers.go:333-391` | SSRF: `handleAPIosint` missing IP validation — enables internal network port scanning + metadata endpoint probing |
+| SEC-H2 | HIGH | CWE-918 | `internal/vlog/intel/intel.go:54` | Enricher HTTP client follows redirects — API keys (VirusTotal/AbuseIPDB) leaked to redirect targets |
+| SEC-H3 | HIGH | CWE-345 | `internal/limit/limiter.go:420-462` | Rate limiter bypass: proxy headers trusted without CIDR allowlist; X-Forwarded-For spoofable |
+| SEC-H4 | HIGH | CWE-200 | `internal/vlog/web/handlers.go` (11 lines) | Raw `err.Error()` in JSON responses leaks DB paths, table names, SQLite diagnostics |
+| SEC-M1 | MEDIUM | CWE-79 | `dashboard.html:146-148` | DOM XSS: `escH()` missing `"` and `'` escaping; used in `innerHTML` for attributes/onclick |
+| SEC-M2 | MEDIUM | CWE-770 | `internal/ws/ws.go:31-34` | No WS message size limit — OOM DoS with large frames |
+| SEC-M3 | MEDIUM | CWE-770 | `internal/ws/ws.go:38-174` | No WS connection limit — 10k conns = OOM + FD exhaustion |
+| SEC-M4 | MEDIUM | CWE-346 | `internal/ws/ws.go:34` | WS origin validation disabled (`CheckOrigin: always true`) |
+| SEC-M5 | MEDIUM | CWE-693 | `internal/vlog/web/server.go:107-112` | Missing security headers: no CSP, X-Content-Type-Options, X-Frame-Options, HSTS |
+| SEC-M6 | MEDIUM | CWE-400 | `internal/limit/limiter.go:556` | `autoState` map memory leak: below-threshold IPs never swept |
+| SEC-L1 | LOW | CWE-150 | `internal/vlog/db/queries.go:202` | SQL LIKE `%`/`_` metacharacters not escaped (wildcard enum, not injection) |
+| SEC-L2 | LOW | CWE-400 | `internal/vlog/intel/virustotal.go:45` | Unbounded `io.ReadAll` on VT/AbuseIPDB responses |
+| SEC-L3 | LOW | CWE-400 | `internal/vlog/ingest/ingest.go:148` | Unbounded `io.ReadAll` on tar entries (decompression bomb) |
+| SEC-L4 | LOW | CWE-200 | `internal/limit/limiter.go:267` | `X-RateLimit-Policy` header leaks detected IP + exact rate limit config |
+| SEC-L5 | LOW | CWE-79 | `dashboard.html:316` | `cell.innerHTML = loc.error` (third-party API response) |
+
+### Fix Priority Roadmap
+
+| Priority | IDs | Effort | Impact |
+|----------|-----|--------|--------|
+| **P0 — Immediate** | SEC-C1, SEC-C2 | 2h | vLog auth: bind localhost + API key middleware on mutating endpoints |
+| **P0 — Immediate** | SEC-H1, CR-7 | 15m | Add `net.ParseIP` + private IP check on enrich/OSINT handlers |
+| **P0 — Immediate** | CR-1 | 30m | Backup: move log truncation to AFTER successful archive write |
+| **P1 — This sprint** | CR-3 | 15m | `notifyVLog`: call synchronously instead of goroutine before return |
+| **P1 — This sprint** | CR-4, CR-5 | 2h | WS + SSE write race: add mutex or single-writer pattern |
+| **P1 — This sprint** | SEC-H2 | 15m | Enricher: add `CheckRedirect: ErrUseLastResponse` |
+| **P1 — This sprint** | SEC-H3 | 3h | Rate limiter: add trusted proxy CIDR allowlist |
+| **P1 — This sprint** | SEC-M1, SEC-L5 | 30m | XSS: fix `escH()` + switch innerHTML → textContent |
+| **P1 — This sprint** | SEC-H4 | 1h | Sanitize error responses throughout vLog handlers |
+| **P2 — Next sprint** | SEC-M2, SEC-M3 | 1h | WS: add `SetReadLimit` + connection counter |
+| **P2 — Next sprint** | SEC-M4, SEC-M5 | 2h | WS origin validation + security headers middleware |
+| **P2 — Next sprint** | CR-2, CR-6, CR-8 | 2h | Backup nil-deref fix, geo.Close() mutex, time.Tick → ticker |
+| **P3 — Backlog** | SEC-L1..L4, SEC-M6 | 2h | Hardening: LIKE escaping, io.LimitReader, autoState sweep, header cleanup |
+
+### Next Steps (unchanged from prior)
+- [ ] **PR `vLog/v1.1.0` → `develop`** (31 commits ahead; docs + config refactor + backup module + vLog)
+- [ ] **Create GitHub release `v1.2.0`** pre-release "vProxVL Backup Module, Log Analyzer and Threat Intelligence Dashboard"
+- [ ] Fix P0 items before tagging (SEC-C1 esp. critical for prod deployment)
+- [ ] Remove tracked binaries (`vprox`, `vlog`) from git (future cleanup)
