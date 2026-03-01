@@ -8,7 +8,7 @@ Production-grade reverse proxy for Cosmos SDK node services — RPC, REST, gRPC,
 - **WebSocket proxying** — bidirectional with configurable idle timeout and max lifetime.
 - **Rate limiting** — per-IP token bucket with optional auto-quarantine and JSONL audit log.
 - **Geo enrichment** — country and ASN logged per request via MMDB lookup (optional).
-- **HTML banner injection** — custom banners on RPC index and REST swagger pages.
+- **HTML banner injection** — per-service banners (`msg_rpc`, `msg_api`) on RPC index and REST swagger, independent of address masking.
 - **Backup automation** — TOML-configured scheduled backups with multi-file archive support.
 - **Service management** — `start -d`, `stop`, `restart` with passwordless sudoers integration.
 - **Systemd-ready** — `make install` renders and optionally installs the service unit + sudoers rule.

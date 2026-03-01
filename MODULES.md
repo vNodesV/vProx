@@ -40,17 +40,22 @@ Chain configs live in `$HOME/.vProx/config/chains/*.toml`. For backward compatib
 | Field | Type | Description |
 |---|---|---|
 | `default_ports` | bool | `true` (default) — inherit ports from `config/ports.toml` |
+| `msg_rpc` | bool | Show `[message].rpc_msg` banner on RPC index page |
+| `msg_api` | bool | Show `[message].api_msg` banner on REST/swagger pages |
+| `rpc_aliases` | `[]string` | Extra RPC hostnames for vhost routing (e.g. `["rpc-alt.example.com"]`) |
+| `rest_aliases` | `[]string` | Extra REST hostnames for vhost routing |
+| `api_aliases` | `[]string` | Extra API hostnames for vhost routing |
 | `[ports]` | table | Per-service port overrides when `default_ports = false` |
-| `[expose]` | table | Routing mode: `mode = "path"` or `mode = "vhost"` |
-| `[aliases]` | table | Service-specific hostnames for vhost routing |
-| `[features]` | table | `banner_injection`, `absolute_links` |
-| `[logging]` | table | `file` — per-chain log path (relative to `VPROX_HOME`) |
+| `[expose]` | table | Routing booleans: `path = true` (prefix routing) and/or `vhost = true` (subdomain routing) |
+| `[features]` | table | `rpc_address_masking`, `mask_rpc`, `swagger_masking`, `absolute_links` |
+| `[message]` | table | `rpc_msg` and `api_msg` banner strings (shown only when `msg_rpc`/`msg_api` are `true`) |
+| `[logging]` | table | `file` — per-chain log filename (relative to `data/logs/`) |
 | `[ws]` | table | `idle_timeout_sec`, `max_lifetime_sec` |
 
-**Routing modes:**
+**Routing modes** (`[expose]` block — both can be true simultaneously):
 
-- `mode = "path"` (default): `host/rpc/...` → `ip:26657`, `host/rest/...` → `ip:1317`, etc.
-- `mode = "vhost"`: `rpc.<host>` → `ip:26657`, `rest.<host>` → `ip:1317`, etc. (requires DNS/nginx for subdomains)
+- `path = true`: `host/rpc/...` → `ip:26657`, `host/rest/...` → `ip:1317`, etc.
+- `vhost = true`: `rpc.<host>` → `ip:26657`, `api.<host>` → `ip:1317`, etc. Requires DNS or a reverse proxy for each subdomain.
 
 A fully annotated example is at [`config/chains/chain.sample.toml`](./config/chains/chain.sample.toml).
 
@@ -208,20 +213,22 @@ vProx --backup-status             # Show scheduler status
 
 ### Automated backups
 
-Configure via `$HOME/.vProx/config/backup/backup.toml` (see [`config/backup.sample.toml`](./config/backup.sample.toml)):
+Configure via `$HOME/.vProx/config/backup/backup.toml` (see [`config/backup/backup.sample.toml`](./config/backup/backup.sample.toml)):
 
 ```toml
 [backup]
-automation = true           # Enable automatic backup scheduler
+automation = false          # Enable automatic backup scheduler (default: false — opt-in)
 compression = "tar.gz"
 interval_days = 7           # Rotate every N days (0 = disable timer)
 max_size_mb = 100           # Rotate when main.log exceeds N MB (0 = disable)
 check_interval_min = 10     # How often to check conditions
 
 [backup.files]
-logs   = ["main.log", "rate-limit.jsonl"]
+# All *.log files in data/logs/ are auto-discovered (chain logs included automatically).
+# List only non-.log files you want archived (e.g. .jsonl, .json).
+logs   = ["rate-limit.jsonl"]
 data   = ["access-counts.json"]
-config = ["ports.toml", "chains/your_chain.toml"]
+config = ["ports.toml"]
 ```
 
 Trigger logic: backup fires when **either** `interval_days` or `max_size_mb` threshold is met (whichever comes first).
@@ -291,7 +298,7 @@ If a chain config includes a `[logging]` block:
 
 ```toml
 [logging]
-file = "logs/my-chain.log"
+file = "my-chain.log"   # filename only; resolves to data/logs/my-chain.log
 ```
 
 vProx writes summary lines to **both** `main.log` and the chain-specific file. Relative paths resolve under `$VPROX_HOME`.
@@ -357,6 +364,45 @@ vProx --backup-status                 # Show scheduler status
 
 **Rate limit overrides (CLI, override .env):**
 
+```bash
+vProx --rps 50              # Requests per second
+vProx --burst 200           # Burst capacity
+vProx --disable-auto        # Disable auto-quarantine
+vProx --auto-rps 0.5        # Penalty RPS during quarantine
+vProx --auto-burst 1        # Penalty burst during quarantine
+```
+
+---
+
+## 10) Chain Config Reference
+
+See [`config/chains/chain.sample.toml`](./config/chains/chain.sample.toml) for a fully annotated template.
+
+**Key top-level fields:**
+
+```toml
+chain_name    = "my-chain"             # Unique identifier (logs)
+host          = "my-chain.example.com" # Matched Host header
+ip            = "10.0.0.1"            # Backend node IP
+default_ports = true                   # Use ports.toml defaults
+
+msg_rpc       = false    # Show rpc_msg banner on RPC index
+msg_api       = false    # Show api_msg banner on REST swagger
+
+rpc_aliases   = []       # Extra RPC hostnames (vhost routing only)
+rest_aliases  = []       # Extra REST hostnames (vhost routing only)
+api_aliases   = []       # Extra API alias hostnames (vhost routing only)
+```
+
+**Features block:**
+
+```toml
+[features]
+rpc_address_masking = true   # Mask local IP (10.0.0.x/) links on RPC index HTML
+mask_rpc            = ""     # Replacement label (empty = remove the link entirely)
+swagger_masking     = false  # Rewrite Swagger Try-It base URL to public host (future)
+absolute_links      = "auto" # auto | always | never
+```
 
 ---
 
@@ -414,7 +460,7 @@ During probing, each cell shows a CSS spinner ring. On completion, cells show `N
 - **Search**: by IP, country code, or row ID
 - **Per-page**: 25 / 50 / 100 / 200 / All
 - **Sort**: any column; sort state persisted in URL (back-nav and direct URL sharing work correctly)
-- **Columns**: Org (ip-api.com) · IP · Country · ASN · Requests · Rate Limits · Threat Score · Last Seen · Actions · Status
+- **Columns**: Org (ip-api.com) · IP · Country · Requests · Rate Limits · Threat Score · Last Seen · Actions · Status
 - **Status badge**: ALLOWED (green) / BLOCKED (red)
 - **Investigate button**: turns green (`.btn-investigate-done`) when threat intel exists for that IP
 

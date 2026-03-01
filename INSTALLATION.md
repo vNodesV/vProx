@@ -198,9 +198,10 @@ Create one `.toml` file per chain in `$HOME/.vProx/config/chains/`. A fully comm
 Minimal example (`$HOME/.vProx/config/chains/my-chain.toml`):
 
 ```toml
-chain_name = "my-chain"
-host       = "my-chain.example.com"   # Host header vProx matches on
-ip         = "127.0.0.1"              # Backend node IP
+chain_name    = "my-chain"
+host          = "my-chain.example.com"   # Host header vProx matches on
+ip            = "127.0.0.1"              # Backend node IP
+default_ports = true                     # Use ports from config/ports.toml
 
 [services]
 rpc       = true
@@ -210,12 +211,13 @@ grpc      = false
 grpc_web  = false
 
 [expose]
-mode = "path"   # "path" (prefix routing) or "vhost" (subdomain routing)
+path  = true    # Enable /rpc, /rest, /websocket on the base host
+vhost = false   # Enable rpc.<host>, api.<host> subdomains
 ```
 
-**Path routing** (`mode = "path"`): requests to `my-chain.example.com/rpc/...` are forwarded to `127.0.0.1:26657`.
+**Path routing** (`path = true`): requests to `my-chain.example.com/rpc/...` are forwarded to `127.0.0.1:26657`.
 
-**Vhost routing** (`mode = "vhost"`): requests to `rpc.my-chain.example.com` are forwarded to `127.0.0.1:26657`. Requires DNS or nginx upstream for each subdomain.
+**Vhost routing** (`vhost = true`): requests to `rpc.my-chain.example.com` are forwarded to `127.0.0.1:26657`. Requires DNS or a reverse proxy for each subdomain. Both `path` and `vhost` can be enabled simultaneously.
 
 > After changing chain configs, restart vProx: `sudo systemctl restart vProx.service`
 

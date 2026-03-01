@@ -5,7 +5,7 @@
 
 # automation: when true, backups run automatically based on interval_days and/or max_size_mb.
 # Set to false to disable automatic backups (manual `vprox --new-backup` always works regardless).
-automation = true
+automation = false
 
 # compression: archive format. Only "tar.gz" is currently supported.
 compression = "tar.gz"
@@ -27,8 +27,14 @@ check_interval_min = 10
 
 # Log files to include in the archive.
 # Paths are relative to $VPROX_HOME/data/logs/
-# Each file is a separate quoted string in the array.
-logs = ["main.log", "rate-limit.jsonl"]
+#
+# NOTE: all *.log files in the logs directory are auto-discovered and included
+# automatically (archived + rotated). You do NOT need to list chain log files here
+# (e.g. cheqd.log, meme_chain.log are picked up without any declaration).
+# main.log is always included regardless of this list.
+#
+# Use this list for non-.log files you want included (e.g. .jsonl, .json).
+logs = ["rate-limit.jsonl"]
 
 # Data files to include in the archive.
 # Paths are relative to $VPROX_HOME/data/
@@ -37,4 +43,4 @@ data = ["access-counts.json"]
 # Config files to include in the archive.
 # Paths are relative to $VPROX_HOME/config/
 # Subdirectory paths are supported (e.g. "chains/your_chain.toml").
-config = ["ports.toml", "chains/your_chain.toml"]
+config = ["ports.toml"]
