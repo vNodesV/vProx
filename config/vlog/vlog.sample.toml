@@ -10,6 +10,12 @@ port = 8889
 # Leave empty (default) when vLog is served at the root path.
 # base_path = "/vlog"
 
+# API key required to call the block/unblock endpoints (POST /api/v1/block/{ip}).
+# These endpoints manipulate UFW firewall rules — they must be protected.
+# Leave empty to disable block/unblock entirely (endpoints return 503).
+# Generate a strong key: openssl rand -hex 32
+# api_key = ""
+
 # Path to the SQLite database file.
 # Default: $VPROX_HOME/data/vlog.db
 # db_path = "/home/user/.vProx/data/vlog.db"

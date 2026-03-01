@@ -302,7 +302,16 @@ config-vlog: dirs
 			echo "✓ Copied vlog.sample.toml to $(CFG_DIR)/vlog/vlog.toml"; \
 			echo "  Edit $(CFG_DIR)/vlog/vlog.toml to set your API keys."; \
 		else \
-			echo "✓ $(CFG_DIR)/vlog/vlog.toml already exists"; \
+			echo "✓ $(CFG_DIR)/vlog/vlog.toml already exists — checking for missing fields..."; \
+			if ! grep -q "api_key" "$(CFG_DIR)/vlog/vlog.toml"; then \
+				echo ""; \
+				echo "  ⚠ ACTION REQUIRED: api_key is missing from your vlog.toml."; \
+				echo "    Block/unblock endpoints are disabled until you add it."; \
+				echo "    Generate a key:  openssl rand -hex 32"; \
+				echo "    Then add to $(CFG_DIR)/vlog/vlog.toml under [vlog]:"; \
+				echo "      api_key = \"your-generated-key\""; \
+				echo ""; \
+			fi; \
 		fi; \
 	else \
 		echo "WARNING: config/vlog/vlog.sample.toml not found in repo"; \
