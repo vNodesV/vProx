@@ -3,8 +3,22 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 )
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+// escapeSQLLike escapes SQL LIKE metacharacters (%, _, \) so that user-supplied
+// search terms are matched literally. Must be used with ESCAPE '\' in the query.
+func escapeSQLLike(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `%`, `\%`)
+	s = strings.ReplaceAll(s, `_`, `\_`)
+	return s
+}
 
 // ---------------------------------------------------------------------------
 // Domain structs
@@ -199,7 +213,7 @@ func (d *DB) ListIPAccounts(limit, offset int) ([]*IPAccount, error) {
 // SearchIPAccounts returns accounts whose ip or country match the query string
 // (case-insensitive LIKE), ordered by last_seen DESC.
 func (d *DB) SearchIPAccounts(query string, limit, offset int) ([]*IPAccount, error) {
-	pat := "%" + query + "%"
+	pat := "%" + escapeSQLLike(query) + "%"
 	const q = `SELECT
 		ip, first_seen, last_seen, total_requests, ratelimit_events,
 		country, asn, org, hostnames, open_ports, services,
@@ -207,7 +221,7 @@ func (d *DB) SearchIPAccounts(query string, limit, offset int) ([]*IPAccount, er
 		threat_score, threat_flags, intel_updated_at,
 		notes, tags, status
 	FROM ip_accounts
-	WHERE ip LIKE ? OR country LIKE ? OR CAST(rowid AS TEXT) LIKE ?
+	WHERE ip LIKE ? ESCAPE '\' OR country LIKE ? ESCAPE '\' OR CAST(rowid AS TEXT) LIKE ? ESCAPE '\'
 	ORDER BY last_seen DESC LIMIT ? OFFSET ?`
 
 	rows, err := d.Query(q, pat, pat, pat, limit, offset)
@@ -235,10 +249,10 @@ func (d *DB) SearchIPAccounts(query string, limit, offset int) ([]*IPAccount, er
 
 // CountSearchIPAccounts returns the total number of accounts matching query.
 func (d *DB) CountSearchIPAccounts(query string) (int64, error) {
-	pat := "%" + query + "%"
+	pat := "%" + escapeSQLLike(query) + "%"
 	var n int64
 	err := d.QueryRow(
-		`SELECT COUNT(*) FROM ip_accounts WHERE ip LIKE ? OR country LIKE ? OR CAST(rowid AS TEXT) LIKE ?`,
+		`SELECT COUNT(*) FROM ip_accounts WHERE ip LIKE ? ESCAPE '\' OR country LIKE ? ESCAPE '\' OR CAST(rowid AS TEXT) LIKE ? ESCAPE '\'`,
 		pat, pat, pat,
 	).Scan(&n)
 	return n, err
