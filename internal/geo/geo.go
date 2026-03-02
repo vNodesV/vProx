@@ -36,13 +36,12 @@ var (
 )
 
 // Preferred MMDB location(s).
-// Primary: system-wide FHS path installed by `make geo`.
-// Fallbacks: legacy user-home paths, then current directory (dev).
-// User home paths are prepended dynamically in initDB() to respect VPROX_HOME.
+// Primary: $VPROX_HOME/data/geolocation/ (installed by `make geo`).
+// Fallbacks: system-wide FHS paths, then current directory (dev).
+// Home paths are prepended dynamically in initDB() to respect VPROX_HOME.
 var ip2lPaths = []string{
-	// FHS system-wide install (canonical — `make geo` installs here)
+	// System-wide FHS fallbacks
 	"/usr/local/share/IP2Location/ip2location.mmdb",
-	// Legacy system paths
 	"/usr/local/share/IP2Proxy/ip2location.mmdb",
 	"/usr/share/IP2Location/ip2location.mmdb",
 	"/usr/share/IP2Proxy/ip2location.mmdb",
@@ -87,20 +86,12 @@ func initDB() {
 	// Start the cache sweeper (CR-8).
 	startCacheSweeper()
 
-	// Prepend user-home override paths so they take priority over system paths.
-	// Supports VPROX_HOME env (explicit home) and legacy ~/.vProx fallback.
-	// New canonical: $VPROX_HOME/data/geo/ip2location.mmdb
-	// Legacy compat: $VPROX_HOME/data/geolocation/ip2location.mmdb
+	// Prepend user-home paths so they take priority over system-wide fallbacks.
+	// `make geo` extracts the MMDB to $VPROX_HOME/data/geolocation/.
 	if home := os.Getenv("VPROX_HOME"); home != "" {
-		ip2lPaths = append([]string{
-			filepath.Join(home, "data", "geo", "ip2location.mmdb"),
-			filepath.Join(home, "data", "geolocation", "ip2location.mmdb"), // legacy
-		}, ip2lPaths...)
+		ip2lPaths = append([]string{filepath.Join(home, "data", "geolocation", "ip2location.mmdb")}, ip2lPaths...)
 	} else if home := os.Getenv("HOME"); home != "" {
-		ip2lPaths = append([]string{
-			filepath.Join(home, ".vProx", "data", "geo", "ip2location.mmdb"),
-			filepath.Join(home, ".vProx", "data", "geolocation", "ip2location.mmdb"), // legacy
-		}, ip2lPaths...)
+		ip2lPaths = append([]string{filepath.Join(home, ".vProx", "data", "geolocation", "ip2location.mmdb")}, ip2lPaths...)
 	}
 
 	// 1) IP2Location MMDB
