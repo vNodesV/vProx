@@ -60,8 +60,10 @@ type IPLimiter struct {
 	mirrorMain bool // also echo important events into main log (global log package)
 
 	// client IP extraction
-	trustProxy bool   // prefer CF-Connecting-IP / Forwarded / X-Forwarded-For
-	ipHeader   string // explicit header (e.g., X-Real-IP)
+	trustProxy     bool         // prefer CF-Connecting-IP / Forwarded / X-Forwarded-For
+	trustedProxies []*net.IPNet // SEC-H3: CIDR allowlist; XFF trusted only from these sources
+	xffWarnOnce    sync.Once    // log warning once if trustProxy=true but no trustedProxies
+	ipHeader       string       // explicit header (e.g., X-Real-IP)
 
 	// behavior
 	enforceDefaults bool // if true, defaults also 429 via Allow(); else Wait()
@@ -127,6 +129,24 @@ func WithTrustProxy(trust bool) Option {
 // WithIPHeader uses a specific header for client IP first (e.g., "X-Real-IP").
 func WithIPHeader(header string) Option {
 	return func(l *IPLimiter) { l.ipHeader = header }
+}
+
+// WithTrustedProxies sets the CIDR list of trusted reverse proxies.
+// When set, proxy headers (X-Forwarded-For, CF-Connecting-IP, Forwarded)
+// are only trusted if RemoteAddr falls within one of these networks.
+// If trustProxy is true but this list is empty, current behavior is preserved
+// (all proxy headers trusted) with a one-time startup warning.
+func WithTrustedProxies(cidrs []string) Option {
+	return func(l *IPLimiter) {
+		for _, cidr := range cidrs {
+			_, network, err := net.ParseCIDR(cidr)
+			if err != nil {
+				log.Printf("[limit] warn: invalid trusted_proxy CIDR %q: %v", cidr, err)
+				continue
+			}
+			l.trustedProxies = append(l.trustedProxies, network)
+		}
+	}
 }
 
 // WithNow overrides the time source (primarily for tests).
@@ -264,7 +284,6 @@ func (l *IPLimiter) Middleware(next http.Handler) http.Handler {
 			if !lim.Allow() {
 				l.logAccessLimited(ip, r, "RATE_LIMIT_EXCEEDED")
 				w.Header().Set("Retry-After", "1")
-				w.Header().Set("X-RateLimit-Policy", l.policyString(ip))
 				w.Header().Set("X-RateLimit-Status", "blocked")
 				http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
 				l.logEvent(ip, r, "429")
@@ -282,7 +301,6 @@ func (l *IPLimiter) Middleware(next http.Handler) http.Handler {
 			if !lim.Allow() {
 				l.logAccessLimited(ip, r, "RATE_LIMIT_EXCEEDED")
 				w.Header().Set("Retry-After", "1")
-				w.Header().Set("X-RateLimit-Policy", l.policyString(ip))
 				w.Header().Set("X-RateLimit-Status", "blocked")
 				http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
 				l.logEvent(ip, r, "429")
@@ -391,6 +409,25 @@ func (l *IPLimiter) sweep() {
 		l.pool.Delete(ip)
 		return true
 	})
+
+	// SEC-M6: evict stale autoState entries — IPs whose strike window expired
+	// and that have no active auto-override (never escalated or already expired).
+	if l.enforceAuto {
+		l.autoState.Range(func(key, val any) bool {
+			ip := key.(string)
+			if _, hasExpiry := l.autoExpiry.Load(ip); hasExpiry {
+				return true // keep: active auto-override will clean up on expiry
+			}
+			s := val.(*strikeState)
+			s.mu.Lock()
+			stale := !s.windowEnd.IsZero() && now.After(s.windowEnd)
+			s.mu.Unlock()
+			if stale {
+				l.autoState.Delete(ip)
+			}
+			return true
+		})
+	}
 }
 
 // --- internals ---
@@ -418,8 +455,10 @@ func (l *IPLimiter) limiterFor(ip string) *rate.Limiter {
 }
 
 func (l *IPLimiter) clientIP(r *http.Request) string {
+	proxyTrusted := l.trustProxy && l.isProxyTrusted(r)
+
 	// 0) Cloudflare direct hint
-	if l.trustProxy {
+	if proxyTrusted {
 		if v := strings.TrimSpace(r.Header.Get("CF-Connecting-IP")); v != "" {
 			if p := parseFirstIP(v); p != "" {
 				return p
@@ -434,7 +473,7 @@ func (l *IPLimiter) clientIP(r *http.Request) string {
 			}
 		}
 	}
-	if l.trustProxy {
+	if proxyTrusted {
 		// 2) Forwarded
 		if fwd := r.Header.Get("Forwarded"); fwd != "" {
 			if ip := forwardedForIP(fwd); ip != "" {
@@ -459,6 +498,32 @@ func (l *IPLimiter) clientIP(r *http.Request) string {
 		return r.RemoteAddr
 	}
 	return host
+}
+
+// isProxyTrusted returns true if the direct connection IP (RemoteAddr) is in
+// the configured trusted_proxies CIDR list. If no list is configured, falls
+// back to trusting all proxy headers (backward compat) with a one-time warning.
+func (l *IPLimiter) isProxyTrusted(r *http.Request) bool {
+	if len(l.trustedProxies) == 0 {
+		l.xffWarnOnce.Do(func() {
+			log.Printf("[limit] WARN: trust_proxy enabled but no trusted_proxies configured — trusting all proxy headers")
+		})
+		return true
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return false
+	}
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return false
+	}
+	for _, network := range l.trustedProxies {
+		if network.Contains(ip) {
+			return true
+		}
+	}
+	return false
 }
 
 func forwardedForIP(h string) string {
