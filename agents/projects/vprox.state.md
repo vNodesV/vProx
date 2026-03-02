@@ -869,3 +869,87 @@ Callers must include `X-API-Key: your-secret-key-here` header. Without key confi
   1. `sudo tar -xzf f2b-fix.tar.gz -C /`
   2. Run manual UFW commands from `jail.local` comments for 5 confirmed-malicious IPs
   3. `sudo fail2ban-client check` → `sudo systemctl restart fail2ban`
+
+---
+
+## Session: 2026-03-01 Evening — vLog Matrix [V] Theme + Auth
+
+### Active Branch
+`vLog/v1.1.0` — HEAD: `fc37276`
+
+### Commits This Session
+| SHA | Description |
+|-----|-------------|
+| `70a46db` | feat(vlog): session auth + login page + all P0 security fixes |
+| `a1e5c29` | fix(vlog): CSP cdn.jsdelivr.net, bind_address config, Makefile api_key warning |
+| `fc37276` | vLog: Matrix [V] dark theme — content_bg, neutral text, green accents |
+
+### Work Completed
+
+#### Auth + Login System (`70a46db`)
+- `internal/vlog/config/config.go` — `AuthConfig{Username, PasswordHash}` in `VLogSection`; default username `"admin"`
+- `internal/vlog/web/server.go` — session map + HMAC-SHA256 key; `requireSession` middleware wraps all page+API routes; login/logout routes
+- `internal/vlog/web/handlers.go` — `handleLoginPage`, `handleLoginSubmit`, `handleLogout`; session helpers `newSession/validSession/deleteSession`
+- `internal/vlog/web/templates/login.html` — NEW: standalone branded login page (198 lines, no base.html dep)
+- `internal/vlog/web/static/bg_wide.png` — hero background (server corridor)
+- `internal/vlog/web/static/2025_NOBG.png` — vNodes[V] logo
+- `config/vlog/vlog.sample.toml` — `[vlog.auth]` + `bind_address` + `api_key` documented
+- `go.mod/go.sum` — `golang.org/x/crypto` (bcrypt) added
+- Auth bypass: if `password_hash == ""` → `requireSession` is no-op (backward compat)
+
+#### Bind Address Fix + CSP (`a1e5c29`)
+- `bind_address` field in `VLogSection` (default `"127.0.0.1"`) — wired into `http.Server.Addr`
+- CSP `style-src` now includes `https://cdn.jsdelivr.net` (PicoCSS)
+- Makefile `config-vlog`: boxed api_key warning with HMAC-SHA256 explanation
+
+#### Matrix [V] Dark Theme (`fc37276`)
+- `internal/vlog/web/static/vlog.css` — full rewrite of design tokens:
+  - `--vn-bg: #000`, `--vn-bg-card: #000`, `--vn-text: #c8c8c8` (neutral, readable)
+  - `--vn-green: #00ff00`, `--vn-text-muted: #888`, `--vn-border: #0a1a0a`
+  - Card bg: `#000` + border `#0a1a0a` (dark green trace, invisible on bg image)
+  - Buttons reversed: dark `#001700` bg + `#00ff00` text + green border
+  - All blue (`#0d6efd`) → green tokens; sort-spinner, search-btn, btn-update, enrich-bar, port-open
+- `internal/vlog/web/static/content_bg.png` — NEW: vNodes[V] green neon room (1080×1080, 2.2MB)
+  - Body: `background: url('content_bg.png') center/cover no-repeat fixed`
+  - Overlay: `rgba(0,0,0,0.72)` via `body::before`
+- `internal/vlog/web/templates/base.html` — `data-theme="dark"` on `<html>`; logout button green border
+- `internal/vlog/web/templates/login.html` — card bg `#001700`, border `rgba(0,255,0,0.20)`, submit reversed
+
+### Color Palette Reference (Matrix [V] Dev — matches vnodesv.net)
+| Token | Value | Usage |
+|-------|-------|-------|
+| `--vn-bg` | `#000000` | Body background |
+| `--vn-bg-card` | `#000000` | Card backgrounds (black over bg image) |
+| `--vn-green` | `#00ff00` | Accent, interactive, nav active, headings |
+| `--vn-green-hover` | `#6df36d` | Hover states (vnodesv.net `--muted`) |
+| `--vn-border` | `#0a1a0a` | Card/block borders (vnodesv.net `--matrix-soft`) |
+| `--vn-text` | `#c8c8c8` | Body text (neutral, readable) |
+| `--vn-text-muted` | `#888888` | Secondary text |
+| BG image | `content_bg.png` | Fixed, center/cover, 72% black overlay |
+
+### Auth Architecture
+- Session token: `crypto/rand` 32-byte → hex → HMAC-SHA256 → stored in `map[string]time.Time` (24h TTL)
+- Cookie: `vlog_session`, `HttpOnly`, `SameSite=Strict` (no `Secure` — HTTP-only via localhost)
+- Password: bcrypt via `golang.org/x/crypto/bcrypt`
+- Generate: `htpasswd -nbBC 12 admin 'yourpassword' | cut -d: -f2`
+
+### Server-Side Setup Required
+```toml
+# $VPROX_HOME/config/vlog.toml
+[vlog]
+base_path    = "/vlog"
+bind_address = "127.0.0.1"
+api_key      = "$(openssl rand -hex 32)"
+
+[vlog.auth]
+username      = "admin"
+password_hash = "$(htpasswd -nbBC 12 admin 'pass' | cut -d: -f2)"
+```
+
+### Planned Todos (carry forward)
+- `wiz-vlog-appearance` — Settings → Appearance dropdown (default/light/dark themes)
+- `wiz-vlog-branding` — Settings → Branding sub-section (logo, bg, accent, font)
+- `wiz-vlog-settings` — full Settings page + restart API
+- **PR `vLog/v1.1.0` → `develop`** (34+ commits ahead — still pending)
+- **GitHub release `v1.2.0`**
+- Fix remaining P2/P3 audit findings (CR-2, CR-6, CR-8, SEC-H3, SEC-M4, SEC-M6, SEC-L1–L4)

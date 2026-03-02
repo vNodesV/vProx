@@ -7,15 +7,15 @@
 /* ── vNodes[V] design tokens ── */
 :root {
   --vn-bg:           #000000;
-  --vn-bg-card:      #000000;
+  --vn-bg-card:      rgba(0, 6, 0, 0.78);
   --vn-green:        #00ff00;
   --vn-green-hover:  #6df36d;
   --vn-green-dim:    rgba(0, 255, 0, 0.08);
-  --vn-green-border: #0a1a0a;
-  --vn-green-glow:   rgba(0, 255, 0, 0.10);
+  --vn-green-border: rgba(0, 255, 0, 0.18);
+  --vn-green-glow:   rgba(0, 255, 0, 0.18);
   --vn-text:         #c8c8c8;
   --vn-text-muted:   #888888;
-  --vn-border:       #0a1a0a;
+  --vn-border:       rgba(0, 255, 0, 0.10);
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
   --font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
   font-size: 14px;
@@ -32,23 +32,47 @@
 }
 
 /* ── Body + fixed background ── */
+html {
+  height: 100%;
+}
 body {
   font-family: var(--font-sans);
   font-size: 0.9rem;
   line-height: 1.5;
-  background: #000000 url('content_bg.png') center/cover no-repeat fixed;
   color: var(--vn-text);
+  /* Full image always visible — stretches to fill viewport, aspect ratio adjusts to screen */
+  background: #000000 url('content_bg.png') center center / 100% 100% no-repeat fixed;
+  /* Flex column so footer sticks to the floor */
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
 }
-/* Dark overlay so text stays readable over the image */
+/* Overlay — lightened so image breathes through */
 body::before {
   content: '';
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.72);
+  background: rgba(0, 0, 0, 0.50);
   pointer-events: none;
   z-index: 0;
 }
-.container { position: relative; z-index: 1; }
+/* Content above overlay */
+body > * { position: relative; z-index: 1; }
+main.container { flex: 1; }
+
+/* ── Footer ── */
+.vlog-footer {
+  text-align: center;
+  padding: 0.6rem 1rem;
+  font-size: 0.72rem;
+  color: rgba(0, 255, 0, 0.35);
+  letter-spacing: 0.05em;
+  border-top: 1px solid rgba(0, 255, 0, 0.08);
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  user-select: none;
+}
 
 /* ── Typography ── */
 h1 { font-size: 1.4rem; font-weight: 700; color: #e0e0e0; }
@@ -88,12 +112,12 @@ nav a      { font-size: 0.82rem; }
 
 /* ── Glass cards ── */
 .stat-card, .chart-block, .intel-card, article {
-  background: #000000;
-  border: 1px solid #0a1a0a;
+  background: var(--vn-bg-card);
+  border: 1px solid var(--vn-green-border);
   border-radius: 8px;
-  box-shadow: 0 0 24px var(--vn-green-glow), 0 4px 16px rgba(0,0,0,0.3);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  box-shadow: 0 0 28px var(--vn-green-glow), inset 0 1px 0 rgba(0,255,0,0.06), 0 4px 20px rgba(0,0,0,0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 /* ── Tables ── */
@@ -183,12 +207,14 @@ gap: 0.75rem;
 margin-bottom: 1.25rem;
 }
 .stat-card {
-background: #000000;
-border: 1px solid #0a1a0a;
+background: var(--vn-bg-card);
+border: 1px solid var(--vn-green-border);
 border-radius: 6px;
 padding: 0.75rem 1rem;
 text-align: center;
-box-shadow: 0 0 16px var(--vn-green-glow);
+box-shadow: 0 0 20px var(--vn-green-glow), 0 4px 16px rgba(0,0,0,0.5);
+backdrop-filter: blur(8px);
+-webkit-backdrop-filter: blur(8px);
 }
 .stat-card h3 { margin: 0 0 0.2rem; font-size: 1.6rem; font-weight: 700; color: var(--vn-green); }
 .stat-card p  { margin: 0; font-size: 0.75rem; color: var(--vn-text-muted); }
@@ -202,11 +228,13 @@ margin-bottom: 1.5rem;
 }
 @media (max-width: 700px) { .chart-row { grid-template-columns: 1fr; } }
 .chart-block {
-background: #000000;
-border: 1px solid #0a1a0a;
+background: var(--vn-bg-card);
+border: 1px solid var(--vn-green-border);
 border-radius: 6px;
 padding: 0.75rem 1rem;
-box-shadow: 0 0 16px var(--vn-green-glow);
+box-shadow: 0 0 20px var(--vn-green-glow), 0 4px 16px rgba(0,0,0,0.5);
+backdrop-filter: blur(8px);
+-webkit-backdrop-filter: blur(8px);
 }
 .chart-header {
 display: flex;
