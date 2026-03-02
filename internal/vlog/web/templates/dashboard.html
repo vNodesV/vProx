@@ -7,20 +7,28 @@
 
 <div class="stats-grid">
   <div class="stat-card">
-    <h3>{{index .Stats "total_ips"}}</h3>
-    <p>Total IPs</p>
-  </div>
-  <div class="stat-card">
     <h3>{{index .Stats "total_requests"}}</h3>
     <p>Total Requests</p>
   </div>
   <div class="stat-card">
-    <h3>{{index .Stats "total_ratelimit_events"}}</h3>
+    <h3 style="color:#ef5350">{{index .Stats "blocked_ips"}}</h3>
+    <p>Blocked IPs</p>
+  </div>
+  <div class="stat-card">
+    <h3 style="color:#ffa726">{{index .Stats "total_ratelimit_events"}}</h3>
     <p>Rate Limit Events</p>
   </div>
   <div class="stat-card">
-    <h3>{{index .Stats "blocked_ips"}}</h3>
-    <p>Blocked IPs</p>
+    <h3>{{index .Stats "total_ips"}}</h3>
+    <p>Total IPs</p>
+  </div>
+  <div class="stat-card">
+    <h3>{{index .Stats "total_archives"}}</h3>
+    <p>Total Archives</p>
+  </div>
+  <div class="stat-card">
+    <h3 style="color:#ef5350">{{len .TopThreatAccounts}}</h3>
+    <p>Threat Accounts</p>
   </div>
 </div>
 
@@ -66,7 +74,55 @@
   </div>
 </div>
 
-<!-- ENDPOINT STATUS BLOCK (full width, below charts) -->
+<!-- TOP THREAT ACCOUNTS -->
+<article style="padding:1rem;margin-bottom:1.5rem">
+  <h2>Top Threat Accounts</h2>
+  {{if .TopThreatAccounts}}
+  <div style="overflow-x:auto">
+  <table id="threat-tbl" role="grid">
+    <thead>
+      <tr>
+        <th class="sortable">IP</th>
+        <th class="sortable">Country</th>
+        <th class="sortable">Requests</th>
+        <th class="sortable">Rate Hits</th>
+        <th class="sortable">Threat Score</th>
+        <th class="sortable">Last Seen</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{range .TopThreatAccounts}}
+      <tr>
+        <td><a href="{{$.BasePath}}/accounts/{{.IP}}"><code>{{.IP}}</code></a></td>
+        <td>{{.Country}}</td>
+        <td>{{.TotalRequests}}</td>
+        <td>{{.RatelimitEvents}}</td>
+        <td>
+          <div class="threat-bar" style="width:80px;display:inline-block;vertical-align:middle;">
+            <div class="threat-fill {{threatClass .ThreatScore}}" style="width:{{.ThreatScore}}%"></div>
+          </div>
+          <span class="threat-num">{{.ThreatScore}}</span>
+        </td>
+        <td>{{.LastSeen}}</td>
+        <td>
+          {{if eq .Status "blocked"}}<span style="color:#ef5350">●</span> Blocked
+          {{else if eq .Status "rate_limited"}}<span style="color:#ffa726">●</span> Rate Ltd
+          {{else}}<span style="color:#4caf50">●</span> OK
+          {{end}}
+        </td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+  </div>
+  <script>initSortableTable('threat-tbl');</script>
+  {{else}}
+  <p>No threat accounts found.</p>
+  {{end}}
+</article>
+
+<!-- ENDPOINT STATUS BLOCK (full width) -->
 <div class="chart-block" style="margin-bottom:1.5rem;">
   <div class="chart-header" style="margin-bottom:0.5rem;">
     <strong style="font-size:.9rem;">Endpoint Status</strong>
@@ -85,45 +141,6 @@
     </div>
   </header>
   <div id="ingest-result"></div>
-</section>
-
-<section>
-  <h3>Blocked IPs</h3>
-  {{if .BlockedAccounts}}
-  <table id="blocked-tbl" role="grid">
-    <thead>
-      <tr>
-        <th class="sortable">IP</th>
-        <th class="sortable">Country</th>
-        <th class="sortable">Threat Score</th>
-        <th class="sortable">Requests</th>
-        <th class="sortable">Last Seen</th>
-        <th>Actions</th>
-      </tr>
-    </thead>
-    <tbody>
-      {{range .BlockedAccounts}}
-      <tr>
-        <td><code>{{.IP}}</code></td>
-        <td>{{.Country}}</td>
-        <td>
-          <div class="threat-bar" style="width:100px;display:inline-block;vertical-align:middle;">
-            <div class="threat-fill {{threatClass .ThreatScore}}"
-                 style="width:{{.ThreatScore}}%"></div>
-          </div>
-          {{.ThreatScore}}
-        </td>
-        <td>{{.TotalRequests}}</td>
-        <td>{{.LastSeen}}</td>
-        <td><a href="{{$.BasePath}}/accounts/{{.IP}}" role="button" class="outline">View</a></td>
-      </tr>
-      {{end}}
-    </tbody>
-  </table>
-  <script>initSortableTable('blocked-tbl');</script>
-  {{else}}
-  <p>No blocked IPs.</p>
-  {{end}}
 </section>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>

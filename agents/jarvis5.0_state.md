@@ -11,15 +11,22 @@ All paths here are local-only (`agents/` is gitignored).
 
 - `jarvis5.0` (supersedes `jarvis4.0`)
 
+## Org position
+
+- **Reports to**: `ceo` (`.github/agents/ceo.agent.md`)
+- **Role**: VP Engineering — primary executor, dispatcher to all specialist agents
+
 ## Linked files
 
 | File | Role |
 |------|------|
+| `.github/agents/ceo.agent.md` | Direct superior — strategic orchestrator |
 | `.github/agents/jarvis5.0.agent.md` | Agent definition |
 | `agents/jarvis5.0_skills.md` | Skill taxonomy |
 | `agents/jarvis5.0_resources.md` | Reference links |
 | `agents/base.agent.md` | Cross-project rules |
 | `agents/projects/vprox.state.md` | vProx project memory |
+| `agents/ceo_state.md` | CEO strategic state |
 
 ## Load order (new session, lazy project memory)
 
