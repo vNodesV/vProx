@@ -33,6 +33,9 @@ You are the repository PR reviewer and quality gatekeeper for `vProx`.
 ## Security review checklist (audit-driven — block on any CRITICAL/HIGH)
 - **Admin/mutating endpoints must have auth middleware** — no bare `mux.HandleFunc` for `POST /api/v1/block`, `/unblock`, `/ingest`, or any state-mutating route; must be wrapped with API key middleware.
 - **Admin HTTP servers must bind to 127.0.0.1** — never `0.0.0.0` for any internal-only service; Apache/nginx provides the public-facing proxy layer.
+- **Session tokens must use `crypto/rand`** — never `math/rand`, timestamp hashes, or user-derived values; minimum 32 bytes → hex → 64-char token.
+- **Session cookies must have `HttpOnly` + `SameSite=Strict`** — never `SameSite=Lax` for admin panels; `Secure` required if HTTPS-only; TTL enforced server-side (24h max for admin UIs, purge expired on every request).
+- **Auth bypass must be explicit and documented** — empty `password_hash` → auth disabled is acceptable for dev/docker, but must be guarded by a clear config comment and server warning log; never silently bypass in production.
 - **SSE handlers: serialize all ResponseWriter writes** — `http.ResponseWriter` is not concurrent-safe; keepalive goroutine + `emit()` must share a `sync.Mutex` or route writes through a single-writer goroutine.
 - **WebSocket: SetReadLimit must be called after Upgrade** — never leave `ReadLimit` at 0 (unlimited); minimum `1<<20` for client, `4<<20` for backend; add connection counter.
 - **WebSocket: CheckOrigin must not return true unconditionally** — validate Origin against configured allowed hosts.
@@ -51,7 +54,7 @@ You are the repository PR reviewer and quality gatekeeper for `vProx`.
 - **Backup** (`internal/backup/`): log rotation, multi-file archive, access-count persistence; `automation bool` (TOML) controls auto-scheduler; `--backup` flag always runs; NEW/UPD structured log format; comma-split convenience in `resolveBackupExtraFiles`
 - **Geo** (`internal/geo/`): IP2Location/GeoLite2, lazy init via sync.Once (resettable), micro-cache with periodic sweep, VPROX_HOME-aware path resolution
 - **Web GUI** (P4 planned, `internal/gui/`): embedded admin dashboard — `html/template` + `go:embed` + htmx, served via vProxWeb HTTP server
-- **vLog** (`cmd/vlog/`, `internal/vlog/`): standalone log-analyzer binary; SQLite (modernc.org/sqlite) for IP accounts; ingests `archives/*.tar.gz`; VirusTotal + AbuseIPDB + Shodan intel; composite threat score; embedded web UI; `POST /api/v1/ingest` endpoint for vProx backup hook; config at `$VPROX_HOME/config/vlog.toml`
+- **vLog** (`cmd/vlog/`, `internal/vlog/`): standalone log-analyzer binary; SQLite (modernc.org/sqlite) for IP accounts; ingests `archives/*.tar.gz`; VirusTotal + AbuseIPDB + Shodan intel; composite threat score; embedded web UI (Matrix [V] dark theme); session auth (login page, bcrypt, 32-byte `crypto/rand` tokens, 24h TTL, `requireSession` middleware, auth bypass if `password_hash == ""`); `POST /api/v1/ingest` endpoint for vProx backup hook; config at `$VPROX_HOME/config/vlog.toml` (`[vlog.auth]` section for `password_hash`)
 
 ## Config layout (current)
 - `config/webservice.toml` — webserver module enable + `[server]` listen addresses

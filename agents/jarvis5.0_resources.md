@@ -369,6 +369,9 @@ resources docs        → Section 12
 resources ai          → Section 13
 resources release     → Section 14
 resources ebpf        → Section 14
+resources webgui      → Section 15 (CSS/dashboard/htmx/SSE)
+resources auth        → Section 16 (session auth, bcrypt, cookies)
+resources css         → Section 15 (CSS custom props, glass morphism, background-size)
 ```
 
 ---
@@ -463,9 +466,14 @@ resources ebpf        → Section 14
 | Resource | URL | Notes |
 |---|---|---|
 | Pico CSS | https://picocss.com | Classless CSS framework, minimal footprint, dark mode |
+| Pico CSS dark mode | https://picocss.com/docs/color-schemes | `data-theme="dark"`, `--pico-*` overrides |
+| CSS custom properties | https://developer.mozilla.org/en-US/docs/Web/CSS/Using_CSS_custom_properties | CSS variable design token system |
 | Simple.css | https://simplecss.org | Classless, lightweight, semantic HTML styling |
 | AdminLTE | https://adminlte.io | Dashboard template (heavier, if needed) |
 | Chart.js | https://www.chartjs.org | Lightweight charts for dashboards |
+| backdrop-filter (MDN) | https://developer.mozilla.org/en-US/docs/Web/CSS/backdrop-filter | Glass morphism blur effect |
+| CSS glass morphism guide | https://css.glass | Generator + browser compat notes for glass morphism |
+| CSS background-size (MDN) | https://developer.mozilla.org/en-US/docs/Web/CSS/background-size | `cover`/`contain`/`100% 100%` reference |
 
 ### Architecture Patterns
 | Resource | URL | Notes |
@@ -519,4 +527,17 @@ resources ebpf        → Section 14
 
 ---
 
-*Last updated: 2026-03-01 (rev12: §6 Go HTTP Security Hardening subsection added — ResponseWriter concurrency, io.LimitReader, OWASP WS/SSRF/Error/REST cheat sheets, gorilla SetReadLimit, Cloudflare IP ranges, net.IP.IsPrivate; Quick Domain Lookup updated)*
+## 16. Session Auth & Web Security (vLog)
+
+| Resource | URL | Notes |
+|---|---|---|
+| golang.org/x/crypto/bcrypt | https://pkg.go.dev/golang.org/x/crypto/bcrypt | Bcrypt password hashing — production use in vLog auth |
+| crypto/rand | https://pkg.go.dev/crypto/rand | Cryptographically secure random bytes for session tokens |
+| net/http Cookie | https://pkg.go.dev/net/http#Cookie | HttpOnly, SameSite, Secure flags reference |
+| OWASP Session Management | https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html | Token size, TTL, cookie flags, invalidation |
+| htpasswd bcrypt | https://httpd.apache.org/docs/2.4/misc/password_encryptions.html | Apache htpasswd bcrypt format (compatible with Go bcrypt) |
+| golang.org/x/crypto/acme/autocert | https://pkg.go.dev/golang.org/x/crypto/acme/autocert | ACME TLS cert management |
+
+---
+
+*Last updated: 2026-03-02 (rev13: §15 CSS & Dashboard UI — Pico dark mode, CSS custom props, backdrop-filter, glass morphism, background-size refs added; §16 Session Auth NEW — bcrypt, crypto/rand, cookie flags, OWASP session management; Quick Domain Lookup updated)*

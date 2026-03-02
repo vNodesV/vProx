@@ -62,6 +62,8 @@ performance claim is benchmarked, every recommendation is trade-off-aware.
 - **Purpose**: log archive analyzer with CRM-like IP accounts, security intelligence, and query UI
 - **Database**: SQLite via `modernc.org/sqlite` (pure Go, no CGO, WAL mode)
 - **Web UI**: `html/template` + `go:embed` + htmx — dashboard, accounts, query builder, threat panel
+- **Auth system** (shipped `70a46db`): login page (`login.html`, standalone, no `base.html` dep); session tokens via `crypto/rand` 32-byte hex; HMAC-SHA256; `map[string]time.Time` 24h TTL; bcrypt (`golang.org/x/crypto/bcrypt`, `Cost=12`); `HttpOnly`/`SameSite=Strict` cookie; `requireSession` middleware wraps all page+API routes; auth bypass if `password_hash == ""` (backward compat); config: `[vlog.auth]` in `vlog.toml`
+- **Theme** (shipped `cc7735a`): Matrix [V] dark theme — CSS design token system (`--vn-*`), Pico v2 dark mode override, glass morphism cards (`backdrop-filter:blur(8px)`, translucent bg, green border glow), viewport-fill background (`background-size:100% 100% fixed`, `content_bg.png`), `body::before` overlay, sticky footer (flex-column + `main{flex:1}`)
 - **Dashboard**: dual-line Chart.js request charts (left/right 50/50), standalone endpoint status panel with 3 static probe columns (Local | 🇨🇦 | 🌍); CSS spinner during probe; hover tooltips via `title` attribute
 - **Endpoint probe**: `handleAPIProbe` — local probe (SSRF-guarded, candidate URL discovery) + concurrent CA+WW probes via check-host.net HTTP-check API (submit+poll, 12s deadline, 2s interval); result shape `{host,url,local,ca,ww}` with `locResult{ok,code,latency_ms,error,node}`; node list verified from `/nodes/hosts` (ca1, fr2, de1/de4, nl1, uk1, fi1, jp1, sg1, us1/us2, br1, in1)
 - **Accounts page**: server-side search (IP/country/rowid), per-page selector (25/50/100/200/All), sortable columns with URL-based sort persistence (back-nav safe), Investigate button (`.btn-investigate-done` green when intel exists), Org column (ip-api.com), Status column (ALLOWED/BLOCKED)
@@ -69,19 +71,23 @@ performance claim is benchmarked, every recommendation is trade-off-aware.
 - **IP Intelligence**: VirusTotal v3 + AbuseIPDB v2 + Shodan APIs; parallel queries (3 goroutines → buffered channels); composite threat score (0-100); flag + score + per-source breakdown; cache in `intel_cache` table
 - **OSINT**: 5 concurrent ops (DNS, port scan, ip-api.com, protocol probe, Cosmos RPC) via `sync.WaitGroup` + `sync.Mutex`; timing: ~5s vs old ~23s
 - **SSE handlers** (`internal/vlog/web/handlers.go`): `handleAPIInvestigate`, `handleAPIEnrich`, `handleAPIosint` — all use keepalive goroutine (15s `: ping`) + `context.Background()` (never `r.Context()`) to survive Apache `ProxyTimeout`; see SSE keepalive pattern in `base.agent.md`
-- **Config**: `$VPROX_HOME/config/vlog.toml` (port, db_path, archives_dir, API keys, intel.auto_enrich)
+- **Config**: `$VPROX_HOME/config/vlog.toml` (port, db_path, archives_dir, `api_key`, `bind_address`, `base_path`, `[vlog.auth]`)
 - **CLI**: `vlog start`, `vlog stop`, `vlog restart`, `vlog ingest`, `vlog status`, `--home`, `--port`, `--quiet`
 - **vProx hook**: optional `vlog_url` in `config/ports.toml` — vProx POSTs to vLog after `--new-backup` (non-fatal)
 - **Apache config** (`.vscode/vlog.apache2`): `ProxyTimeout 60`, `RequestReadTimeout handshake=5 header=10-30,MinRate=750 body=0`; `/vlog/` Location: IP-restricted + `timeout=30`; `SetEnvIfNoCase Content-Encoding .+ no-gzip dont-vary`; `X-Real-IP "%{REMOTE_ADDR}s"`
 
-### Security Audit Findings (2026-03-01 — P0 items, fix before v1.2.0 release)
-Critical open issues tracked in `agents/projects/vprox.state.md`:
-- **SEC-C1/C2 (CRITICAL)**: vLog binds `0.0.0.0`; zero auth on mutating endpoints (`/block`, `/unblock`). Fix: bind `127.0.0.1` + `requireAPIKey` middleware.
-- **SEC-H1 (HIGH)**: `handleAPIosint` missing `net.ParseIP` + private-IP check → SSRF internal network scan. 15-min fix.
-- **CR-1 (CRITICAL)**: `backup.go` truncates source logs BEFORE `writeTarGz` — data loss on write failure. Fix: move truncation after successful write.
-- **CR-3 (HIGH)**: `notifyVLog` goroutine killed before HTTP POST — call synchronously.
-- **CR-4/CR-5 (HIGH)**: WS `WriteControl` race + SSE `ResponseWriter` concurrent write → add `sync.Mutex`.
-- Full findings: 26 total (2 CRITICAL, 6 HIGH, 7 MEDIUM, 5 LOW, 3 INFO). Supply chain/SQL injection/command injection: CLEAN.
+### Security Audit Status (2026-03-01 — all P0 items FIXED)
+All CRITICAL/HIGH findings from the 2026-03-01 audit applied in `70a46db` + `a1e5c29`. Supply chain/SQL injection/command injection remain CLEAN.
+
+**P0 Fixed:**
+- ✅ SEC-C1: `bind_address = "127.0.0.1"` (config-driven, default loopback)
+- ✅ SEC-C2: `requireAPIKey` middleware on `/block` + `/unblock`; `api_key` in vlog.toml
+- ✅ SEC-H1: `net.ParseIP` + `isPrivateIP()` SSRF guard in all probe/enrich/osint handlers
+- ✅ CR-1: Backup truncation moved after successful `writeTarGz`
+- ✅ CR-3: `notifyVLog` called synchronously (not in goroutine)
+- ✅ CR-4/CR-5: `sync.Mutex` on WS `WriteControl` + SSE `ResponseWriter`
+
+**P2/P3 Remaining (not blocking release):** CR-2, CR-6, CR-8, SEC-H3, SEC-M4, SEC-M6, SEC-L1–L4. Full list in `agents/projects/vprox.state.md`.
 
 ### Cosmos SDK node context (upstream knowledge)
 - **Cosmos SDK v0.50.14** — proxied upstream protocol knowledge
@@ -293,24 +299,214 @@ Always specify `model:` in `task` calls. Parallelize when tasks are independent.
 
 Triggered by user command `agentupgrade` or self-initiated when significant capability growth is recognized.
 
+Skill source: `https://github.com/github/awesome-copilot/blob/main/docs/README.skills.md`
+
 ```
+0. SKILL SYNC   → Fetch latest skill registry from awesome-copilot; diff against last-known list;
+                   flag new skills for integration, deprecated skills for removal.
+                   Skills: suggest-awesome-github-copilot-skills
+                           suggest-awesome-github-copilot-agents
+                           suggest-awesome-github-copilot-instructions
+                           suggest-awesome-github-copilot-prompts
+
 1. INVENTORY    → Read all agent files: .github/agents/*.agent.md, agents/*.md, agents/projects/*.state.md
-2. ASSESS       → For each file evaluate: accuracy, completeness, consistency, currency
+                   Map current project structure and workflow.
+                   Skills: context-map
+                           what-context-needed
+                           folder-structure-blueprint-generator
+                           my-issues
+                           my-pull-requests
+                           repo-story-time
+
+2. ASSESS       → For each file evaluate: accuracy, completeness, consistency, currency.
+                   Identify stale references, missing cross-links, outdated scope.
+                   Skills: agentic-eval
+                           agent-governance
+                           review-and-refactor
+                           code-exemplars-blueprint-generator
+                           project-workflow-analysis-blueprint-generator
+                           model-recommendation
+                           tldr-prompt
+
 3. CONTEXT      → Build complete_state:
-                   - Recent work: last 2 major PRs/commits/features
+                   - Recent work: last 2 major PRs/commits/features (gh-cli, my-pull-requests)
                    - Current codebase: modules, architecture, conventions
                    - Feature potential: capabilities that could be added
                    - Skill growth: new domains exercised since last upgrade
-4. PATCH        → Apply targeted updates:
-                   - Agent definitions (scope, tools, commands)
-                   - Skills taxonomy (new domains, depth adjustments)
-                   - Resources library (new references)
-                   - State/router files (commands, upgrade history)
-                   - Base rules (if cross-project patterns changed)
-                   - Reviewer agent (if review scope changed)
-                   - Project state files (conventions, follow-ups)
-5. VERIFY       → Cross-reference all files for consistency
-6. REPORT       → Changed files, gaps closed, new capabilities, upgrade history entry
+                   Skills: architecture-blueprint-generator
+                           technology-stack-blueprint-generator
+                           project-workflow-analysis-blueprint-generator
+                           breakdown-epic-arch
+                           breakdown-plan
+                           prd
+                           create-technical-spike
+                           gh-cli
+
+4. PATCH        → Apply targeted updates in parallel where independent:
+
+  4a. Agent definitions (scope, tools, commands, model routing):
+      Skills: create-agentsmd
+              finalize-agent-prompt
+              structured-autonomy-plan
+              structured-autonomy-generate
+              structured-autonomy-implement
+              github-copilot-starter
+              make-skill-template
+              copilot-instructions-blueprint-generator
+              generate-custom-instructions-from-codebase
+
+  4b. Skills taxonomy (new domains, depth adjustments):
+      Skills: make-skill-template
+              add-educational-comments
+              write-coding-standards-from-file
+
+  4c. Resources library (new references, dead-link pruning):
+      Skills: documentation-writer
+              microsoft-docs
+              microsoft-code-reference
+              microsoft-skill-creator
+              update-llms
+              create-llms
+              create-tldr-page
+              tldr-prompt
+              mkdocs-translations
+
+  4d. State / router files (commands, upgrade history, memory):
+      Skills: memory-merger
+              remember
+              remember-interactive-programming
+
+  4e. Specification + planning files:
+      Skills: create-specification
+              update-specification
+              create-implementation-plan
+              update-implementation-plan
+              breakdown-epic-pm
+              breakdown-feature-prd
+              breakdown-feature-implementation
+              breakdown-test
+              gen-specs-as-issues
+              quasi-coder
+              first-ask
+              boost-prompt
+              prompt-builder
+
+  4f. Architecture + decision records:
+      Skills: create-architectural-decision-record
+              architecture-blueprint-generator
+              excalidraw-diagram-generator
+              plantuml-ascii
+              readme-blueprint-generator
+
+  4g. CI/CD + DevOps files:
+      Skills: create-github-action-workflow-specification
+              devops-rollout-plan
+              git-commit
+              git-flow-branch-creator
+              conventional-commit
+              make-repo-contribution
+              editorconfig
+              multi-stage-dockerfile
+
+  4h. GitHub Issues + PRs:
+      Skills: github-issues
+              create-github-issue-feature-from-specification
+              create-github-issues-feature-from-implementation-plan
+              create-github-issues-for-unmet-specification-requirements
+              create-github-pull-request-from-specification
+              breakdown-plan
+
+  4i. Documentation:
+      Skills: create-readme
+              readme-blueprint-generator
+              create-oo-component-documentation
+              update-oo-component-documentation
+              update-markdown-file-index
+              convert-plaintext-to-md
+              markdown-to-html
+              comment-code-generate-a-tutorial
+              folder-structure-blueprint-generator
+              technology-stack-blueprint-generator
+              copilot-instructions-blueprint-generator
+
+  4j. Code quality + security:
+      Skills: refactor
+              refactor-plan
+              refactor-method-complexity-reduce
+              review-and-refactor
+              polyglot-test-agent
+              ai-prompt-engineering-safety-review
+              sql-code-review
+              sql-optimization
+
+  4k. Reviewer agent scope update (if review scope changed):
+      Skills: review-and-refactor
+              agent-governance
+              agentic-eval
+
+  4l. Project state files (conventions, follow-ups, open items):
+      Skills: breakdown-plan
+              create-specification
+              update-specification
+
+  ── Skills catalogued but not applicable to vProx stack (log for future projects) ──
+  appinsights-instrumentation, apple-appstore-reviewer, arch-linux-triage, aspire,
+  aspnet-minimal-api-openapi, az-cost-optimize, azure-deployment-preflight,
+  azure-devops-cli, azure-resource-health-diagnose, azure-resource-visualizer,
+  azure-role-selector, azure-static-web-apps, bigquery-pipeline-audit,
+  centos-linux-triage, chrome-devtools, containerize-aspnet-framework,
+  containerize-aspnetcore, copilot-cli-quickstart, copilot-usage-metrics,
+  cosmosdb-datamodeling, create-spring-boot-java-project,
+  create-spring-boot-kotlin-project, create-web-form, csharp-async, csharp-docs,
+  csharp-mcp-server-generator, csharp-mstest, csharp-nunit, csharp-tunit,
+  csharp-xunit, datanalysis-credit-risk, dataverse-python-advanced-patterns,
+  dataverse-python-production-code, dataverse-python-quickstart,
+  dataverse-python-usecase-builder, debian-linux-triage, declarative-agents,
+  dotnet-best-practices, dotnet-design-pattern-review, dotnet-upgrade, ef-core,
+  entra-agent-user, fabric-lakehouse, fedora-linux-triage, finnish-humanizer,
+  fluentui-blazor, game-engine, image-manipulation-image-magick,
+  import-infrastructure-as-code, java-add-graalvm-native-image-support, java-docs,
+  java-junit, java-mcp-server-generator, java-refactoring-extract-method,
+  java-refactoring-remove-parameter, java-springboot, javascript-typescript-jest,
+  kotlin-mcp-server-generator, kotlin-springboot, legacy-circuit-mockups,
+  mcp-configure, mcp-copilot-studio-server-generator, mcp-create-adaptive-cards,
+  mcp-create-declarative-agent, mcp-deploy-manage-agents, meeting-minutes,
+  msstore-cli, nano-banana-pro-openrouter, next-intl-add-language, nuget-manager,
+  openapi-to-application-code, pdftk-server, penpot-uiux-design,
+  php-mcp-server-generator, playwright-automation-fill-in-form,
+  playwright-explore-website, playwright-generate-test, postgresql-code-review,
+  postgresql-optimization, power-apps-code-app-scaffold, power-bi-dax-optimization,
+  power-bi-model-design-review, power-bi-performance-troubleshooting,
+  power-bi-report-design-consultation, power-platform-mcp-connector-suite,
+  powerbi-modeling, pytest-coverage, python-mcp-server-generator, ruby-mcp-server-generator,
+  rust-mcp-server-generator, shuffle-json-data, snowflake-semanticview,
+  sponsor-finder, swift-mcp-server-generator, terraform-azurerm-set-diff-analyzer,
+  transloadit-media-processing, typescript-mcp-server-generator,
+  typespec-api-operations, typespec-create-agent, typespec-create-api-plugin,
+  update-avm-modules-in-bicep, vscode-ext-commands, vscode-ext-localization,
+  winapp-cli, workiq-copilot,
+  ── vProx-adjacent (activate if scope expands) ──
+  go-mcp-server-generator (MCP server feature), mcp-cli (MCP tool integration),
+  copilot-sdk (agent embedding), webapp-testing (vLog UI), web-design-reviewer (vLog UI),
+  scoutqa-test (vLog QA), chrome-devtools (vLog browser debug),
+  java-springboot (Cosmos SDK context only)
+
+5. VERIFY       → Cross-reference all files for consistency; rebuild index; validate links.
+                   Skills: context-map
+                           what-context-needed
+                           model-recommendation
+                           webapp-testing
+                           scoutqa-test
+                           playwright-explore-website
+
+6. REPORT       → Changed files, gaps closed, new capabilities, upgrade history entry.
+                   Commit with conventional message; create issues for deferred items.
+                   Skills: tldr-prompt
+                           conventional-commit
+                           git-commit
+                           make-repo-contribution
+                           github-issues
+                           create-github-issue-feature-from-specification
 ```
 
 **Decision heuristics for ASSESS:**
@@ -319,3 +515,5 @@ Triggered by user command `agentupgrade` or self-initiated when significant capa
 - Depth increase → evidence: built production code in that domain
 - Stale reference → update or remove
 - Missing cross-reference → add link between files
+- New awesome-copilot skill in applicable category → evaluate for step 4 integration
+- "Not applicable" skill becomes relevant (scope expansion) → move from catalogue to active
