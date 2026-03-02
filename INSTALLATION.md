@@ -386,6 +386,27 @@ shodan_key     = "your-key"
 auto_enrich    = true
 ```
 
+### Dashboard authentication (optional)
+
+By default the dashboard is open with no login. To enable password protection, generate a bcrypt hash and add it to `vlog.toml`:
+
+```bash
+# Requires apache2-utils
+sudo apt install apache2-utils
+
+htpasswd -nbBC 12 admin yourpassword | cut -d: -f2
+```
+
+Paste the output (the `$2y$12$...` string) into `vlog.toml`:
+
+```toml
+[vlog.auth]
+username      = "admin"
+password_hash = "$2y$12$..."   # paste hash here
+```
+
+Restart vLog for the change to take effect. Set `password_hash = ""` to disable authentication.
+
 ### Run
 
 ```bash
