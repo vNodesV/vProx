@@ -36,7 +36,8 @@ func (w *Watcher) Start() {
 	go w.loop()
 }
 
-// Stop signals the watcher goroutine to exit and blocks until it does.
+// Stop signals the watcher goroutine to exit. It returns immediately;
+// in-flight IngestAll calls complete asynchronously.
 func (w *Watcher) Stop() {
 	close(w.done)
 }

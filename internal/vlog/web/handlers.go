@@ -756,6 +756,12 @@ func (s *Server) handleAPIProbe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Additional SSRF layer: reject if host is a literal private/loopback IP.
+	if ip := net.ParseIP(host); ip != nil && isPrivateIP(host) {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "private address not allowed"})
+		return
+	}
+
 	ctx, cancel := context.WithTimeout(r.Context(), 14*time.Second)
 	defer cancel()
 
@@ -993,12 +999,17 @@ func (s *Server) handleLoginSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token := s.newSession()
+	token, err := s.newSession()
+	if err != nil {
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
 	http.SetCookie(w, &http.Cookie{
 		Name:     "vlog_session",
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
+		Secure:   true,
 		SameSite: http.SameSiteStrictMode,
 		MaxAge:   86400, // 24h
 	})
@@ -1011,10 +1022,12 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 		s.deleteSession(cookie.Value)
 	}
 	http.SetCookie(w, &http.Cookie{
-		Name:   "vlog_session",
-		Value:  "",
-		Path:   "/",
-		MaxAge: -1,
+		Name:     "vlog_session",
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteStrictMode,
+		MaxAge:   -1,
 	})
 	http.Redirect(w, r, s.cfg.VLog.BasePath+"/login", http.StatusFound)
 }

@@ -157,7 +157,9 @@ func (e *Enricher) EnrichStream(ctx context.Context, ip string, force bool, emit
 
 	// Rate-limit once per investigation (not per provider) — all 3 providers
 	// call different APIs so their individual quotas are independent.
-	_ = e.limiter.Wait(ctx)
+	if err := e.limiter.Wait(ctx); err != nil {
+		return nil, fmt.Errorf("intel: rate limit cancelled: %w", err)
+	}
 
 	go func() {
 		if e.cfg.Keys.VirusTotal == "" {
@@ -308,11 +310,11 @@ func (e *Enricher) EnrichStream(ctx context.Context, ip string, force bool, emit
 
 	shodanFlags := ExtractShodanRiskFlags(acc.ShodanData)
 	effectiveAbuse := abuseScore
-	if effectiveAbuse < 0 && acc.AbuseScore > 0 {
+	if effectiveAbuse < 0 && acc.AbuseScore >= 0 {
 		effectiveAbuse = acc.AbuseScore
 	}
 	effectiveVT := vtMalicious
-	if effectiveVT < 0 && acc.VTMalicious > 0 {
+	if effectiveVT < 0 && acc.VTMalicious >= 0 {
 		effectiveVT = acc.VTMalicious
 	}
 	acc.ThreatScore = ComputeScore(effectiveAbuse, effectiveVT, shodanFlags)

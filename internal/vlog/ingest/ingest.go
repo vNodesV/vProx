@@ -145,7 +145,7 @@ func (ing *Ingester) ingestCore(path string) error {
 		switch {
 		case strings.HasSuffix(entryName, ".log"):
 			// Handles main.log and any chain-specific *.log files.
-			data, err := io.ReadAll(tr)
+			data, err := io.ReadAll(io.LimitReader(tr, 64<<20))
 			if err != nil {
 				return fmt.Errorf("read %s in %s: %w", entryName, name, err)
 			}
@@ -156,7 +156,7 @@ func (ing *Ingester) ingestCore(path string) error {
 			}
 
 		case entryName == "rate-limit.jsonl":
-			data, err := io.ReadAll(tr)
+			data, err := io.ReadAll(io.LimitReader(tr, 64<<20))
 			if err != nil {
 				return fmt.Errorf("read rate-limit.jsonl in %s: %w", name, err)
 			}

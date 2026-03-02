@@ -15,6 +15,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"html/template"
+	"io/fs"
 	"net/http"
 	"sync"
 	"time"
@@ -113,7 +114,12 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 	mux.HandleFunc("POST /logout", s.handleLogout)
 
 	// Static assets — exempt from session check.
-	mux.Handle("GET /static/", http.FileServer(http.FS(webFS)))
+	// Serve only the "static/" subtree to prevent path traversal to templates/.
+	staticSub, err := fs.Sub(webFS, "static")
+	if err != nil {
+		return nil, fmt.Errorf("web: embed static sub: %w", err)
+	}
+	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticSub))))
 
 	// Page routes — session-protected.
 	mux.Handle("GET /", s.requireSession(http.HandlerFunc(s.handleDashboard)))
@@ -170,24 +176,36 @@ func (s *Server) requireSession(next http.Handler) http.Handler {
 }
 
 // newSession creates a new HMAC-signed session token with 24h TTL.
-func (s *Server) newSession() string {
+func (s *Server) newSession() (string, error) {
 	raw := make([]byte, 32)
-	rand.Read(raw) //nolint:errcheck // crypto/rand.Read never errors
+	if _, err := rand.Read(raw); err != nil {
+		return "", fmt.Errorf("web: newSession rand: %w", err)
+	}
 	mac := hmac.New(sha256.New, s.sessionKey)
 	mac.Write(raw)
 	token := hex.EncodeToString(raw) + "." + hex.EncodeToString(mac.Sum(nil))
 	s.sessionMu.Lock()
 	s.sessions[token] = time.Now().Add(24 * time.Hour)
 	s.sessionMu.Unlock()
-	return token
+	return token, nil
 }
 
 // validSession reports whether token exists and has not expired.
+// Expired tokens are removed from the map to prevent unbounded growth.
 func (s *Server) validSession(token string) bool {
 	s.sessionMu.RLock()
 	expiry, ok := s.sessions[token]
 	s.sessionMu.RUnlock()
-	return ok && time.Now().Before(expiry)
+	if !ok {
+		return false
+	}
+	if time.Now().After(expiry) {
+		s.sessionMu.Lock()
+		delete(s.sessions, token)
+		s.sessionMu.Unlock()
+		return false
+	}
+	return true
 }
 
 // deleteSession removes a session token.

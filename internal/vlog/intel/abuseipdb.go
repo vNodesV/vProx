@@ -55,7 +55,7 @@ func CheckAbuseIPDB(apiKey, ip string, httpClient *http.Client) (score int64, ra
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
 	if err != nil {
 		return 0, "", fmt.Errorf("abuseipdb: read body: %w", err)
 	}
