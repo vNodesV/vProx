@@ -179,7 +179,7 @@ func TestHandleWSNotEnabled(t *testing.T) {
 	var summaryRoute string
 	deps := Deps{
 		ClientIP: func(r *http.Request) string { return "127.0.0.1" },
-		LogRequestSummary: func(r *http.Request, proxied bool, route, host string, start time.Time) {
+		LogRequestSummary: func(r *http.Request, proxied bool, route, host string, start time.Time, statusCode int) {
 			summaryRoute = route
 		},
 		BackendWSParams: func(host string) (string, time.Duration, time.Duration, bool) {
@@ -232,7 +232,7 @@ func TestHandleWSIntegration(t *testing.T) {
 
 	deps := Deps{
 		ClientIP: func(r *http.Request) string { return "127.0.0.1" },
-		LogRequestSummary: func(r *http.Request, proxied bool, route, host string, start time.Time) {
+		LogRequestSummary: func(r *http.Request, proxied bool, route, host string, start time.Time, statusCode int) {
 		},
 		BackendWSParams: func(host string) (string, time.Duration, time.Duration, bool) {
 			return backendWSURL, 30 * time.Second, 0, true
@@ -276,7 +276,7 @@ func TestHandleWSIntegration(t *testing.T) {
 func TestHandleWSOriginRejected(t *testing.T) {
 	deps := Deps{
 		ClientIP: func(r *http.Request) string { return "127.0.0.1" },
-		LogRequestSummary: func(r *http.Request, proxied bool, route, host string, start time.Time) {
+		LogRequestSummary: func(r *http.Request, proxied bool, route, host string, start time.Time, statusCode int) {
 		},
 		BackendWSParams: func(host string) (string, time.Duration, time.Duration, bool) {
 			return "ws://127.0.0.1:26657/websocket", 30 * time.Second, 0, true

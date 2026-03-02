@@ -19,6 +19,11 @@ import (
 
 const defaultCompression = "tar.gz"
 
+// OnBackupEvent is called (if non-nil) each time a backup lifecycle event occurs.
+// status is one of: started, completed, failed.
+// Wire up in main.go: backup.OnBackupEvent = metrics.RecordBackupEvent
+var OnBackupEvent func(status string)
+
 // Options controls backup behavior.
 type Options struct {
 	// LogPath is the primary log file (main.log). It is snapshotted and truncated.
@@ -169,6 +174,9 @@ func RunOnce(opts Options) error {
 		applog.F("to", finalPath),
 		applog.F("size", humanSize(totalSize)),
 	)
+	if OnBackupEvent != nil {
+		OnBackupEvent("started")
+	}
 
 	if err := writeTarGz(entries, finalPath); err != nil {
 		_ = cleanupTemps(tmpPaths)
@@ -203,6 +211,9 @@ func RunOnce(opts Options) error {
 		applog.F("location", finalPath),
 		applog.F("compressedSize", humanSize(archiveInfo.Size())),
 	)
+	if OnBackupEvent != nil {
+		OnBackupEvent("completed")
+	}
 
 	if opts.StatePath != "" {
 		_ = writeLastRun(opts.StatePath, now)
@@ -218,6 +229,9 @@ func emitFailed(id, method, reason string) {
 		applog.F("method", method),
 		applog.F("reason", reason),
 	)
+	if OnBackupEvent != nil {
+		OnBackupEvent("failed")
+	}
 }
 
 // cleanupTemps removes a list of temporary file paths, ignoring errors.

@@ -39,6 +39,21 @@ var (
 // Primary: $VPROX_HOME/data/geolocation/ (installed by `make geo`).
 // Fallbacks: system-wide FHS paths, then current directory (dev).
 // Home paths are prepended dynamically in initDB() to respect VPROX_HOME.
+// OnCacheHit is called (if non-nil) each time a geo lookup is served from cache.
+// Wire up in main.go: geo.OnCacheHit = metrics.RecordGeoCacheHit
+var OnCacheHit func()
+
+// OnCacheMiss is called (if non-nil) each time a geo lookup misses the cache.
+// Wire up in main.go: geo.OnCacheMiss = metrics.RecordGeoCacheMiss
+var OnCacheMiss func()
+
+// IsReady reports whether at least one geo database reader is initialised.
+func IsReady() bool {
+	dbMu.RLock()
+	defer dbMu.RUnlock()
+	return ip2lDB != nil || geoCountry != nil
+}
+
 var ip2lPaths = []string{
 	// System-wide FHS fallbacks
 	"/usr/local/share/IP2Location/ip2location.mmdb",
@@ -229,7 +244,13 @@ func Lookup(ipStr string) (string, string) {
 		return "", ""
 	}
 	if cc, asn, ok := cacheGet(ipStr); ok {
+		if OnCacheHit != nil {
+			OnCacheHit()
+		}
 		return cc, asn
+	}
+	if OnCacheMiss != nil {
+		OnCacheMiss()
 	}
 
 	ip := net.ParseIP(ipStr)

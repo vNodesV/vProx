@@ -19,6 +19,10 @@ import (
 	"golang.org/x/time/rate"
 )
 
+// OnRateLimitHit is called (if non-nil) each time a 429 response is served.
+// Wire up in main.go: limit.OnRateLimitHit = metrics.RecordRateLimitHit
+var OnRateLimitHit func()
+
 // RateSpec defines a requests-per-second (RPS) budget and a burst size.
 type RateSpec struct {
 	RPS   float64
@@ -287,6 +291,9 @@ func (l *IPLimiter) Middleware(next http.Handler) http.Handler {
 				w.Header().Set("X-RateLimit-Status", "blocked")
 				http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
 				l.logEvent(ip, r, "429")
+				if OnRateLimitHit != nil {
+					OnRateLimitHit()
+				}
 				return
 			}
 			w.Header().Set("X-RateLimit-Status", "limited")
@@ -304,6 +311,9 @@ func (l *IPLimiter) Middleware(next http.Handler) http.Handler {
 				w.Header().Set("X-RateLimit-Status", "blocked")
 				http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
 				l.logEvent(ip, r, "429")
+				if OnRateLimitHit != nil {
+					OnRateLimitHit()
+				}
 				return
 			}
 			// Allowed under defaults → status=ok
@@ -320,6 +330,9 @@ func (l *IPLimiter) Middleware(next http.Handler) http.Handler {
 			w.Header().Set("X-RateLimit-Status", "blocked")
 			http.Error(w, "request canceled", http.StatusTooManyRequests)
 			l.logEvent(ip, r, "wait-canceled")
+			if OnRateLimitHit != nil {
+				OnRateLimitHit()
+			}
 			return
 		}
 		w.Header().Set("X-RateLimit-Status", "ok")

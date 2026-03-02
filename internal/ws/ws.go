@@ -21,7 +21,7 @@ type Deps struct {
 
 	// LogRequestSummary is your 3-line summary emitter
 	// (the one that prints HOST/ROUTE/REQUEST + IP + latency + country, etc.)
-	LogRequestSummary func(r *http.Request, proxied bool, route string, host string, start time.Time)
+	LogRequestSummary func(r *http.Request, proxied bool, route string, host string, start time.Time, statusCode int)
 
 	// BackendWSParams returns backend WS URL + timeouts, or ok=false if WS isn't enabled for this host.
 	// Example return: ("ws://10.0.0.13:26657/websocket", 300s, 0s, true)
@@ -119,7 +119,7 @@ func HandleWS(d Deps) http.HandlerFunc {
 		backendURL, idle, hard, ok := d.BackendWSParams(host)
 		if !ok {
 			http.Error(w, "WebSocket not enabled", http.StatusNotFound)
-			d.LogRequestSummary(r, false, "ws-deny", host, start)
+			d.LogRequestSummary(r, false, "ws-deny", host, start, http.StatusNotFound)
 			return
 		}
 
@@ -138,7 +138,7 @@ func HandleWS(d Deps) http.HandlerFunc {
 		}
 		cConn, err := upgrader.Upgrade(w, r, respHdr)
 		if err != nil {
-			d.LogRequestSummary(r, false, "ws-upgrade-fail", host, start)
+			d.LogRequestSummary(r, false, "ws-upgrade-fail", host, start, http.StatusBadRequest)
 			return
 		}
 		defer cConn.Close()
@@ -159,17 +159,14 @@ func HandleWS(d Deps) http.HandlerFunc {
 				websocket.FormatCloseMessage(websocket.CloseTryAgainLater, "backend unreachable"),
 				time.Now().Add(2*time.Second),
 			)
-			d.LogRequestSummary(r, false, "ws-backend-fail", host, start)
+			d.LogRequestSummary(r, false, "ws-backend-fail", host, start, http.StatusBadGateway)
 			return
 		}
 		defer bConn.Close()
 		bConn.SetReadLimit(wsMaxMessageBytes) // Fix SEC-M2
 
 		// Emit CONNECTED log now that both sides are up.
-		d.LogRequestSummary(r, true, "websocket", host, start)
-
-		// Emit CONNECTED log now that both sides are up.
-		d.LogRequestSummary(r, true, "websocket", host, start)
+		d.LogRequestSummary(r, true, "websocket", host, start, http.StatusSwitchingProtocols)
 
 		// Defaults
 		if idle <= 0 {

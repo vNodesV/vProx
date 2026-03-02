@@ -3,6 +3,7 @@ package main
 import (
 	"compress/gzip"
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	_ "net/http/pprof" // registers /debug/pprof/ handlers on http.DefaultServeMux
 	"os"
 	"os/exec"
 	"os/signal"
@@ -22,16 +24,21 @@ import (
 	"time"
 
 	toml "github.com/pelletier/go-toml/v2"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	backup "github.com/vNodesV/vProx/internal/backup"
 	"github.com/vNodesV/vProx/internal/config"
 	"github.com/vNodesV/vProx/internal/counter"
 	"github.com/vNodesV/vProx/internal/geo"
 	"github.com/vNodesV/vProx/internal/limit"
 	applog "github.com/vNodesV/vProx/internal/logging"
+	"github.com/vNodesV/vProx/internal/metrics"
 	ws "github.com/vNodesV/vProx/internal/ws"
 )
 
 // --------------------- GLOBALS ---------------------
+
+// startTime records when the vProx process started, used by /healthz.
+var startTime = time.Now()
 
 var (
 	chains       = make(map[string]*config.ChainConfig)
@@ -303,7 +310,7 @@ func sanitizeIP(s string) string {
 	return ""
 }
 
-func logRequestSummary(r *http.Request, proxied bool, route string, host string, start time.Time) {
+func logRequestSummary(r *http.Request, proxied bool, route string, host string, start time.Time, statusCode int) {
 	src := clientIP(r)
 	hostNorm := normalizeHost(host)
 
@@ -358,9 +365,11 @@ func logRequestSummary(r *http.Request, proxied bool, route string, host string,
 		applog.F("ID", logID),
 		applog.F("status", status),
 		applog.F("method", r.Method),
+		applog.F("statusCode", statusCode),
 		applog.F("from", src),
 		applog.F("count", srcQty),
 		applog.F("to", strings.ToUpper(hostNorm)),
+		applog.F("chainId", hostNorm),
 		applog.F("endpoint", dst),
 		applog.F("latency", fmt.Sprintf("%dms", durMS)),
 		applog.F("userAgent", ua),
@@ -372,6 +381,31 @@ func logRequestSummary(r *http.Request, proxied bool, route string, host string,
 			cl.Println(line)
 		}
 	}
+}
+
+// --------------------- HEALTH ---------------------
+
+// healthHandler serves GET /healthz with a JSON body reporting service status.
+func healthHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	status := "ok"
+	httpCode := http.StatusOK
+
+	// Degraded if no geo database is available.
+	if !geo.IsReady() {
+		status = "degraded"
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(httpCode)
+	_ = json.NewEncoder(w).Encode(map[string]string{
+		"status":  status,
+		"version": "1.0.0",
+		"uptime":  time.Since(startTime).Round(time.Second).String(),
+	})
 }
 
 // --------------------- UTILS ---------------------
@@ -773,12 +807,16 @@ func resolveBackupExtraFiles(cfg backup.BackupConfig, dataDir, logsDir, configDi
 
 func handler(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
+	metrics.IncActiveConnections()
+	defer metrics.DecActiveConnections()
 	host := normalizeHost(r.Host)
 
 	chain, ok := chains[host]
 	if !ok {
 		http.Error(w, "Unknown host", http.StatusBadRequest)
-		logRequestSummary(r, false, "direct", host, start)
+		metrics.RecordProxyError("direct", "unknown_host")
+		metrics.RecordRequest(r.Method, "direct", http.StatusBadRequest, time.Since(start))
+		logRequestSummary(r, false, "direct", host, start, http.StatusBadRequest)
 		return
 	}
 
@@ -886,7 +924,9 @@ func handler(w http.ResponseWriter, r *http.Request) {
 
 	if targetURL == "" {
 		http.Error(w, "Not Found or service disabled", http.StatusNotFound)
-		logRequestSummary(r, false, "direct", host, start)
+		metrics.RecordProxyError("direct", "unknown_host")
+		metrics.RecordRequest(r.Method, "direct", http.StatusNotFound, time.Since(start))
+		logRequestSummary(r, false, "direct", host, start, http.StatusNotFound)
 		return
 	}
 
@@ -905,7 +945,9 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	req, err := http.NewRequest(r.Method, targetURL, r.Body)
 	if err != nil {
 		http.Error(w, "Request build error", http.StatusInternalServerError)
-		logRequestSummary(r, false, route, host, start)
+		metrics.RecordProxyError(route, "request_build_error")
+		metrics.RecordRequest(r.Method, route, http.StatusInternalServerError, time.Since(start))
+		logRequestSummary(r, false, route, host, start, http.StatusInternalServerError)
 		return
 	}
 	req.Header = r.Header.Clone()
@@ -924,7 +966,9 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		http.Error(w, "Backend error", http.StatusBadGateway)
-		logRequestSummary(r, false, route, host, start)
+		metrics.RecordProxyError(route, "backend_error")
+		metrics.RecordRequest(r.Method, route, http.StatusBadGateway, time.Since(start))
+		logRequestSummary(r, false, route, host, start, http.StatusBadGateway)
 		return
 	}
 	defer resp.Body.Close()
@@ -951,7 +995,8 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	if !willModify {
 		w.WriteHeader(resp.StatusCode)
 		_, _ = io.Copy(w, resp.Body)
-		logRequestSummary(r, true, route, host, start)
+		metrics.RecordRequest(r.Method, route, resp.StatusCode, time.Since(start))
+		logRequestSummary(r, true, route, host, start, resp.StatusCode)
 		return
 	}
 
@@ -962,7 +1007,9 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		gzReader, err := gzip.NewReader(resp.Body)
 		if err != nil {
 			http.Error(w, "Gzip error", http.StatusInternalServerError)
-			logRequestSummary(r, false, route, host, start)
+			metrics.RecordProxyError(route, "backend_error")
+			metrics.RecordRequest(r.Method, route, http.StatusInternalServerError, time.Since(start))
+			logRequestSummary(r, false, route, host, start, http.StatusInternalServerError)
 			return
 		}
 		defer gzReader.Close()
@@ -1003,7 +1050,8 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	_, _ = w.Write([]byte(html))
-	logRequestSummary(r, true, route, host, start)
+	metrics.RecordRequest(r.Method, route, resp.StatusCode, time.Since(start))
+	logRequestSummary(r, true, route, host, start, resp.StatusCode)
 }
 
 // --------------------- BACKUP -------------------
@@ -1442,6 +1490,16 @@ func main() {
 	// Build mux and routes
 	mux := http.NewServeMux()
 
+	// Observability endpoints (registered before catch-all handler)
+	mux.Handle("/metrics", promhttp.Handler())
+	mux.HandleFunc("/healthz", healthHandler)
+
+	// Wire metric hooks — hook pattern avoids import cycles between internal packages.
+	limit.OnRateLimitHit = metrics.RecordRateLimitHit
+	geo.OnCacheHit = metrics.RecordGeoCacheHit
+	geo.OnCacheMiss = metrics.RecordGeoCacheMiss
+	backup.OnBackupEvent = metrics.RecordBackupEvent
+
 	// Handle --dry-run flag: load everything but don't start server
 	if *dryRunFlag {
 		log.Println("")
@@ -1550,6 +1608,23 @@ func main() {
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       120 * time.Second,
+	}
+
+	// Optional pprof debug server — MUST be on a separate port from the proxy.
+	// Activated by VPROX_DEBUG=1 or VPROX_DEBUG_PORT=<port>.
+	if os.Getenv("VPROX_DEBUG") == "1" || os.Getenv("VPROX_DEBUG_PORT") != "" {
+		debugPort := "6060"
+		if p := os.Getenv("VPROX_DEBUG_PORT"); p != "" {
+			debugPort = p
+		}
+		// http.DefaultServeMux already has /debug/pprof/ handlers registered
+		// via the blank import of net/http/pprof at the top of this file.
+		go func() {
+			applog.Print("INFO", "debug", "pprof_server_started", applog.F("addr", ":"+debugPort))
+			if err := http.ListenAndServe(":"+debugPort, http.DefaultServeMux); err != nil {
+				applog.Print("ERROR", "debug", "pprof_server_error", applog.F("error", err.Error()))
+			}
+		}()
 	}
 
 	cleanup := func() {
