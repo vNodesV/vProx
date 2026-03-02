@@ -35,15 +35,18 @@ var (
 	cacheStop   chan struct{}
 )
 
-// Preferred MMDB location(s) — system-wide paths only. User home paths are
-// added dynamically in initDB() to respect VPROX_HOME overrides.
+// Preferred MMDB location(s).
+// Primary: system-wide FHS path installed by `make geo`.
+// Fallbacks: legacy user-home paths, then current directory (dev).
+// User home paths are prepended dynamically in initDB() to respect VPROX_HOME.
 var ip2lPaths = []string{
-	// System-wide locations
-	"/usr/local/share/IP2Proxy/ip2location.mmdb",
+	// FHS system-wide install (canonical — `make geo` installs here)
 	"/usr/local/share/IP2Location/ip2location.mmdb",
-	"/usr/share/IP2Proxy/ip2location.mmdb",
+	// Legacy system paths
+	"/usr/local/share/IP2Proxy/ip2location.mmdb",
 	"/usr/share/IP2Location/ip2location.mmdb",
-	// Fallback to current directory (for dev)
+	"/usr/share/IP2Proxy/ip2location.mmdb",
+	// Fallback to current directory (dev)
 	"./ip2location.mmdb",
 }
 
@@ -84,12 +87,20 @@ func initDB() {
 	// Start the cache sweeper (CR-8).
 	startCacheSweeper()
 
-	// Resolve user home path at init time (not package init) so
-	// VPROX_HOME overrides are respected.
+	// Prepend user-home override paths so they take priority over system paths.
+	// Supports VPROX_HOME env (explicit home) and legacy ~/.vProx fallback.
+	// New canonical: $VPROX_HOME/data/geo/ip2location.mmdb
+	// Legacy compat: $VPROX_HOME/data/geolocation/ip2location.mmdb
 	if home := os.Getenv("VPROX_HOME"); home != "" {
-		ip2lPaths = append([]string{filepath.Join(home, "data", "geolocation", "ip2location.mmdb")}, ip2lPaths...)
+		ip2lPaths = append([]string{
+			filepath.Join(home, "data", "geo", "ip2location.mmdb"),
+			filepath.Join(home, "data", "geolocation", "ip2location.mmdb"), // legacy
+		}, ip2lPaths...)
 	} else if home := os.Getenv("HOME"); home != "" {
-		ip2lPaths = append([]string{filepath.Join(home, ".vProx", "data", "geolocation", "ip2location.mmdb")}, ip2lPaths...)
+		ip2lPaths = append([]string{
+			filepath.Join(home, ".vProx", "data", "geo", "ip2location.mmdb"),
+			filepath.Join(home, ".vProx", "data", "geolocation", "ip2location.mmdb"), // legacy
+		}, ip2lPaths...)
 	}
 
 	// 1) IP2Location MMDB

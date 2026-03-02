@@ -11,7 +11,6 @@ VLOG_BUILD := $(BUILD_DIR)/$(VLOG_NAME)
 
 VPROX_HOME := $(HOME)/.vProx
 DATA_DIR := $(VPROX_HOME)/data
-GEO_DIR := $(DATA_DIR)/geolocation
 LOG_DIR := $(DATA_DIR)/logs
 CFG_DIR := $(VPROX_HOME)/config
 CHAINS_DIR := $(VPROX_HOME)/chains
@@ -20,11 +19,12 @@ ARCHIVE_DIR := $(LOG_DIR)/archives
 SERVICE_DIR := $(VPROX_HOME)/service
 SERVICE_PATH := $(SERVICE_DIR)/vProx.service
 VLOG_SERVICE := $(SERVICE_DIR)/vLog.service
-DIR_LIST := $(DATA_DIR) $(GEO_DIR) $(LOG_DIR) $(CFG_DIR) $(CFG_DIR)/chains $(CFG_DIR)/backup $(INTERNAL_DIR) $(ARCHIVE_DIR) $(SERVICE_DIR)
+DIR_LIST := $(DATA_DIR) $(LOG_DIR) $(CFG_DIR) $(CFG_DIR)/chains $(CFG_DIR)/backup $(INTERNAL_DIR) $(ARCHIVE_DIR) $(SERVICE_DIR)
 
-# GeoLocation database
+# GeoLocation database — installed system-wide (FHS: /usr/local/share/IP2Location/)
 GEO_DB_SRC := ip2l/ip2location.mmdb.gz
-GEO_DB_DST := $(GEO_DIR)/ip2location.mmdb
+GEO_DB_DIR := /usr/local/share/IP2Location
+GEO_DB_DST := $(GEO_DB_DIR)/ip2location.mmdb
 
 ENV_FILE := $(VPROX_HOME)/.env
 
@@ -86,8 +86,9 @@ geo:
 		echo "WARNING: GEO DB not found at $(GEO_DB_SRC)"; \
 		echo "Geolocation features will be disabled until a database is provided."; \
 	else \
-		gunzip -c "$(GEO_DB_SRC)" > "$(GEO_DB_DST)"; \
-		echo "✓ Decompressed GEO DB to $(GEO_DB_DST)"; \
+		sudo mkdir -p "$(GEO_DB_DIR)"; \
+		gunzip -c "$(GEO_DB_SRC)" | sudo tee "$(GEO_DB_DST)" > /dev/null; \
+		echo "✓ Installed GEO DB to $(GEO_DB_DST)"; \
 	fi
 
 ## Create .env if missing
@@ -96,7 +97,7 @@ env:
 	@echo "Setting up environment configuration..."
 	@if [[ ! -f "$(ENV_FILE)" ]]; then \
 		echo "# Geolocation database paths" > "$(ENV_FILE)"; \
-		echo "IP2LOCATION_MMDB=$(GEO_DB_DST)" >> "$(ENV_FILE)"; \
+		echo "IP2LOCATION_MMDB=/usr/local/share/IP2Location/ip2location.mmdb" >> "$(ENV_FILE)"; \
 		echo "GEOLITE2_COUNTRY_DB=" >> "$(ENV_FILE)"; \
 		echo "GEOLITE2_ASN_DB=" >> "$(ENV_FILE)"; \
 		echo "" >> "$(ENV_FILE)"; \
