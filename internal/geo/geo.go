@@ -26,6 +26,13 @@ var (
 	geoASN     *geoip2.Reader
 
 	lastIP2LErr string
+
+	// CR-6: guards ip2lDB, geoCountry, geoASN against concurrent Close/Lookup.
+	dbMu sync.RWMutex
+
+	// CR-8: stoppable cache sweeper (replaces time.Tick).
+	cacheTicker *time.Ticker
+	cacheStop   chan struct{}
 )
 
 // Preferred MMDB location(s) — system-wide paths only. User home paths are
@@ -74,6 +81,9 @@ func safeOpenMMDB(path string) (db *maxminddb.Reader, err error) {
 
 // lazy init — tries IP2Location MMDB first, then GeoLite2 fallbacks
 func initDB() {
+	// Start the cache sweeper (CR-8).
+	startCacheSweeper()
+
 	// Resolve user home path at init time (not package init) so
 	// VPROX_HOME overrides are respected.
 	if home := os.Getenv("VPROX_HOME"); home != "" {
@@ -171,17 +181,23 @@ var cache sync.Map // ip string -> cacheEntry
 
 const cacheTTL = 10 * time.Minute
 
-func init() {
-	// Periodic cache sweep to evict expired entries and bound memory.
+func startCacheSweeper() {
+	cacheStop = make(chan struct{})
+	cacheTicker = time.NewTicker(5 * time.Minute)
 	go func() {
-		for range time.Tick(5 * time.Minute) {
-			now := time.Now()
-			cache.Range(func(key, val any) bool {
-				if e := val.(cacheEntry); now.After(e.exp) {
-					cache.Delete(key)
-				}
-				return true
-			})
+		for {
+			select {
+			case <-cacheTicker.C:
+				now := time.Now()
+				cache.Range(func(key, val any) bool {
+					if e := val.(cacheEntry); now.After(e.exp) {
+						cache.Delete(key)
+					}
+					return true
+				})
+			case <-cacheStop:
+				return
+			}
 		}
 	}()
 }
@@ -218,6 +234,10 @@ func Lookup(ipStr string) (string, string) {
 	if ip == nil {
 		return "", ""
 	}
+
+	// CR-6: hold read lock while accessing DB handles.
+	dbMu.RLock()
+	defer dbMu.RUnlock()
 
 	// 1) Try IP2Location (single lookup, extract both)
 	if ip2lDB != nil {
@@ -290,6 +310,8 @@ func LookupProxy(_ string) (ProxyMeta, bool) { return ProxyMeta{}, false }
 // Info returns a one-line status string for logging.
 func Info() string {
 	once.Do(initDB)
+	dbMu.RLock()
+	defer dbMu.RUnlock()
 	var parts []string
 
 	if ip2lDB != nil {
@@ -318,6 +340,23 @@ func Info() string {
 // Close releases DB resources (useful on shutdown / hot-reload).
 // Resets the init guard so a subsequent Lookup() re-opens the databases.
 func Close() {
+	// CR-8: stop the cache sweeper ticker.
+	if cacheTicker != nil {
+		cacheTicker.Stop()
+	}
+	if cacheStop != nil {
+		select {
+		case <-cacheStop:
+			// already closed
+		default:
+			close(cacheStop)
+		}
+	}
+
+	// CR-6: acquire write lock before setting DB handles to nil.
+	dbMu.Lock()
+	defer dbMu.Unlock()
+
 	if ip2lDB != nil {
 		_ = ip2lDB.Close()
 		ip2lDB = nil
