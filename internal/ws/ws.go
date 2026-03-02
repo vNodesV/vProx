@@ -26,12 +26,66 @@ type Deps struct {
 	// BackendWSParams returns backend WS URL + timeouts, or ok=false if WS isn't enabled for this host.
 	// Example return: ("ws://10.0.0.13:26657/websocket", 300s, 0s, true)
 	BackendWSParams func(host string) (backendURL string, idle time.Duration, hard time.Duration, ok bool)
+
+	// AllowedOrigins controls WebSocket CORS (SEC-M4).
+	// Empty  = same-origin only (Origin must match Host).
+	// ["*"]  = allow all origins (explicit opt-in).
+	// Otherwise only the listed origins are accepted.
+	AllowedOrigins []string
 }
 
-var upgrader = websocket.Upgrader{
+var defaultUpgraderConfig = struct {
+	ReadBufferSize  int
+	WriteBufferSize int
+}{
 	ReadBufferSize:  32 << 10,
 	WriteBufferSize: 32 << 10,
-	CheckOrigin:     func(r *http.Request) bool { return true }, // edge terminates, trust local policy
+}
+
+// makeOriginChecker builds a CheckOrigin function from the AllowedOrigins list.
+func makeOriginChecker(allowed []string) func(*http.Request) bool {
+	// Wildcard: allow all (explicit opt-in).
+	for _, o := range allowed {
+		if o == "*" {
+			return func(r *http.Request) bool { return true }
+		}
+	}
+	// Non-empty list: match against allowed origins.
+	if len(allowed) > 0 {
+		set := make(map[string]struct{}, len(allowed))
+		for _, o := range allowed {
+			set[strings.ToLower(strings.TrimSpace(o))] = struct{}{}
+		}
+		return func(r *http.Request) bool {
+			origin := strings.ToLower(strings.TrimSpace(r.Header.Get("Origin")))
+			if origin == "" {
+				return true // no Origin header (non-browser client)
+			}
+			_, ok := set[origin]
+			return ok
+		}
+	}
+	// Empty list: same-origin only — Origin host must match request Host.
+	return func(r *http.Request) bool {
+		origin := strings.TrimSpace(r.Header.Get("Origin"))
+		if origin == "" {
+			return true // no Origin header (non-browser client)
+		}
+		host := strings.ToLower(r.Host)
+		// Strip port from origin URL: "https://example.com:443" → "example.com"
+		originHost := strings.ToLower(origin)
+		if idx := strings.Index(originHost, "://"); idx != -1 {
+			originHost = originHost[idx+3:]
+		}
+		originHost = strings.TrimSuffix(originHost, "/")
+		if h, _, err := net.SplitHostPort(originHost); err == nil {
+			originHost = h
+		}
+		if h, _, err := net.SplitHostPort(host); err == nil {
+			host = h
+		}
+		return originHost == host
+	}
 }
 
 // Fix SEC-M2: per-frame read limit to prevent OOM from oversized frames.
@@ -45,6 +99,12 @@ var wsActiveConns int64
 
 // HandleWS returns an http.HandlerFunc you can register at /websocket.
 func HandleWS(d Deps) http.HandlerFunc {
+	upgrader := websocket.Upgrader{
+		ReadBufferSize:  defaultUpgraderConfig.ReadBufferSize,
+		WriteBufferSize: defaultUpgraderConfig.WriteBufferSize,
+		CheckOrigin:     makeOriginChecker(d.AllowedOrigins),
+	}
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		host := strings.ToLower(r.Host)
