@@ -3,7 +3,6 @@ package main
 import (
 	"compress/gzip"
 	"context"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -25,6 +24,7 @@ import (
 	toml "github.com/pelletier/go-toml/v2"
 	backup "github.com/vNodesV/vProx/internal/backup"
 	"github.com/vNodesV/vProx/internal/config"
+	"github.com/vNodesV/vProx/internal/counter"
 	"github.com/vNodesV/vProx/internal/geo"
 	"github.com/vNodesV/vProx/internal/limit"
 	applog "github.com/vNodesV/vProx/internal/logging"
@@ -58,11 +58,6 @@ var (
 			DisableCompression: false,
 		},
 	}
-
-	// logger state
-	srcCounter   = make(map[string]int64)
-	counterMutex sync.Mutex
-	counterDirty bool // true when in-memory counts differ from disk
 
 	chainLoggerMu sync.Mutex
 	chainLoggers  = make(map[string]*log.Logger)
@@ -326,11 +321,7 @@ func logRequestSummary(r *http.Request, proxied bool, route string, host string,
 	hostNorm := normalizeHost(host)
 
 	// counter
-	counterMutex.Lock()
-	srcCounter[src]++
-	srcQty := srcCounter[src]
-	counterDirty = true
-	counterMutex.Unlock()
+	srcQty := counter.Increment(src)
 
 	durMS := time.Since(start).Milliseconds()
 	dst := r.URL.RequestURI()
@@ -393,113 +384,6 @@ func logRequestSummary(r *http.Request, proxied bool, route string, host string,
 		if cl := getChainLogger(ch); cl != nil {
 			cl.Println(line)
 		}
-	}
-}
-
-func loadAccessCounts(path string) {
-	if strings.TrimSpace(path) == "" {
-		return
-	}
-	b, err := os.ReadFile(path)
-	if err != nil {
-		if !os.IsNotExist(err) {
-			applog.Print("WARN", "access", "counter_load_failed", applog.F("error", err.Error()))
-		}
-		return
-	}
-	var src map[string]int64
-	if err := json.Unmarshal(b, &src); err != nil {
-		applog.Print("WARN", "access", "counter_load_failed", applog.F("error", err.Error()))
-		return
-	}
-	clean := make(map[string]int64, len(src))
-	for ip, qty := range src {
-		if strings.TrimSpace(ip) == "" || qty < 0 {
-			continue
-		}
-		clean[ip] = qty
-	}
-	counterMutex.Lock()
-	srcCounter = clean
-	counterMutex.Unlock()
-}
-
-func saveAccessCounts(path string) error {
-	if strings.TrimSpace(path) == "" {
-		return nil
-	}
-	counterMutex.Lock()
-	defer counterMutex.Unlock()
-	return saveAccessCountsLocked(path)
-}
-
-func saveAccessCountsLocked(path string) error {
-	if strings.TrimSpace(path) == "" {
-		return nil
-	}
-	buf := make(map[string]int64, len(srcCounter))
-	for ip, qty := range srcCounter {
-		if strings.TrimSpace(ip) == "" || qty < 0 {
-			continue
-		}
-		buf[ip] = qty
-	}
-	b, err := json.MarshalIndent(buf, "", "  ")
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o644); err != nil {
-		return err
-	}
-	return os.Rename(tmp, path)
-}
-
-func resetAccessCounts(path string) error {
-	counterMutex.Lock()
-	srcCounter = make(map[string]int64)
-	err := saveAccessCountsLocked(path)
-	counterMutex.Unlock()
-	return err
-}
-
-// accessCountSaveInterval controls how often dirty counters are flushed to disk.
-const accessCountSaveInterval = 1 * time.Second
-
-// startAccessCountTicker runs a background goroutine that flushes dirty
-// counters to disk every accessCountSaveInterval. Returns a stop function
-// that flushes once more and stops the ticker.
-func startAccessCountTicker(path string) func() {
-	ticker := time.NewTicker(accessCountSaveInterval)
-	done := make(chan struct{})
-	go func() {
-		for {
-			select {
-			case <-ticker.C:
-				counterMutex.Lock()
-				if counterDirty {
-					_ = saveAccessCountsLocked(path)
-					counterDirty = false
-				}
-				counterMutex.Unlock()
-			case <-done:
-				return
-			}
-		}
-	}()
-	return func() {
-		ticker.Stop()
-		close(done)
-		// Final flush
-		counterMutex.Lock()
-		if counterDirty {
-			_ = saveAccessCountsLocked(path)
-			counterDirty = false
-		}
-		counterMutex.Unlock()
 	}
 }
 
@@ -1477,7 +1361,7 @@ func main() {
 
 	if doBackup {
 		if resetCount {
-			if err := resetAccessCounts(accessCountsPath); err != nil {
+			if err := counter.Reset(accessCountsPath); err != nil {
 				log.Fatalf("Failed to reset access counters: %v", err)
 			}
 			applog.Print("INFO", "access", "counter_reset", applog.F("path", accessCountsPath))
@@ -1510,8 +1394,8 @@ func main() {
 
 	// Geo status line
 	applog.Print("INFO", "geo", "status", applog.F("message", geo.Info()))
-	loadAccessCounts(accessCountsPath)
-	stopCounterTicker := startAccessCountTicker(accessCountsPath)
+	counter.Load(accessCountsPath)
+	stopCounterTicker := counter.StartTicker(accessCountsPath)
 
 	// Load configs (TOML only)
 	var loadErr error
