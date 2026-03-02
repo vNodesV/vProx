@@ -93,3 +93,7 @@ ip2l/ip2location.mmdb
 *.db-wal
 *.db-shm
 *.sqlite
+
+# Built binaries
+vprox
+vlog
