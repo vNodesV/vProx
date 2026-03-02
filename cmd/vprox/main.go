@@ -24,93 +24,18 @@ import (
 
 	toml "github.com/pelletier/go-toml/v2"
 	backup "github.com/vNodesV/vProx/internal/backup"
+	"github.com/vNodesV/vProx/internal/config"
 	"github.com/vNodesV/vProx/internal/geo"
 	"github.com/vNodesV/vProx/internal/limit"
 	applog "github.com/vNodesV/vProx/internal/logging"
 	ws "github.com/vNodesV/vProx/internal/ws"
 )
 
-// --------------------- TYPES ---------------------
-
-type Ports struct {
-	RPC     int    `toml:"rpc"`
-	REST    int    `toml:"rest"`
-	GRPC    int    `toml:"grpc"`
-	GRPCWeb int    `toml:"grpc_web"`
-	API     int    `toml:"api"`
-	VLogURL string `toml:"vlog_url"` // optional: notify vLog after --new-backup
-}
-
-type VHostPrefix struct {
-	RPC  string `toml:"rpc"`
-	REST string `toml:"rest"`
-}
-
-type Expose struct {
-	Path        bool        `toml:"path"`
-	VHost       bool        `toml:"vhost"`
-	VHostPrefix VHostPrefix `toml:"vhost_prefix"`
-}
-
-type Services struct {
-	RPC       bool `toml:"rpc"`
-	REST      bool `toml:"rest"`
-	WebSocket bool `toml:"websocket"`
-	GRPC      bool `toml:"grpc"`
-	GRPCWeb   bool `toml:"grpc_web"`
-	APIAlias  bool `toml:"api_alias"`
-}
-
-type Features struct {
-	RPCAddressMasking bool   `toml:"rpc_address_masking"` // Mask local IP links on RPC index HTML
-	MaskRPC           string `toml:"mask_rpc"`            // Replacement label for masked IP (empty = remove)
-	SwaggerMasking    bool   `toml:"swagger_masking"`     // Rewrite Swagger Try-It URLs to public host
-	AbsoluteLinks     string `toml:"absolute_links"`      // auto | always | never
-}
-
-type LoggingCfg struct {
-	File   string `toml:"file"`
-	Format string `toml:"format"`
-}
-
-type Message struct {
-	APIMsg string `toml:"api_msg"`
-	RPCMsg string `toml:"rpc_msg"`
-}
-
-type WSConfig struct {
-	IdleTimeoutSec int `toml:"idle_timeout_sec"` // default 300
-	MaxLifetimeSec int `toml:"max_lifetime_sec"` // 0 = no hard cap
-}
-
-type ChainConfig struct {
-	SchemaVersion int    `toml:"schema_version"`
-	ChainName     string `toml:"chain_name"`
-	Host          string `toml:"host"`
-	IP            string `toml:"ip"`
-
-	RPCAliases  []string `toml:"rpc_aliases"`  // extra RPC hostnames; active only when expose.vhost = true
-	RESTAliases []string `toml:"rest_aliases"` // extra REST/API hostnames; active only when expose.vhost = true
-	APIAliases  []string `toml:"api_aliases"`  // extra /api hostnames; active only when expose.vhost = true
-
-	Expose   Expose     `toml:"expose"`
-	Services Services   `toml:"services"`
-	Ports    Ports      `toml:"ports"`
-	WS       WSConfig   `toml:"ws"`
-	Features Features   `toml:"features"`
-	Logging  LoggingCfg `toml:"logging"`
-	Message  Message    `toml:"message"`
-
-	DefaultPorts bool `toml:"default_ports"`
-	MsgRPC       bool `toml:"msg_rpc"` // enable rpc_msg banner injection
-	MsgAPI       bool `toml:"msg_api"` // enable api_msg banner injection
-}
-
 // --------------------- GLOBALS ---------------------
 
 var (
-	chains       = make(map[string]*ChainConfig)
-	defaultPorts Ports
+	chains       = make(map[string]*config.ChainConfig)
+	defaultPorts config.Ports
 
 	vproxHome  string
 	configDir  string
@@ -165,171 +90,9 @@ const (
 	ansiRed     = "\x1b[31m"
 )
 
-// --------------------- VALIDATION ---------------------
-
-var (
-	reHostname = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)+$`)
-)
-
-func isValidHostname(h string) bool {
-	h = strings.ToLower(strings.TrimSpace(h))
-	if len(h) == 0 || len(h) > 253 {
-		return false
-	}
-	return reHostname.MatchString(h)
-}
-
-func validatePortsLabel(label string, v int) error {
-	if v <= 0 || v > 65535 {
-		return fmt.Errorf("%s port out of range: %d", label, v)
-	}
-	return nil
-}
-
-func validateAbsoluteLinksMode(m string) bool {
-	switch strings.ToLower(strings.TrimSpace(m)) {
-	case "", "auto", "always", "never":
-		return true
-	default:
-		return false
-	}
-}
-
-func normalizeVHostPrefixes(e *Expose) {
-	if e.VHostPrefix.RPC == "" {
-		e.VHostPrefix.RPC = "rpc"
-	}
-	if e.VHostPrefix.REST == "" {
-		// common defaults: "api" or "rest"
-		e.VHostPrefix.REST = "api"
-	}
-}
-
-func validateConfig(c *ChainConfig) error {
-	if c.SchemaVersion == 0 {
-		c.SchemaVersion = 1
-	}
-
-	// Host/IP
-	c.Host = strings.ToLower(strings.TrimSpace(c.Host))
-	if !isValidHostname(c.Host) {
-		return fmt.Errorf("invalid host: %q", c.Host)
-	}
-	if net.ParseIP(strings.TrimSpace(c.IP)) == nil {
-		return fmt.Errorf("invalid ip: %q", c.IP)
-	}
-
-	// Expose / prefixes
-	normalizeVHostPrefixes(&c.Expose)
-
-	// Absolute links
-	if !validateAbsoluteLinksMode(c.Features.AbsoluteLinks) {
-		return fmt.Errorf("features.absolute_links must be auto|always|never, got %q", c.Features.AbsoluteLinks)
-	}
-
-	// Ports
-	if c.DefaultPorts {
-		// use global defaults later
-	} else {
-		if err := validatePortsLabel("rpc", c.Ports.RPC); err != nil {
-			return err
-		}
-		if err := validatePortsLabel("rest", c.Ports.REST); err != nil {
-			return err
-		}
-		if c.Services.GRPC {
-			if err := validatePortsLabel("grpc", c.Ports.GRPC); err != nil {
-				return err
-			}
-		}
-		if c.Services.GRPCWeb {
-			if err := validatePortsLabel("grpc_web", c.Ports.GRPCWeb); err != nil {
-				return err
-			}
-		}
-		if c.Services.APIAlias {
-			if err := validatePortsLabel("api", c.Ports.API); err != nil {
-				return err
-			}
-		}
-	}
-
-	// Aliases (active only when expose.vhost = true)
-	for _, a := range c.RPCAliases {
-		if !isValidHostname(a) {
-			return fmt.Errorf("rpc_aliases contains invalid hostname: %q", a)
-		}
-	}
-	for _, a := range c.RESTAliases {
-		if !isValidHostname(a) {
-			return fmt.Errorf("rest_aliases contains invalid hostname: %q", a)
-		}
-	}
-	for _, a := range c.APIAliases {
-		if !isValidHostname(a) {
-			return fmt.Errorf("api_aliases contains invalid hostname: %q", a)
-		}
-	}
-
-	// Services sanity: at least one service enabled
-	if !(c.Services.RPC || c.Services.REST || c.Services.GRPC || c.Services.GRPCWeb || c.Services.APIAlias || c.Services.WebSocket) {
-		return errors.New("no services enabled; enable at least one in [services]")
-	}
-
-	// WS requires RPC (tunnels to RPC /websocket)
-	if c.Services.WebSocket && !c.Services.RPC {
-		return errors.New("services.websocket requires services.rpc to be enabled")
-	}
-
-	// WS defaults
-	if c.WS.IdleTimeoutSec <= 0 {
-		c.WS.IdleTimeoutSec = 3600
-	}
-	if c.WS.MaxLifetimeSec < 0 {
-		c.WS.MaxLifetimeSec = 0
-	}
-
-	return nil
-}
-
 // --------------------- CONFIG LOADERS (TOML ONLY) ---------------------
 
-func loadPorts(path string) (Ports, error) {
-	var p Ports
-	f, err := os.Open(path)
-	if err != nil {
-		return p, err
-	}
-	defer f.Close()
-	if err := toml.NewDecoder(f).Decode(&p); err != nil {
-		return p, err
-	}
-	// validate global defaults
-	if err := validatePortsLabel("rpc", p.RPC); err != nil {
-		return p, fmt.Errorf("ports.toml: %w", err)
-	}
-	if err := validatePortsLabel("rest", p.REST); err != nil {
-		return p, fmt.Errorf("ports.toml: %w", err)
-	}
-	if p.GRPC != 0 {
-		if err := validatePortsLabel("grpc", p.GRPC); err != nil {
-			return p, fmt.Errorf("ports.toml: %w", err)
-		}
-	}
-	if p.GRPCWeb != 0 {
-		if err := validatePortsLabel("grpc_web", p.GRPCWeb); err != nil {
-			return p, fmt.Errorf("ports.toml: %w", err)
-		}
-	}
-	if p.API != 0 {
-		if err := validatePortsLabel("api", p.API); err != nil {
-			return p, fmt.Errorf("ports.toml: %w", err)
-		}
-	}
-	return p, nil
-}
-
-func registerHost(host string, c *ChainConfig) error {
+func registerHost(host string, c *config.ChainConfig) error {
 	if host == "" {
 		return nil
 	}
@@ -349,7 +112,7 @@ func loadChains(dir string) error {
 	}
 	for _, entry := range entries {
 		name := entry.Name()
-		if entry.IsDir() || !isChainTOML(name) {
+		if entry.IsDir() || !config.IsChainTOML(name) {
 			continue
 		}
 		fpath := filepath.Join(dir, name)
@@ -357,14 +120,14 @@ func loadChains(dir string) error {
 		if err != nil {
 			return err
 		}
-		var c ChainConfig
+		var c config.ChainConfig
 		if err := toml.NewDecoder(f).Decode(&c); err != nil {
 			f.Close()
 			return fmt.Errorf("decode %s: %w", entry.Name(), err)
 		}
 		f.Close()
 
-		if err := validateConfig(&c); err != nil {
+		if err := config.ValidateConfig(&c); err != nil {
 			return fmt.Errorf("%s: %w", entry.Name(), err)
 		}
 
@@ -593,7 +356,7 @@ func logRequestSummary(r *http.Request, proxied bool, route string, host string,
 		if id := applog.RequestIDFrom(r); id != "" {
 			logID = id
 		} else {
-			logID = applog.NewTypedID(pathPrefix(dst))
+			logID = applog.NewTypedID(config.PathPrefix(dst))
 		}
 	}
 
@@ -631,34 +394,6 @@ func logRequestSummary(r *http.Request, proxied bool, route string, host string,
 			cl.Println(line)
 		}
 	}
-}
-
-// pathPrefix returns a 3-letter log ID prefix based on the request path.
-func pathPrefix(dst string) string {
-	p := strings.ToUpper(dst)
-	switch {
-	case strings.HasPrefix(p, "/RPC"):
-		return "RPC"
-	case strings.HasPrefix(p, "/REST"), strings.HasPrefix(p, "/API"):
-		return "API"
-	case strings.HasPrefix(p, "/WEBSOCKET"), strings.HasPrefix(p, "/WS"):
-		return "WSS"
-	default:
-		return "REQ"
-	}
-}
-
-// routeIDPrefix maps the resolved route to a 3-letter typed ID prefix.
-// WSS is assigned by ws.go before this handler; this covers RPC, API, and fallback.
-func routeIDPrefix(prefix, route string, isRPCvhost, isRESTvhost bool) string {
-	if isRPCvhost || prefix == rpcPrefix || route == "rpc" {
-		return "RPC"
-	}
-	if isRESTvhost || prefix == restPrefix || prefix == apiPrefix ||
-		prefix == grpcPrefix || prefix == grpcWebPrefix || route == "rest" {
-		return "API"
-	}
-	return "REQ"
 }
 
 func loadAccessCounts(path string) {
@@ -907,7 +642,7 @@ func colorValueForKey(key, value string) string {
 	return ansiGreen + value + ansiReset
 }
 
-func getChainLogger(c *ChainConfig) *log.Logger {
+func getChainLogger(c *config.ChainConfig) *log.Logger {
 	if c == nil {
 		return nil
 	}
@@ -1253,7 +988,7 @@ func resolveBackupExtraFiles(cfg backup.BackupConfig, dataDir, logsDir, configDi
 		}
 		if strings.HasSuffix(name, ".log") {
 			// Avoid duplicates with auto-discovered paths.
-			if !containsString(rotate, p) {
+			if !config.ContainsString(rotate, p) {
 				rotate = append(rotate, p)
 			}
 		} else {
@@ -1268,60 +1003,6 @@ func resolveBackupExtraFiles(cfg backup.BackupConfig, dataDir, logsDir, configDi
 		extra = append(extra, filepath.Join(configDir, name))
 	}
 	return rotate, extra
-}
-
-// containsString reports whether s is in the slice.
-func containsString(slice []string, s string) bool {
-	for _, v := range slice {
-		if v == s {
-			return true
-		}
-	}
-	return false
-}
-
-func hasChainConfigs(dir string) bool {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return false
-	}
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-		if isChainTOML(entry.Name()) {
-			return true
-		}
-	}
-	return false
-}
-
-// isChainTOML returns true only for files that are chain config TOMLs.
-// Excludes known non-chain system files and all *.sample.toml files.
-func isChainTOML(name string) bool {
-	if !strings.HasSuffix(name, ".toml") {
-		return false
-	}
-	if strings.HasSuffix(name, ".sample.toml") {
-		return false
-	}
-	skip := []string{"ports.toml", "backup.toml"}
-	for _, s := range skip {
-		if strings.EqualFold(name, s) {
-			return false
-		}
-	}
-	return true
-}
-
-func inList(list []string, needle string) bool {
-	needle = strings.ToLower(strings.TrimSpace(needle))
-	for _, s := range list {
-		if strings.EqualFold(strings.TrimSpace(s), needle) {
-			return true
-		}
-	}
-	return false
 }
 
 // --------------------- CORE HANDLER ---------------------
@@ -1368,8 +1049,8 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		if ap == "" {
 			ap = "api"
 		}
-		isRPCvhost = strings.HasPrefix(host, rp+".") || inList(chain.RPCAliases, host)
-		isRESTvhost = strings.HasPrefix(host, ap+".") || inList(chain.RESTAliases, host) || inList(chain.APIAliases, host)
+		isRPCvhost = strings.HasPrefix(host, rp+".") || config.InList(chain.RPCAliases, host)
+		isRESTvhost = strings.HasPrefix(host, ap+".") || config.InList(chain.RESTAliases, host) || config.InList(chain.APIAliases, host)
 	}
 
 	var (
@@ -1448,7 +1129,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	// Always stamp a typed vProx request ID based on the resolved route.
 	// Apache has its own access log for upstream correlation; we own this ID space.
 	// If Apache forwarded an X-Request-ID, it is overwritten with the typed ID.
-	requestID := applog.NewTypedID(routeIDPrefix(routePrefix, route, isRPCvhost, isRESTvhost))
+	requestID := applog.NewTypedID(config.RouteIDPrefix(routePrefix, route, isRPCvhost, isRESTvhost))
 	r.Header.Set(applog.RequestIDHeader, requestID)
 	applog.SetResponseRequestID(w, requestID)
 
@@ -1820,7 +1501,7 @@ func main() {
 		}
 		// Notify vLog (non-fatal). Prefer ports.toml vlog_url, fall back to env.
 		vlogURL := os.Getenv("VLOG_URL")
-		if p, err := loadPorts(filepath.Join(configDir, "ports.toml")); err == nil && p.VLogURL != "" {
+		if p, err := config.LoadPorts(filepath.Join(configDir, "ports.toml")); err == nil && p.VLogURL != "" {
 			vlogURL = p.VLogURL
 		}
 		notifyVLog(vlogURL)
@@ -1838,7 +1519,7 @@ func main() {
 	if _, err := os.Stat(portsPath); err != nil {
 		log.Fatalf("ports config missing: %s", portsPath)
 	}
-	defaultPorts, loadErr = loadPorts(portsPath)
+	defaultPorts, loadErr = config.LoadPorts(portsPath)
 	if loadErr != nil {
 		log.Fatalf("Could not load default ports: %v", loadErr)
 	}
@@ -1849,7 +1530,7 @@ func main() {
 	//   3. $configDir (flat layout, backward compat — filtered by isChainTOML)
 	foundChains := false
 	for _, scanDir := range []string{chainsConfigDir, chainsDir, configDir} {
-		if !hasChainConfigs(scanDir) {
+		if !config.HasChainConfigs(scanDir) {
 			continue
 		}
 		if err := loadChains(scanDir); err != nil {
