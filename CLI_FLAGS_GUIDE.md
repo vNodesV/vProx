@@ -262,3 +262,80 @@ Example:
 - `vProx --new-backup --reset_count` — backup + reset counters
 - `vProx --list-backup` — list archives
 - `vProx --backup-status` — show scheduler status
+
+---
+
+## vLog CLI Reference
+
+vLog is the companion log-analyzer binary shipped with vProxVL v1.2.0.
+
+### Commands
+
+| Command | Description |
+|---|---|
+| `vlog start` | Start vLog web server (foreground, default `:8889`) |
+| `vlog start -d` | Start as background service (`sudo service vLog start`) |
+| `vlog stop` | Stop vLog service (`sudo service vLog stop`) |
+| `vlog restart` | Restart vLog service (`sudo service vLog restart`) |
+| `vlog ingest` | One-shot: scan archives, ingest new entries, exit |
+| `vlog status` | Print database stats and exit |
+
+### Flags (all commands)
+
+| Flag | Default | Description |
+|---|---|---|
+| `--home PATH` | `$VPROX_HOME` or `~/.vProx` | Override vProx home directory |
+| `--port PORT` | from `vlog.toml` | Override web server listen port |
+| `--quiet` | false | Suppress non-essential output |
+| `--version` | — | Print version and exit |
+| `-h`, `--help` | — | Print usage |
+
+### Flags (start only)
+
+| Flag | Default | Description |
+|---|---|---|
+| `--no-watch` | false | Disable background FS watcher (no auto-ingest) |
+| `--no-enrich` | false | Disable auto-enrichment on new IPs |
+| `--watch-interval DURATION` | `30s` | FS watcher poll interval |
+
+### Flags (one-shot / diagnostic)
+
+| Flag | Description |
+|---|---|
+| `--list-archives` | List all ingested archive files |
+| `--list-accounts` | Print all IP accounts as JSON |
+| `--list-threats` | Print flagged IPs (score ≥ 50) |
+| `--enrich IP` | Run threat intelligence on a single IP and print result |
+| `--purge-cache IP\|all` | Evict cached intel for one IP or all IPs |
+| `--validate` | Validate `vlog.toml` config and exit |
+| `--info` | Print resolved config and exit |
+| `--dry-run` | Validate + print without starting server |
+
+### Priority order
+
+1. CLI flags
+2. `$VPROX_HOME/config/vlog.toml`
+3. Built-in defaults
+
+### Practical command sets
+
+#### Service management
+```bash
+vlog start -d         # daemon
+vlog stop             # stop
+vlog restart          # restart
+vlog status           # show stats
+```
+
+#### Manual ingest
+```bash
+vlog ingest           # process all pending archives
+vlog ingest --home /custom/path
+```
+
+#### Intelligence
+```bash
+vlog --enrich 1.2.3.4            # run VT + AbuseIPDB + Shodan on IP
+vlog --purge-cache 1.2.3.4       # clear cached score for IP
+vlog --list-threats               # print IPs with score ≥ 50
+```

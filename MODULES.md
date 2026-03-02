@@ -40,17 +40,22 @@ Chain configs live in `$HOME/.vProx/config/chains/*.toml`. For backward compatib
 | Field | Type | Description |
 |---|---|---|
 | `default_ports` | bool | `true` (default) — inherit ports from `config/ports.toml` |
+| `msg_rpc` | bool | Show `[message].rpc_msg` banner on RPC index page |
+| `msg_api` | bool | Show `[message].api_msg` banner on REST/swagger pages |
+| `rpc_aliases` | `[]string` | Extra RPC hostnames for vhost routing (e.g. `["rpc-alt.example.com"]`) |
+| `rest_aliases` | `[]string` | Extra REST hostnames for vhost routing |
+| `api_aliases` | `[]string` | Extra API hostnames for vhost routing |
 | `[ports]` | table | Per-service port overrides when `default_ports = false` |
-| `[expose]` | table | Routing mode: `mode = "path"` or `mode = "vhost"` |
-| `[aliases]` | table | Service-specific hostnames for vhost routing |
-| `[features]` | table | `banner_injection`, `absolute_links` |
-| `[logging]` | table | `file` — per-chain log path (relative to `VPROX_HOME`) |
+| `[expose]` | table | Routing booleans: `path = true` (prefix routing) and/or `vhost = true` (subdomain routing) |
+| `[features]` | table | `rpc_address_masking`, `mask_rpc`, `swagger_masking`, `absolute_links` |
+| `[message]` | table | `rpc_msg` and `api_msg` banner strings (shown only when `msg_rpc`/`msg_api` are `true`) |
+| `[logging]` | table | `file` — per-chain log filename (relative to `data/logs/`) |
 | `[ws]` | table | `idle_timeout_sec`, `max_lifetime_sec` |
 
-**Routing modes:**
+**Routing modes** (`[expose]` block — both can be true simultaneously):
 
-- `mode = "path"` (default): `host/rpc/...` → `ip:26657`, `host/rest/...` → `ip:1317`, etc.
-- `mode = "vhost"`: `rpc.<host>` → `ip:26657`, `rest.<host>` → `ip:1317`, etc. (requires DNS/nginx for subdomains)
+- `path = true`: `host/rpc/...` → `ip:26657`, `host/rest/...` → `ip:1317`, etc.
+- `vhost = true`: `rpc.<host>` → `ip:26657`, `api.<host>` → `ip:1317`, etc. Requires DNS or a reverse proxy for each subdomain.
 
 A fully annotated example is at [`config/chains/chain.sample.toml`](./config/chains/chain.sample.toml).
 
@@ -208,20 +213,22 @@ vProx --backup-status             # Show scheduler status
 
 ### Automated backups
 
-Configure via `$HOME/.vProx/config/backup/backup.toml` (see [`config/backup.sample.toml`](./config/backup.sample.toml)):
+Configure via `$HOME/.vProx/config/backup/backup.toml` (see [`config/backup/backup.sample.toml`](./config/backup/backup.sample.toml)):
 
 ```toml
 [backup]
-automation = true           # Enable automatic backup scheduler
+automation = false          # Enable automatic backup scheduler (default: false — opt-in)
 compression = "tar.gz"
 interval_days = 7           # Rotate every N days (0 = disable timer)
 max_size_mb = 100           # Rotate when main.log exceeds N MB (0 = disable)
 check_interval_min = 10     # How often to check conditions
 
 [backup.files]
-logs   = ["main.log", "rate-limit.jsonl"]
+# All *.log files in data/logs/ are auto-discovered (chain logs included automatically).
+# List only non-.log files you want archived (e.g. .jsonl, .json).
+logs   = ["rate-limit.jsonl"]
 data   = ["access-counts.json"]
-config = ["ports.toml", "chains/your_chain.toml"]
+config = ["ports.toml"]
 ```
 
 Trigger logic: backup fires when **either** `interval_days` or `max_size_mb` threshold is met (whichever comes first).
@@ -291,7 +298,7 @@ If a chain config includes a `[logging]` block:
 
 ```toml
 [logging]
-file = "logs/my-chain.log"
+file = "my-chain.log"   # filename only; resolves to data/logs/my-chain.log
 ```
 
 vProx writes summary lines to **both** `main.log` and the chain-specific file. Relative paths resolve under `$VPROX_HOME`.
@@ -357,12 +364,53 @@ vProx --backup-status                 # Show scheduler status
 
 **Rate limit overrides (CLI, override .env):**
 
+```bash
+vProx --rps 50              # Requests per second
+vProx --burst 200           # Burst capacity
+vProx --disable-auto        # Disable auto-quarantine
+vProx --auto-rps 0.5        # Penalty RPS during quarantine
+vProx --auto-burst 1        # Penalty burst during quarantine
+```
+
+---
+
+## 10) Chain Config Reference
+
+See [`config/chains/chain.sample.toml`](./config/chains/chain.sample.toml) for a fully annotated template.
+
+**Key top-level fields:**
+
+```toml
+chain_name    = "my-chain"             # Unique identifier (logs)
+host          = "my-chain.example.com" # Matched Host header
+ip            = "10.0.0.1"            # Backend node IP
+default_ports = true                   # Use ports.toml defaults
+
+msg_rpc       = false    # Show rpc_msg banner on RPC index
+msg_api       = false    # Show api_msg banner on REST swagger
+
+rpc_aliases   = []       # Extra RPC hostnames (vhost routing only)
+rest_aliases  = []       # Extra REST hostnames (vhost routing only)
+api_aliases   = []       # Extra API alias hostnames (vhost routing only)
+```
+
+**Features block:**
+
+```toml
+[features]
+rpc_address_masking = true   # Mask local IP (10.0.0.x/) links on RPC index HTML
+mask_rpc            = ""     # Replacement label (empty = remove the link entirely)
+swagger_masking     = false  # Rewrite Swagger Try-It base URL to public host (future)
+absolute_links      = "auto" # auto | always | never
+```
 
 ---
 
 ## 11) vLog — Log Archive Analyzer
 
-**Purpose**: Standalone binary that analyzes vProx log archives. Maintains a SQLite database of per-IP accounts, request events, and rate-limit events. Provides a CRM-like web UI and REST API for security intelligence and traffic analysis.
+**Version**: v1.0.0 (ships with vProxVL v1.2.0)
+
+**Purpose**: Standalone binary that analyzes vProx log archives. Maintains a SQLite database of per-IP accounts, request events, and rate-limit events. Provides a CRM-like web UI and REST API for security intelligence, traffic analysis, and multi-location endpoint health monitoring.
 
 **Location:**
 - `cmd/vlog/` — binary entry point
@@ -379,48 +427,100 @@ vProx --backup-status                 # Show scheduler status
 | Command | Action |
 |---|---|
 | `vlog start` | Start vLog server (foreground) |
+| `vlog start -d` | Start as background daemon (`sudo service vLog start`) |
+| `vlog stop` | Stop vLog service (`sudo service vLog stop`) |
+| `vlog restart` | Restart vLog service (`sudo service vLog restart`) |
 | `vlog ingest` | One-shot archive ingest and exit |
 | `vlog status` | Show database stats and exit |
 
-**Flags:** `--home`, `--config`, `--port`, `--quiet`, `--version`, `--help`
+**Runtime flags (start):** `--home`, `--port`, `--quiet`, `--no-watch`, `--no-enrich`, `--watch-interval`
+**One-shot flags:** `--list-archives`, `--list-accounts`, `--list-threats`, `--enrich <ip>`, `--purge-cache <ip|all>`, `--validate`, `--info`, `--dry-run`
+
+### Dashboard
+
+The dashboard (`GET /`) provides:
+
+- **Stats cards**: total IPs, total requests, rate-limit events, flagged IPs
+- **Dual-line Chart.js charts**: requests over time (left block) and IPs/rate-limits (right block) with chart-type dropdown
+- **Endpoint status panel**: table of proxied hosts with request counts, unique IPs, last seen, and 3 live probe columns:
+
+| Column | Source | Description |
+|---|---|---|
+| **Live** | — | Probe trigger button |
+| **Local** | vLog server | Direct HTTP probe from the vLog host; shows latency in green or error in red |
+| **🇨🇦** | check-host.net — Vancouver | External probe from Canada node |
+| **🌍** | check-host.net — random WW node | External probe from Europe/Asia/Americas |
+
+During probing, each cell shows a CSS spinner ring. On completion, cells show `NNms` (green) or error text (red). Hovering shows the probe node label and probed URL.
+
+### Accounts Page
+
+`GET /accounts` — paginated, searchable, sortable IP account list:
+
+- **Search**: by IP, country code, or row ID
+- **Per-page**: 25 / 50 / 100 / 200 / All
+- **Sort**: any column; sort state persisted in URL (back-nav and direct URL sharing work correctly)
+- **Columns**: Org (ip-api.com) · IP · Country · Requests · Rate Limits · Threat Score · Last Seen · Actions · Status
+- **Status badge**: ALLOWED (green) / BLOCKED (red)
+- **Investigate button**: turns green (`.btn-investigate-done`) when threat intel exists for that IP
 
 ### Web UI Routes
 
 | Route | Description |
 |---|---|
-| `/` | Dashboard: stats, recent flagged IPs |
-| `/accounts` | Paginated IP account list |
-| `/accounts/:ip` | CRM-like IP account detail |
-| `/api/v1/ingest` | POST: trigger archive ingest |
-| `/api/v1/accounts` | GET: JSON account list |
-| `/api/v1/accounts/:ip` | GET: JSON account detail |
-| `/api/v1/enrich/:ip` | POST: trigger IP enrichment |
-| `/api/v1/stats` | GET: JSON dashboard stats |
+| `GET /` | Dashboard: stats, charts, endpoint probe panel |
+| `GET /accounts` | Paginated IP account list with search and sort |
+| `GET /accounts/:ip` | CRM-like IP account detail |
+| `POST /api/v1/ingest` | Trigger archive ingest |
+| `GET /api/v1/accounts` | JSON account list |
+| `GET /api/v1/accounts/:ip` | JSON account detail |
+| `GET /api/v1/probe?host=HOST` | Multi-location HTTP probe (local + CA + WW) |
+| `GET /api/v1/chart?type=TYPE` | Chart data (requests, ips, endpoint_summary, …) |
+| `POST /api/v1/enrich/:ip` | SSE: run threat intelligence (VirusTotal + AbuseIPDB + Shodan) |
+| `POST /api/v1/osint/:ip` | SSE: run OSINT scan |
+| `POST /api/v1/investigate/:ip` | SSE: full investigation (TI + OSINT, two-phase) |
+| `POST /api/v1/block/:ip` | Flag IP as blocked |
+| `POST /api/v1/unblock/:ip` | Remove block flag |
+| `GET /api/v1/stats` | JSON dashboard stats |
 
 ### Internal Packages
 
 | Package | Description |
 |---|---|
 | `internal/vlog/config/` | TOML config loader (`vlog.toml`) |
-| `internal/vlog/db/` | SQLite schema, connection pool, query methods (5 tables) |
+| `internal/vlog/db/` | SQLite schema, connection pool, query methods (5 tables + 6 indexes) |
 | `internal/vlog/ingest/` | Archive scanner, log parser (`main.log` + `rate-limit.jsonl`), FS watcher |
-| `internal/vlog/intel/` | AbuseIPDB v2, VirusTotal v3, Shodan API clients; composite threat scoring (0–100) |
-| `internal/vlog/web/` | Embedded HTTP server, `html/template` + htmx UI |
+| `internal/vlog/intel/` | AbuseIPDB v2, VirusTotal v3, Shodan API clients; parallel queries (3 goroutines); composite threat scoring (0–100); ~10s vs former ~30s |
+| `internal/vlog/web/` | Embedded HTTP server, `html/template` + `go:embed` + htmx UI, SSE handlers, probe handler |
+
+### OSINT Engine
+
+5 operations run concurrently via `sync.WaitGroup` + `sync.Mutex`:
+
+| Operation | Source | Detail |
+|---|---|---|
+| Reverse DNS | stdlib | PTR lookup |
+| Port scan | stdlib | TCP dial on common ports (22, 80, 443, 26657, 1317, 9090, 9091) |
+| Org / geo | ip-api.com | Country, city, ISP, org, ASN |
+| Protocol probe | net/http | Cosmos RPC `/status`, REST `/cosmos/base/tendermint/v1beta1/node_info` |
+| Cosmos RPC | CometBFT | Node info if RPC port open |
+
+Typical completion: ~5s (concurrent) vs ~23s (sequential).
 
 ### vProx Integration
 
-After `--new-backup`, vProx optionally POSTs to `$VLOG_URL/api/v1/ingest` to trigger automatic ingest:
+After `--new-backup`, vProx optionally POSTs to `vlog_url/api/v1/ingest` to trigger automatic ingest:
 
-```bash
-# In $VPROX_HOME/config/ports.toml or environment
-VLOG_URL=http://localhost:8889   # Enable automatic ingest after each backup
+```toml
+# $VPROX_HOME/config/ports.toml
+vlog_url = "http://localhost:8889"
 ```
 
 The POST is non-fatal — if vLog is unavailable, vProx logs a warning and continues normally.
 
 ### Security Assessment
 
-vLog builds a composite threat score (0–100) for each IP using three external intelligence sources:
+vLog builds a composite threat score (0–100) for each IP using three external intelligence sources (queries run in parallel):
 
 | Source | Weight | API Version |
 |---|---|---|

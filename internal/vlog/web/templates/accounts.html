@@ -1,6 +1,9 @@
 {{define "title"}}Accounts{{end}}
 {{define "content"}}
-<h2>Accounts</h2>
+<nav class="page-nav">
+  <a href="{{.BasePath}}/">Dashboard</a>
+  <a href="{{.BasePath}}/accounts" class="active">Accounts</a>
+</nav>
 
 <div class="accounts-toolbar">
   <div class="accounts-toolbar-left">
@@ -17,6 +20,7 @@
           {{range $v := (intSlice 25 50 100 200)}}
           <option value="{{$v}}"{{if eq $v $ps}} selected{{end}}>{{$v}}</option>
           {{end}}
+          <option value="0"{{if eq 0 $ps}} selected{{end}}>All</option>
         </select>
       </label>
     </form>
@@ -46,21 +50,20 @@
       <th class="sortable">Org</th>
       <th class="sortable">IP</th>
       <th class="sortable">Country</th>
-      <th class="sortable">ASN</th>
       <th class="sortable">Requests</th>
       <th class="sortable">Rate Limits</th>
       <th class="sortable">Threat Score</th>
       <th class="sortable">Last Seen</th>
       <th>Actions</th>
+      <th class="sortable">Status</th>
     </tr>
   </thead>
   <tbody id="accounts-table">
     {{range .Accounts}}
-    <tr>
+    <tr data-ip="{{.IP}}">
       <td class="org-cell">{{if .Org}}<span class="org-name">{{.Org}}</span>{{else}}<span class="org-none">—</span>{{end}}</td>
       <td><code class="ip-code">{{.IP}}</code></td>
       <td>{{.Country}}</td>
-      <td class="asn-cell">{{.ASN}}</td>
       <td>{{.TotalRequests}}</td>
       <td>{{.RatelimitEvents}}</td>
       <td>
@@ -72,12 +75,19 @@
       </td>
       <td class="lastseen-cell">{{.LastSeen}}</td>
       <td class="actions-cell">
-        <button class="btn-investigate{{if .IntelUpdatedAt}} btn-investigate-done{{end}}" onclick="openInvestigate('{{$.BasePath}}', '{{.IP}}')" title="Run TI + OSINT investigation">Investigate</button>
+        <button class="btn-investigate{{if .IntelUpdatedAt}} btn-investigate-done{{end}}" onclick="openInvestigate('{{$.BasePath}}', '{{.IP}}', this)" title="Run TI + OSINT investigation">Investigate</button>
         <a href="{{$.BasePath}}/accounts/{{.IP}}" role="button" class="btn-view outline">View</a>
+      </td>
+      <td>
+        {{if eq .Status "blocked"}}
+          <span class="status-badge status-blocked">Blocked</span>
+        {{else}}
+          <span class="status-badge status-allowed">Allowed</span>
+        {{end}}
       </td>
     </tr>
     {{else}}
-    <tr><td colspan="9">No accounts found.</td></tr>
+    <tr><td colspan="10">No accounts found.</td></tr>
     {{end}}
   </tbody>
 </table>
@@ -86,10 +96,10 @@
 
 <nav class="pagination-nav">
   <ul>
-    {{if gt .Page 1}}
+    {{if and (gt .Page 1) (ne .PageSize 0)}}
     <li><a href="{{.BasePath}}/accounts?page={{subtract .Page 1}}&page_size={{.PageSize}}{{if .Search}}&q={{.Search}}{{end}}">&laquo; Prev</a></li>
     {{end}}
-    {{if lt (multiply .Page .PageSize) .Total}}
+    {{if and (lt (multiply .Page .PageSize) .Total) (ne .PageSize 0)}}
     <li><a href="{{.BasePath}}/accounts?page={{add .Page 1}}&page_size={{.PageSize}}{{if .Search}}&q={{.Search}}{{end}}">Next &raquo;</a></li>
     {{end}}
   </ul>
@@ -114,16 +124,20 @@
     <!-- Combined log -->
     <div class="enrich-log" id="inv-log"></div>
 
-    <button class="enrich-dismiss" id="inv-dismiss" onclick="closeInvestigate()">Dismiss &amp; Refresh</button>
+    <button class="enrich-dismiss" id="inv-dismiss" onclick="closeInvestigate()">Dismiss</button>
   </div>
 </div>
 
 <script>
 var investigateDone = false;
 var investigateES = null;
+var investigateBtn = null;
+var investigateBase = '';
 
-function openInvestigate(base, ip) {
+function openInvestigate(base, ip, btn) {
   investigateDone = false;
+  investigateBtn = btn || null;
+  investigateBase = base;
   document.getElementById('investigate-overlay').style.display = 'flex';
   document.getElementById('inv-ip-label').textContent = ip;
   document.getElementById('inv-ti-msg').textContent = 'Starting…';
@@ -204,9 +218,51 @@ function finishInvestigate() {
   document.getElementById('inv-dismiss').className = 'enrich-dismiss visible';
 }
 
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function threatClass(score) {
+  return score <= 30 ? 'threat-fill-low' : (score <= 60 ? 'threat-fill-medium' : 'threat-fill-high');
+}
+
 function closeInvestigate() {
   document.getElementById('investigate-overlay').style.display = 'none';
-  window.location.reload();
+  if (!investigateDone) return;
+
+  // Mark button green immediately.
+  if (investigateBtn) investigateBtn.classList.add('btn-investigate-done');
+
+  // Refresh the row from the API.
+  var ip = document.getElementById('inv-ip-label').textContent;
+  var row = document.querySelector('tr[data-ip="' + ip + '"]');
+  if (!row || !investigateBase) return;
+
+  fetch(investigateBase + '/api/v1/accounts/' + encodeURIComponent(ip))
+    .then(function(r) { return r.json(); })
+    .then(function(a) {
+      // Org (col 0)
+      row.cells[0].innerHTML = a.Org
+        ? '<span class="org-name">' + escHtml(a.Org) + '</span>'
+        : '<span class="org-none">—</span>';
+      // Requests (col 3), RateLimits (col 4)
+      row.cells[3].textContent = a.TotalRequests;
+      row.cells[4].textContent = a.RatelimitEvents;
+      // ThreatScore (col 5)
+      var cls = threatClass(a.ThreatScore);
+      row.cells[5].innerHTML =
+        '<div class="threat-bar" style="width:60px;display:inline-block;vertical-align:middle;">' +
+        '<div class="threat-fill ' + cls + '" style="width:' + a.ThreatScore + '%"></div>' +
+        '</div><span class="threat-num">' + a.ThreatScore + '</span>';
+      // LastSeen (col 6)
+      row.cells[6].textContent = a.LastSeen || '';
+      // Status (col 8)
+      var isBlocked = (a.Status === 'blocked');
+      row.cells[8].innerHTML = isBlocked
+        ? '<span class="status-badge status-blocked">Blocked</span>'
+        : '<span class="status-badge status-allowed">Allowed</span>';
+    })
+    .catch(function() {}); // button already marked; row update is best-effort
 }
 </script>
 {{end}}

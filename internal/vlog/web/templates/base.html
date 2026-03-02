@@ -1,5 +1,5 @@
 {{define "base"}}<!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -19,45 +19,101 @@
     var spinner = spinnerId ? document.getElementById(spinnerId) : null;
     var ths = table.querySelectorAll('thead th.sortable');
     var state = {col: -1, asc: true};
+
+    // Persist sort state in URL (no navigation) and patch all nav links/forms
+    // so pagination, per-page, and search carry sort params through.
+    function persistSort(col, dir) {
+      var url = new URL(window.location.href);
+      url.searchParams.set('sort', col);
+      url.searchParams.set('dir', dir);
+      history.replaceState(null, '', url.toString());
+
+      // Patch pagination anchor links
+      document.querySelectorAll('.accounts-pagination a').forEach(function(a) {
+        try {
+          var u = new URL(a.href);
+          u.searchParams.set('sort', col); u.searchParams.set('dir', dir);
+          a.href = u.toString();
+        } catch(e) {}
+      });
+      // Patch per-page and search forms (inject/update hidden inputs)
+      document.querySelectorAll('.per-page-form, .search-form').forEach(function(form) {
+        ['sort', 'dir'].forEach(function(name) {
+          var val = (name === 'sort') ? col : dir;
+          var inp = form.querySelector('input[name="' + name + '"]');
+          if (inp) { inp.value = val; } else {
+            inp = document.createElement('input');
+            inp.type = 'hidden'; inp.name = name; inp.value = val;
+            form.appendChild(inp);
+          }
+        });
+      });
+      // Patch clear-search link
+      var cl = document.querySelector('.search-clear');
+      if (cl) {
+        try {
+          var u = new URL(cl.href);
+          u.searchParams.set('sort', col); u.searchParams.set('dir', dir);
+          cl.href = u.toString();
+        } catch(e) {}
+      }
+    }
+
+    function doSort(colIdx, asc, showSpinner) {
+      state.col = colIdx; state.asc = asc;
+      ths.forEach(function(t) { t.classList.remove('sort-asc','sort-desc'); });
+      ths[colIdx].classList.add(asc ? 'sort-asc' : 'sort-desc');
+      persistSort(colIdx, asc ? 'asc' : 'desc');
+      if (showSpinner && spinner) spinner.style.display = 'flex';
+      requestAnimationFrame(function() {
+        setTimeout(function() {
+          var tbody = table.querySelector('tbody');
+          var rows = Array.from(tbody.querySelectorAll('tr'));
+          rows.sort(function(a, b) {
+            var av = a.cells[colIdx] ? a.cells[colIdx].textContent.trim() : '';
+            var bv = b.cells[colIdx] ? b.cells[colIdx].textContent.trim() : '';
+            var an = parseFloat(av), bn = parseFloat(bv);
+            if (!isNaN(an) && !isNaN(bn)) return asc ? an - bn : bn - an;
+            return asc ? av.localeCompare(bv) : bv.localeCompare(av);
+          });
+          rows.forEach(function(r) { tbody.appendChild(r); });
+          if (showSpinner && spinner) spinner.style.display = 'none';
+        }, 0);
+      });
+    }
+
     ths.forEach(function(th) {
       th.addEventListener('click', function() {
         var colIdx = Array.from(th.parentNode.children).indexOf(th);
         var asc = (state.col === colIdx) ? !state.asc : true;
-        state.col = colIdx; state.asc = asc;
-        ths.forEach(function(t) { t.classList.remove('sort-asc','sort-desc'); });
-        th.classList.add(asc ? 'sort-asc' : 'sort-desc');
-        if (spinner) spinner.style.display = 'flex';
-        requestAnimationFrame(function() {
-          setTimeout(function() {
-            var tbody = table.querySelector('tbody');
-            var rows = Array.from(tbody.querySelectorAll('tr'));
-            rows.sort(function(a, b) {
-              var av = a.cells[colIdx] ? a.cells[colIdx].textContent.trim() : '';
-              var bv = b.cells[colIdx] ? b.cells[colIdx].textContent.trim() : '';
-              var an = parseFloat(av), bn = parseFloat(bv);
-              if (!isNaN(an) && !isNaN(bn)) return asc ? an - bn : bn - an;
-              return asc ? av.localeCompare(bv) : bv.localeCompare(av);
-            });
-            rows.forEach(function(r) { tbody.appendChild(r); });
-            if (spinner) spinner.style.display = 'none';
-          }, 0);
-        });
+        doSort(colIdx, asc, true);
       });
     });
+
+    // Restore sort from URL on page load (back-button / direct link with sort params)
+    var params = new URLSearchParams(window.location.search);
+    var sortParam = params.get('sort');
+    if (sortParam !== null) {
+      var col = parseInt(sortParam, 10);
+      if (!isNaN(col) && col >= 0 && col < ths.length) {
+        doSort(col, params.get('dir') !== 'desc', false);
+      }
+    }
   }
   </script>
 </head>
 <body>
-  <nav class="container-fluid">
-    <ul><li><strong>vLog</strong></li></ul>
-    <ul>
-      <li><a href="{{.BasePath}}/">Dashboard</a></li>
-      <li><a href="{{.BasePath}}/accounts">Accounts</a></li>
-    </ul>
-  </nav>
   <main class="container">
+    {{if .AuthEnabled}}<div style="display:flex;justify-content:flex-end;padding:0.5rem 0">
+      <form method="POST" action="{{.BasePath}}/logout" style="margin:0">
+        <button type="submit" class="btn-logout" style="background:none;border:1px solid rgba(0,255,0,0.35);color:#00ff00;padding:0.3rem 0.8rem;border-radius:4px;cursor:pointer;font-size:0.8rem;font-family:Inter,sans-serif;transition:all 0.2s"
+          onmouseover="this.style.background='rgba(0,255,0,0.10)';this.style.borderColor='#00ff00'"
+          onmouseout="this.style.background='none';this.style.borderColor='rgba(0,255,0,0.35)'">↪ Logout</button>
+      </form>
+    </div>{{end}}
     {{block "content" .}}{{end}}
   </main>
+  <footer class="vlog-footer">vNodes[V] &nbsp;·&nbsp; vLog v1.1.0 &nbsp;·&nbsp; Infrastructure Intelligence</footer>
 </body>
 </html>
 {{end}}

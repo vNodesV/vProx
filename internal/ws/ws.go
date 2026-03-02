@@ -34,6 +34,15 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin:     func(r *http.Request) bool { return true }, // edge terminates, trust local policy
 }
 
+// Fix SEC-M2: per-frame read limit to prevent OOM from oversized frames.
+// Fix SEC-M3: global connection cap to prevent FD exhaustion.
+const (
+	wsMaxMessageBytes = 512 * 1024 // 512 KB per frame
+	wsMaxConnections  = 1000
+)
+
+var wsActiveConns int64
+
 // HandleWS returns an http.HandlerFunc you can register at /websocket.
 func HandleWS(d Deps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -54,6 +63,14 @@ func HandleWS(d Deps) http.HandlerFunc {
 			return
 		}
 
+		// Fix SEC-M3: reject new connections when at capacity.
+		if atomic.AddInt64(&wsActiveConns, 1) > wsMaxConnections {
+			atomic.AddInt64(&wsActiveConns, -1)
+			http.Error(w, "too many WebSocket connections", http.StatusServiceUnavailable)
+			return
+		}
+		defer atomic.AddInt64(&wsActiveConns, -1)
+
 		// Upgrade client side (echo request id in handshake response headers)
 		respHdr := http.Header{}
 		if requestID != "" {
@@ -65,6 +82,7 @@ func HandleWS(d Deps) http.HandlerFunc {
 			return
 		}
 		defer cConn.Close()
+		cConn.SetReadLimit(wsMaxMessageBytes) // Fix SEC-M2
 
 		// Dial backend WS (CometBFT/Tendermint speaks WS at /websocket)
 		hdr := http.Header{}
@@ -85,6 +103,10 @@ func HandleWS(d Deps) http.HandlerFunc {
 			return
 		}
 		defer bConn.Close()
+		bConn.SetReadLimit(wsMaxMessageBytes) // Fix SEC-M2
+
+		// Emit CONNECTED log now that both sides are up.
+		d.LogRequestSummary(r, true, "websocket", host, start)
 
 		// Emit CONNECTED log now that both sides are up.
 		d.LogRequestSummary(r, true, "websocket", host, start)
@@ -130,6 +152,9 @@ func HandleWS(d Deps) http.HandlerFunc {
 		var upBytes int64   // client -> backend
 		var downBytes int64 // backend -> client
 		var wg sync.WaitGroup
+		// Fix CR-4: one mutex per connection to serialise concurrent writes
+		// (WriteMessage in pump goroutines vs WriteControl in the closer below).
+		var cMu, bMu sync.Mutex
 
 		// client -> backend
 		wg.Add(1)
@@ -144,7 +169,10 @@ func HandleWS(d Deps) http.HandlerFunc {
 				extendDeadline(cConn)
 				_ = bConn.SetWriteDeadline(time.Now().Add(idle))
 
-				if writeErr := bConn.WriteMessage(mt, p); writeErr != nil {
+				bMu.Lock()
+				writeErr := bConn.WriteMessage(mt, p)
+				bMu.Unlock()
+				if writeErr != nil {
 					errc <- writeErr
 					return
 				}
@@ -165,7 +193,10 @@ func HandleWS(d Deps) http.HandlerFunc {
 				extendDeadline(bConn)
 				_ = cConn.SetWriteDeadline(time.Now().Add(idle))
 
-				if writeErr := cConn.WriteMessage(mt, p); writeErr != nil {
+				cMu.Lock()
+				writeErr := cConn.WriteMessage(mt, p)
+				cMu.Unlock()
+				if writeErr != nil {
 					errc <- writeErr
 					return
 				}
@@ -191,8 +222,12 @@ func HandleWS(d Deps) http.HandlerFunc {
 
 		// Send close frames before closing (best-effort, non-blocking).
 		closeMsg := websocket.FormatCloseMessage(websocket.CloseNormalClosure, cause)
+		cMu.Lock()
 		_ = cConn.WriteControl(websocket.CloseMessage, closeMsg, time.Now().Add(2*time.Second))
+		cMu.Unlock()
+		bMu.Lock()
 		_ = bConn.WriteControl(websocket.CloseMessage, closeMsg, time.Now().Add(2*time.Second))
+		bMu.Unlock()
 		_ = cConn.Close()
 		_ = bConn.Close()
 		wg.Wait()

@@ -179,6 +179,81 @@
 | OWASP Threat Dragon | https://owasp.org/www-project-threat-dragon | Open source threat model tool |
 | Threat Modeling Manifesto | https://www.threatmodelingmanifesto.org | Community principles |
 
+### Go HTTP Security Hardening
+| Resource | URL | Notes |
+|----------|-----|-------|
+| ResponseWriter concurrency | https://pkg.go.dev/net/http#ResponseWriter | "Callers should not mutate or reuse the request until the ServeHTTP method has returned" — not concurrent-safe |
+| io.LimitReader | https://pkg.go.dev/io#LimitReader | Cap external response body reads to prevent OOM/DoS |
+| OWASP WS Security Cheat Sheet | https://cheatsheetseries.owasp.org/cheatsheets/WebSockets_Cheat_Sheet.html | WS origin validation, message limits, auth |
+| gorilla/websocket SetReadLimit | https://pkg.go.dev/github.com/gorilla/websocket#Conn.SetReadLimit | Default 0=unlimited; always set after upgrade |
+| Cloudflare IP Ranges | https://www.cloudflare.com/ips | Authoritative IPv4/IPv6 lists for trusted proxy CIDR allowlist |
+| net.IP.IsPrivate() | https://pkg.go.dev/net#IP.IsPrivate | SSRF guard — blocks RFC 1918, RFC 4193, loopback, link-local |
+| OWASP SSRF Prevention Cheat Sheet | https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html | Private IP blocking, allowlist design |
+| OWASP Error Handling Cheat Sheet | https://cheatsheetseries.owasp.org/cheatsheets/Error_Handling_Cheat_Sheet.html | Don't expose internals in error responses |
+| OWASP REST Security Cheat Sheet | https://cheatsheetseries.owasp.org/cheatsheets/REST_Security_Cheat_Sheet.html | API key auth, error response hygiene, input validation |
+
+---
+
+## 6b. Offensive Security & Penetration Testing
+
+### Methodology
+| Resource | URL | Notes |
+|----------|-----|-------|
+| PTES (Pentest Execution Standard) | http://www.pentest-standard.org | Recon → scan → exploit → post-exploit → report framework |
+| OSSTMM (Open Source Security Testing Methodology) | https://www.isecom.org/OSSTMM.3.pdf | Rigorous security testing methodology |
+| OWASP Testing Guide (OTG) | https://owasp.org/www-project-web-security-testing-guide | Comprehensive web app pentest methodology |
+| HackTricks | https://book.hacktricks.xyz | Techniques and payloads for pentest and CTF |
+| PortSwigger Web Security Academy | https://portswigger.net/web-security | Free, hands-on web vulnerability labs (SQLi, XSS, SSRF, etc.) |
+| PayloadsAllTheThings | https://github.com/swisskyrepo/PayloadsAllTheThings | Payload collections for web, API, and OS exploitation |
+
+### Reconnaissance & OSINT
+| Resource | URL | Notes |
+|----------|-----|-------|
+| Shodan | https://www.shodan.io | Internet-wide port/banner/service indexer — production use in vLog |
+| Censys | https://search.censys.io | Certificate transparency + port scanning |
+| theHarvester | https://github.com/laramies/theHarvester | Email/domain/IP OSINT aggregation |
+| crt.sh | https://crt.sh | Certificate transparency log search |
+| BGP.tools | https://bgp.tools | ASN/BGP routing intel |
+| ip-api.com | https://ip-api.com/docs | Free bulk IP geo/org/ASN (45 req/min) — production use in vLog OSINTStream |
+| ipinfo.io | https://ipinfo.io/developers | IP geo/ASN/hosting API with free tier |
+| AbuseIPDB | https://www.abuseipdb.com/api | IP abuse/reputation database — production use in vLog EnrichStream |
+
+### Scanning & Enumeration
+| Resource | URL | Notes |
+|----------|-----|-------|
+| nmap reference | https://nmap.org/book/man.html | OS/service fingerprinting, NSE scripts |
+| masscan | https://github.com/robertdavidgraham/masscan | Async TCP port scanner (millions of IPs/sec) |
+| nuclei | https://github.com/projectdiscovery/nuclei | Template-based vulnerability scanner; good for API/web |
+| ffuf | https://github.com/ffuf/ffuf | Web fuzzer — directory/parameter/vhost discovery |
+| gobuster | https://github.com/OJ/gobuster | Directory/DNS/vhost brute-force |
+
+### Web Exploitation & Proxies
+| Resource | URL | Notes |
+|----------|-----|-------|
+| Burp Suite | https://portswigger.net/burp | Web proxy + active scanner (Community/Pro) |
+| OWASP ZAP | https://www.zaproxy.org | Open-source web app scanner |
+| SQLMap | https://sqlmap.org | Automated SQL injection and takeover |
+| XSS Hunter | https://xsshunter.trufflesecurity.com | Blind XSS callback platform |
+
+### Exploitation Frameworks & References
+| Resource | URL | Notes |
+|----------|-----|-------|
+| Metasploit Framework | https://docs.metasploit.com | Industry-standard exploit and post-exploit framework |
+| ExploitDB | https://www.exploit-db.com | Public exploit archive; GHDB for Google dorks |
+| GTFOBins | https://gtfobins.github.io | Unix binary privilege escalation and bypass |
+| LOLBAS | https://lolbas-project.github.io | Windows living-off-the-land binaries |
+| CyberChef | https://gchq.github.io/CyberChef | Encode/decode/transform/analyze data |
+
+### Responsible Disclosure & Whitehack Ethics
+| Resource | URL | Notes |
+|----------|-----|-------|
+| CERT/CC Guide to CVD | https://certcc.github.io/CERT-Guide-to-CVD | Coordinated vulnerability disclosure best practices |
+| security.txt (RFC 9116) | https://securitytxt.org | Machine-readable security contact standard |
+| HackerOne Hacktivity | https://hackerone.com/hacktivity | Bug bounty disclosures (learning by example) |
+| Bugcrowd VRT | https://bugcrowd.com/vulnerability-rating-taxonomy | Vulnerability rating taxonomy and severity guidance |
+| CVSS v3.1 Calculator | https://www.first.org/cvss/calculator/3.1 | CVSS scoring reference |
+| Google Project Zero | https://project-zero.google | High-quality 90-day disclosure examples |
+
 ---
 
 ## 7. Architecture & Distributed Systems
@@ -282,7 +357,7 @@ resources stats       → Section 3.1
 resources ml          → Section 3.2, 4
 resources anomaly     → Section 3.2 (Anomaly Detection)
 resources obs         → Section 5
-resources security    → Section 6
+resources security    → Section 6 (defensive + Go HTTP hardening) + Section 6b (offensive/pentest/whitehack)
 resources arch        → Section 7
 resources testing     → Section 8
 resources research    → Section 9
@@ -294,6 +369,9 @@ resources docs        → Section 12
 resources ai          → Section 13
 resources release     → Section 14
 resources ebpf        → Section 14
+resources webgui      → Section 15 (CSS/dashboard/htmx/SSE)
+resources auth        → Section 16 (session auth, bcrypt, cookies)
+resources css         → Section 15 (CSS custom props, glass morphism, background-size)
 ```
 
 ---
@@ -388,9 +466,14 @@ resources ebpf        → Section 14
 | Resource | URL | Notes |
 |---|---|---|
 | Pico CSS | https://picocss.com | Classless CSS framework, minimal footprint, dark mode |
+| Pico CSS dark mode | https://picocss.com/docs/color-schemes | `data-theme="dark"`, `--pico-*` overrides |
+| CSS custom properties | https://developer.mozilla.org/en-US/docs/Web/CSS/Using_CSS_custom_properties | CSS variable design token system |
 | Simple.css | https://simplecss.org | Classless, lightweight, semantic HTML styling |
 | AdminLTE | https://adminlte.io | Dashboard template (heavier, if needed) |
 | Chart.js | https://www.chartjs.org | Lightweight charts for dashboards |
+| backdrop-filter (MDN) | https://developer.mozilla.org/en-US/docs/Web/CSS/backdrop-filter | Glass morphism blur effect |
+| CSS glass morphism guide | https://css.glass | Generator + browser compat notes for glass morphism |
+| CSS background-size (MDN) | https://developer.mozilla.org/en-US/docs/Web/CSS/background-size | `cover`/`contain`/`100% 100%` reference |
 
 ### Architecture Patterns
 | Resource | URL | Notes |
@@ -444,5 +527,17 @@ resources ebpf        → Section 14
 
 ---
 
-*Resources curated for quality, longevity, and relevance to vProx and adjacent infrastructure.*  
-*Last updated: 2026-02-24 (rev5: added §15b Web Service Architecture & Design — server patterns, TLS/cert management, Apache migration, load balancing, security headers)*
+## 16. Session Auth & Web Security (vLog)
+
+| Resource | URL | Notes |
+|---|---|---|
+| golang.org/x/crypto/bcrypt | https://pkg.go.dev/golang.org/x/crypto/bcrypt | Bcrypt password hashing — production use in vLog auth |
+| crypto/rand | https://pkg.go.dev/crypto/rand | Cryptographically secure random bytes for session tokens |
+| net/http Cookie | https://pkg.go.dev/net/http#Cookie | HttpOnly, SameSite, Secure flags reference |
+| OWASP Session Management | https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html | Token size, TTL, cookie flags, invalidation |
+| htpasswd bcrypt | https://httpd.apache.org/docs/2.4/misc/password_encryptions.html | Apache htpasswd bcrypt format (compatible with Go bcrypt) |
+| golang.org/x/crypto/acme/autocert | https://pkg.go.dev/golang.org/x/crypto/acme/autocert | ACME TLS cert management |
+
+---
+
+*Last updated: 2026-03-02 (rev13: §15 CSS & Dashboard UI — Pico dark mode, CSS custom props, backdrop-filter, glass morphism, background-size refs added; §16 Session Auth NEW — bcrypt, crypto/rand, cookie flags, OWASP session management; Quick Domain Lookup updated)*

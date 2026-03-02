@@ -127,18 +127,40 @@
 
 ---
 
-## 5. Security Engineering
+## 5. Security Engineering (Defensive)
 
 | Skill | Depth | Notes |
 |-------|-------|-------|
-| Threat modeling | 3 | STRIDE, data flow diagrams, attack surface |
-| OWASP Top 10 | 3 | Injection, broken auth, SSRF, XSS, IDOR |
-| Input validation | 4 | Allowlist over blocklist, context-aware encoding, IP header sanitization (net.ParseIP) |
-| Authentication | 3 | JWT, API keys, mTLS, OAuth 2.0 flows |
+| Threat modeling | 4 | STRIDE, data flow diagrams, attack surface mapping, trust boundary identification |
+| OWASP Top 10 | 4 | Injection, broken auth, SSRF, XSS, IDOR — and reverse-proxy-specific variants |
+| Input validation | 4 | Allowlist over blocklist, context-aware encoding, IP header sanitization (net.ParseIP); private/loopback/link-local SSRF guard pattern; `io.LimitReader` DoS hardening on external response bodies |
+| Authentication | 4 | JWT, API keys, mTLS, OAuth 2.0 flows; admin API key middleware design + loopback-only binding — production-designed for vLog |
 | Secrets management | 4 | Env vars, vault, never-hardcode policy |
 | Cryptography | 3 | TLS 1.3, AES-GCM, Ed25519, ECDSA, bcrypt — when to use each |
 | Supply chain security | 3 | Dependency review, SBOM, VEX, SLSA levels |
 | Container security | 2 | Distroless, non-root, capability dropping |
+| Security headers | 4 | HSTS, CSP, X-Frame-Options, Referrer-Policy — production-shipped in vProxWeb |
+| UFW / firewall automation | 4 | `exec.Command` safe invocation, `net.ParseIP` guard, sudoers NOPASSWD scoping — production-shipped in vLog; defense-in-depth: auth middleware + loopback bind required before any ufw endpoint |
+| Rate limiter hardening | 4 | Trusted proxy CIDR allowlist pattern; `r.RemoteAddr` CIDR check before honoring XFF/CF-Connecting-IP; Cloudflare IP range integration; prevents IP spoofing bypass — audited in vProx |
+| Error response hygiene | 4 | Never `err.Error()` in HTTP responses; return generic message + server-side log; prevents path/schema/db diagnostic leakage (CWE-200) — audited across all vLog handlers |
+| Concurrent HTTP handler safety | 4 | `http.ResponseWriter` not concurrent-safe; SSE keepalive+emit must be serialized via `sync.Mutex` or single-writer goroutine; WebSocket pump vs WriteControl race prevention — audited in vProx/vLog |
+
+---
+
+## 5b. Offensive Security & Penetration Testing
+
+| Skill | Depth | Notes |
+|-------|-------|-------|
+| Pentest methodology | 3 | PTES, OSSTMM; recon → scan → exploit → post-exploit → report lifecycle |
+| Network reconnaissance | 4 | nmap (OS/service fingerprinting, NSE scripts), masscan, SYN scan, banner grabbing — conceptual + applied in vLog port scan |
+| OSINT (network layer) | 4 | Shodan, Censys, ip-api.com, RDNS, BGP/ASN routing, certificate transparency; production-shipped in vLog `OSINTStream` (concurrent: DNS, port scan, protocol probe, Cosmos RPC probe, ip-api.com) |
+| Web application pentesting | 3 | OWASP Testing Guide; SQLi, XSS, SSRF, IDOR, broken auth, XXE, LFI/RFI; PortSwigger Academy labs |
+| API security testing | 3 | REST/gRPC: JWT forgery, rate-limit bypass, parameter pollution, verbose error disclosure, mass assignment |
+| Proxy security (vProx context) | 4 | Header injection via X-Forwarded-For/X-Real-IP, SSRF through reverse proxy, path traversal, upstream confusion, IP spoofing — directly applicable to vProx threat model |
+| Vulnerability assessment | 3 | CVSS v3.1 scoring, exploit chaining, attack surface mapping, severity triage |
+| Responsible disclosure / whitehack | 3 | Coordinated disclosure (CERT/CC model), CVE assignment, bug bounty programs (HackerOne, Bugcrowd), security.txt RFC 9116, ethical scope definition |
+| Post-exploitation (defensive modeling) | 2 | Privilege escalation, lateral movement — conceptual; applied only for threat modeling and detection logic design |
+| CTF / lab environments | 3 | HackTheBox, TryHackMe patterns; applied to sharpen anomaly detection and scoring logic in vLog |
 
 ---
 
@@ -279,6 +301,7 @@
 | Per-host config | 4 | Per-entity TOML files, directory scanning, hot reload, *bool tri-state for TOML |
 | Config architecture | 4 | vprox.toml (proxy), webserver.toml (module), vhosts/*.toml (per-host), config naming conventions |
 | Apache config import | 3 | VirtualHost parsing, directive mapping, TOML generation |
+| Apache reverse proxy config | 4 | ProxyTimeout, RequestReadTimeout (handshake/header/body=0), ProxyPass timeout=, SSE-safe settings, double-compress guard (`SetEnvIfNoCase Content-Encoding`), `X-Real-IP`; multi-vhost validation |
 | CLI subcommand design | 3 | `flag` package, subcommand dispatch, help formatting |
 
 ---
@@ -291,7 +314,7 @@
 | html/template | 3 | Template composition, partials, FuncMap, context-aware escaping |
 | go:embed (fs.FS) | 3 | Static asset embedding, production vs dev mode switching |
 | htmx | 3 | Partial fragment swaps, SSE/WS integration, hx-get/post/target/swap |
-| Server-Sent Events (SSE) | 2 | Real-time status updates, `text/event-stream`, Go flusher pattern |
+| Server-Sent Events (SSE) | 4 | Keepalive goroutine (15s `: ping`), `context.Background()` isolation from `r.Context()`, Apache `ProxyTimeout` interaction, done-channel shutdown; `http.ResponseWriter` concurrency safety (keepalive + emit MUST be mutex-serialized); production-shipped in vLog (`handleAPIInvestigate`, `handleAPIEnrich`, `handleAPIosint`) |
 | Dashboard patterns | 2 | Status panels, config editors, log viewers, metric widgets |
 | CSS frameworks (light) | 2 | Pico CSS, classless frameworks for admin UIs without build step |
 
@@ -309,7 +332,7 @@
 | Virtual host routing | 4 | Host-based multiplexing, per-vhost config, wildcard matching, default fallback |
 | Response compression | 4 | `compress/gzip`, content-type detection, minimum-size threshold, `Flusher` compatibility |
 | CORS policy engine | 4 | Origin matching, preflight caching, credential forwarding, per-vhost policy |
-| WebSocket proxying | 4 | Upgrade handshake forwarding, bidirectional pump, idle/hard timeouts, connection draining |
+| WebSocket proxying | 4 | Upgrade handshake forwarding, bidirectional pump, idle/hard timeouts, connection draining; `SetReadLimit()` on both ends to prevent OOM; `sync/atomic` connection counter; Origin validation; WriteControl vs pump race prevention — production-audited in vProx |
 | Health checks & readiness | 3 | `/healthz`, `/readyz`, upstream backend health probing, circuit breaker integration |
 | Load balancing | 3 | Round-robin, weighted, least-connections, health-aware backend selection |
 | HTTP/2 & h2c | 3 | Auto H2 on TLS, h2c for gRPC upstream, `golang.org/x/net/http2` |
@@ -336,7 +359,7 @@
 | Composite threat scoring | 3 | Weighted multi-source 0-100 score, flag taxonomy, per-source breakdown display |
 | IP enrichment orchestration | 3 | Async enrichment queue, cache TTL, API rate limiting, graceful degradation |
 | FS watcher patterns | 3 | Poll-based archive watcher, dedup via processed-file registry, trigger-on-new logic |
-| Log analyzer web UI | 2 | Dashboard + CRM account view + query builder + threat panel (htmx partial updates) |
+| Log analyzer web UI | 3 | Dashboard + CRM account view (search/sort/per-page/Investigate btn) + query builder + threat panel; htmx partial SSE updates; production-shipped in vLog v1.1.0 |
 
 ---
 
@@ -352,7 +375,7 @@
 | Web server engineering | 4 | 4 | ✅ Achieved: full vProxWeb module (TLS SNI, gzip, CORS, proxy, static) |
 | Web service arch/design | 4 | 4 | ✅ Achieved: embedded HTTP server, vhost routing, middleware chains, config-driven |
 | Web GUI engineering | 3 | 4 | In progress: Go+htmx embedded dashboard for vProx/vProxWeb management |
-| Log analysis & IP intel | 2 | 4 | In progress: vLog module — SQLite, archive ingestion, AbuseIPDB/VT/Shodan, threat scoring |
+| Log analysis & IP intel | 3 | 4 | Active: vLog v1.1.0 — accounts UI + SSE intel handlers in production, archive ingestion, Apache-proxied |
 
 ---
 
@@ -365,7 +388,8 @@ Rust/CosmWasm:        ████████████████     3.5/4
 Statistics:           ████████████████████ 4/4
 Machine Learning:     ████████████████     3.5/4
 Data Engineering:     ████████████████████ 4/4
-Security:             ████████████         3/4
+Security (defensive): ████████████████████ 4/4  (auth middleware, error hygiene, SSRF IP guard, RW concurrency safety — production-audited)
+Offensive Security:   ████████████         3/4    (OSINT: production vLog OSINTStream; pentest: methodology + web/API/proxy security)
 Architecture:         ████████████████████ 4/4
 Testing:              ████████████████████ 4/4
 Observability:        ████████████████     3.5/4
@@ -376,10 +400,10 @@ AI Agent Design:      ███████████████████�
 Web Server Eng:       ████████████████████ 4/4
 Web Service Arch:     ████████████████████ 4/4
 Web GUI Eng:          ████████████████     3/4    (architecture selected, implementation pending)
-Log Analysis & Intel: ████████             2/4    (design done, implementation in progress)
+Log Analysis & Intel: ████████████         3/4    (production: accounts UI, SSE intel handlers, archive ingestion)
 ```
 
 ---
 
 *Skills are living documentation. Update this file when capabilities change or new domains are acquired.*
-*Last updated: 2026-02-26 (rev8: §16 Log Analysis & IP Intelligence added — vLog module; capability index updated with Log Analysis & Intel 2/4)*
+*Last updated: 2026-03-01 (rev12: §5 auth 3→4, UFW 3→4, new entries: rate limiter hardening, error response hygiene, concurrent HTTP handler safety; §5 input validation +io.LimitReader/SSRF guard; §14 SSE depth 3→4 + concurrency safety note; §15 WS proxying hardening notes; capability index security note updated)*

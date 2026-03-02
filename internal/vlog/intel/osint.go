@@ -44,8 +44,11 @@ type ipAPIResponse struct {
 // CheckOSINT performs network-layer OSINT for ip concurrently:
 //   - Reverse DNS (PTR lookup)
 //   - TCP port scan across ScanPorts (all ports in parallel, 1.5s timeout)
-//   - Protocol detection (HTTPS vs HTTP on port 443/80)
+//   - IP geo/org via ip-api.com
+//   - Protocol detection (HTTPS vs HTTP)
 //   - Cosmos RPC probe (port 26657)
+//
+// All five operations run concurrently; total time ≈ max of their durations.
 func CheckOSINT(ip string) (*OSINTResult, error) {
 	res := &OSINTResult{LatencyMs: -1}
 
@@ -57,14 +60,23 @@ func CheckOSINT(ip string) (*OSINTResult, error) {
 		},
 	}
 
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+
 	// ---- Reverse DNS ----
-	if ptrs, err := net.LookupAddr(ip); err == nil {
-		var cleaned []string
-		for _, p := range ptrs {
-			cleaned = append(cleaned, strings.TrimSuffix(p, "."))
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if ptrs, err := net.LookupAddr(ip); err == nil {
+			var cleaned []string
+			for _, p := range ptrs {
+				cleaned = append(cleaned, strings.TrimSuffix(p, "."))
+			}
+			mu.Lock()
+			res.RDNS = strings.Join(cleaned, ", ")
+			mu.Unlock()
 		}
-		res.RDNS = strings.Join(cleaned, ", ")
-	}
+	}()
 
 	// ---- Concurrent port scan ----
 	type portResult struct {
@@ -72,67 +84,95 @@ func CheckOSINT(ip string) (*OSINTResult, error) {
 		open    bool
 		latency float64
 	}
-	results := make([]portResult, len(ScanPorts))
-	var wg sync.WaitGroup
-	for i, port := range ScanPorts {
-		wg.Add(1)
-		go func(idx, p int) {
-			defer wg.Done()
-			addr := fmt.Sprintf("[%s]:%d", ip, p)
-			if net.ParseIP(ip) != nil && net.ParseIP(ip).To4() != nil {
-				addr = fmt.Sprintf("%s:%d", ip, p)
-			}
-			t0 := time.Now()
-			conn, err := net.DialTimeout("tcp", addr, 1500*time.Millisecond)
-			elapsed := float64(time.Since(t0).Microseconds()) / 1000.0
-			if err == nil {
-				conn.Close()
-				results[idx] = portResult{port: p, open: true, latency: elapsed}
-			} else {
-				results[idx] = portResult{port: p, open: false, latency: elapsed}
-			}
-		}(i, port)
-	}
-	wg.Wait()
-
-	minLatency := -1.0
-	for _, r := range results {
-		if r.open {
-			res.OpenPorts = append(res.OpenPorts, r.port)
-			if minLatency < 0 || r.latency < minLatency {
-				minLatency = r.latency
+	portResults := make([]portResult, len(ScanPorts))
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		var portWg sync.WaitGroup
+		for i, port := range ScanPorts {
+			portWg.Add(1)
+			go func(idx, p int) {
+				defer portWg.Done()
+				addr := fmt.Sprintf("[%s]:%d", ip, p)
+				if net.ParseIP(ip) != nil && net.ParseIP(ip).To4() != nil {
+					addr = fmt.Sprintf("%s:%d", ip, p)
+				}
+				t0 := time.Now()
+				conn, err := net.DialTimeout("tcp", addr, 1500*time.Millisecond)
+				elapsed := float64(time.Since(t0).Microseconds()) / 1000.0
+				if err == nil {
+					conn.Close()
+					portResults[idx] = portResult{port: p, open: true, latency: elapsed}
+				} else {
+					portResults[idx] = portResult{port: p, open: false, latency: elapsed}
+				}
+			}(i, port)
+		}
+		portWg.Wait()
+		minLatency := -1.0
+		mu.Lock()
+		for _, r := range portResults {
+			if r.open {
+				res.OpenPorts = append(res.OpenPorts, r.port)
+				if minLatency < 0 || r.latency < minLatency {
+					minLatency = r.latency
+				}
 			}
 		}
-	}
-	res.LatencyMs = minLatency
+		res.LatencyMs = minLatency
+		mu.Unlock()
+	}()
 
-	// ---- IP geo / org (ip-api.com, no key) ----
-	if info, err := checkIPInfo(client, ip); err == nil {
-		res.Org = info.Org
-		res.Country = info.Country
-		// Normalise ASN: "AS13335 Cloudflare, Inc." → "AS13335"
-		if parts := strings.SplitN(info.AS, " ", 2); len(parts) > 0 {
-			res.ASN = parts[0]
+	// ---- IP geo / org (ip-api.com, no key required) ----
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if info, err := checkIPInfo(client, ip); err == nil {
+			mu.Lock()
+			res.Org = info.Org
+			res.Country = info.Country
+			// Normalise ASN: "AS13335 Cloudflare, Inc." → "AS13335"
+			if parts := strings.SplitN(info.AS, " ", 2); len(parts) > 0 {
+				res.ASN = parts[0]
+			}
+			mu.Unlock()
 		}
-	}
+	}()
 
 	// ---- Protocol detection ----
-	if probeHTTP(client, "https://"+ip) {
-		res.Protocol = "https"
-	} else if probeHTTP(client, "http://"+ip) {
-		res.Protocol = "http"
-	}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		var proto string
+		if probeHTTP(client, "https://"+ip) {
+			proto = "https"
+		} else if probeHTTP(client, "http://"+ip) {
+			proto = "http"
+		}
+		if proto != "" {
+			mu.Lock()
+			res.Protocol = proto
+			mu.Unlock()
+		}
+	}()
 
 	// ---- Cosmos RPC probe ----
-	for _, base := range []string{"http://" + ip + ":26657", "https://" + ip + ":26657"} {
-		m, c, err := checkCosmosRPC(client, base)
-		if err == nil && (m != "" || c != "") {
-			res.Moniker = m
-			res.ChainID = c
-			break
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for _, base := range []string{"http://" + ip + ":26657", "https://" + ip + ":26657"} {
+			m, c, err := checkCosmosRPC(client, base)
+			if err == nil && (m != "" || c != "") {
+				mu.Lock()
+				res.Moniker = m
+				res.ChainID = c
+				mu.Unlock()
+				break
+			}
 		}
-	}
+	}()
 
+	wg.Wait()
 	return res, nil
 }
 

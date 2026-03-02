@@ -7,30 +7,62 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [1.1.0] — Unreleased
+## [v1.2.0] — 2026-03-01
 
-### Added
+This release ships **vProx v1.2.0** and **vLog v1.0.0** together as **vProxVL v1.2.0**.
+
+### Added — vLog v1.0.0
+
 - **vLog module**: standalone log archive analyzer binary (`vlog`)
   - SQLite database (`$VPROX_HOME/data/vlog.db`) for IP accounts, request events, and rate-limit events
-  - Ingests vProx log archives (`*.tar.gz`) from `$VPROX_HOME/data/logs/archives` — oldest-first, with deduplication
+  - Ingests vProx log archives (`*.tar.gz`) from `$VPROX_HOME/data/logs/archives` — oldest-first, with deduplication via `ingested_archives` table
   - Background FS watcher for automatic ingestion of new archives
-  - IP Security Assessment: AbuseIPDB v2 + VirusTotal v3 + Shodan — composite threat score (0–100)
-  - CRM-like IP account profiles with threat flags, notes, and enrichment history
-  - Embedded web UI: dashboard, IP account list, account detail with threat panel, htmx partial updates
-  - REST API: `/api/v1/ingest`, `/api/v1/accounts`, `/api/v1/enrich/:ip`, `/api/v1/stats`
-  - vProx integration: optional POST to vLog after `--new-backup` via `$VLOG_URL`
-  - Config: `$VPROX_HOME/config/vlog.toml` (sample: `config/vlog.sample.toml`)
-- **`modernc.org/sqlite v1.46.1`** added as pure-Go SQLite driver (no CGO required)
+  - **IP Security Assessment**: AbuseIPDB v2 + VirusTotal v3 + Shodan — composite threat score (0–100); parallelized (3 concurrent goroutines); ~10s vs former ~30s
+  - **OSINT engine**: 5 concurrent ops (DNS, port scan, ip-api.com, protocol probe, Cosmos RPC) via `sync.WaitGroup`; ~5s vs former ~23s
+  - CRM-like IP account profiles with threat flags, notes, enrichment history, block/unblock status
+  - **Accounts page**: server-side search (IP/country/row ID), per-page selector (25/50/100/200/All), sortable columns with URL-based sort persistence (back-nav safe), Status column (ALLOWED/BLOCKED), Org lookup via ip-api.com
+  - **Dashboard**: dual-line Chart.js request charts; standalone endpoint status panel with 3 probe columns (Local | 🇨🇦 | 🌍), CSS spinner, node hover tooltips
+  - **Multi-location endpoint probe** (`GET /api/v1/probe`): local SSRF-guarded probe discovers reachable URL; concurrent CA (Vancouver) + worldwide probes via check-host.net HTTP-check API (submit + poll); response: `{host, url, local, ca, ww}` per-location result with `{ok, code, latency_ms, error, node}`
+  - REST API: `/api/v1/ingest`, `/api/v1/accounts`, `/api/v1/probe`, `/api/v1/enrich/:ip`, `/api/v1/osint/:ip`, `/api/v1/investigate/:ip`, `/api/v1/stats`, `/api/v1/block/:ip`, `/api/v1/unblock/:ip`, `/api/v1/chart`
+  - CLI: `vlog start [-d]`, `vlog stop`, `vlog restart`, `vlog ingest`, `vlog status`
+  - vProx integration: optional POST to vLog after `--new-backup` via `vlog_url` in `config/ports.toml`
+  - Config: `$VPROX_HOME/config/vlog.toml` (sample: `config/vlog/vlog.sample.toml`)
+- **`modernc.org/sqlite v1.46.1`** — pure-Go SQLite driver (no CGO required)
+
+### Added — vProx v1.2.0
+
+- Chain log auto-discovery: `--new-backup` auto-includes all `*.log` files from `data/logs/` (except `main.log`); per-chain logs included without manual declaration
+- vLog push hook: vProx POSTs to `vlog_url` after `--new-backup` (non-fatal if vLog unreachable)
+- Typed request IDs: `RPC{24HEX}`, `API{24HEX}`, `REQ{24HEX}` stamped on every proxied request (vhost + alias routes included)
+
+### Changed — vProx v1.2.0
+
+- **Chain config format refactored** (`config/chains/*.toml`):
+  - `msg = bool` split into `msg_rpc = bool` and `msg_api = bool` (independent per-service banner control)
+  - `[aliases]` sub-table removed; replaced by flat top-level `rpc_aliases`, `rest_aliases`, `api_aliases` string arrays
+  - `features.inject_rpc_index` renamed to `features.rpc_address_masking`
+  - `features.inject_rest_swagger` removed
+  - `features.mask_rpc string` added (replacement label for masked local-IP links; empty = remove)
+  - `features.swagger_masking bool` added (reserved; not yet implemented)
+  - `[ports]` section now explicitly noted as optional when `default_ports = true`
+  - `config/backup.sample.toml` default changed to `automation = false` (safe opt-in default)
+- Banner injection bug fixed: `msg_rpc`/`msg_api` flags now correctly gate banner content; address masking (`rpc_address_masking`) operates independently of banner flags
+
+### Fixed — vProx v1.2.0
+
+- Request ID missing on vhost-mode and alias routes (api.*, grpc) — now always assigned before log
+- REST probe path stripped `/api/` prefix incorrectly — now probes `/cosmos/base/tendermint/v1beta1/node_info` directly
+- Banner (`rpc_msg`) injected even when `msg = false` — root cause: injection gated on `InjectRPCIndex` only, ignoring `Msg` flag; now fully decoupled
 
 ---
 
-## [v1.0.2] — unreleased
+## [v1.0.2] — included in v1.2.0
 
 ### Added
 - `internal/logging`: `NewTypedID(prefix)` — generates `{PREFIX}{24HEX_UPPER}` correlation IDs (API, RPC, WSS, BUP, etc.)
 - `internal/logging`: `LineLifecycle()` / `PrintLifecycle()` — `NEW`/`UPD` structured lifecycle log format (no event token; fields-first)
 - `internal/backup/config.go` — `BackupConfig` structs, `DefaultConfig()`, `LoadConfig()` for `backup.toml`
-- `config/backup.sample.toml` — annotated backup config; installed by `make config`
+- `config/backup/backup.sample.toml` — annotated backup config; installed by `make config`
 - CLI commands: `start`, `stop`, `restart` with `runServiceCommand()` → `sudo service vProx start|stop|restart`
 - CLI flag: `-d` / `--daemon` — start as systemd service
 - CLI flags: `--new-backup`, `--list-backup`, `--backup-status`

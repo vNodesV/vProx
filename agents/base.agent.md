@@ -1,0 +1,89 @@
+# vProx agent base directives (local-only)
+**Compatible with**: jarvis4.0, jarvis5.0, jarvis5.0_vscode
+
+This file stores cross-project collaboration rules.
+Project-specific memory goes in `agents/projects/<project>.state.md`.
+
+## Start-of-session protocol
+1. Read the active agent's router state file:
+   - jarvis5.0 (Copilot): `agents/jarvis5.0_state.md`
+   - jarvis5.0_vscode: `agents/jarvis5.0_vscode_state.md`
+   - jarvis4.0: `agents/jarvis4.0_state.md`
+2. Read this file (`base.agent.md`).
+3. Do not auto-load project state.
+4. Load project memory only on explicit `load <project>`.
+5. Confirm unresolved work before editing code.
+
+## End-of-session protocol
+- If user says `save` / `save state`: append a memory dump to current project file.
+- If user says `save new <project>`: create `agents/projects/<project>.state.md` from template and set current project in router.
+- If user says `new`: run guided bootstrap flow from router policy (`Create new repo? (y/N)` branch).
+- If user says `agentupgrade`: run full self-assessment and upgrade protocol (inventory → assess → context → patch → verify → report).
+- Keep entries concise and action-oriented.
+
+## Engineering discipline
+- Small, testable changes.
+- Read enough context before patching.
+- Reuse project-native patterns.
+- Follow decision priority stack:
+  1) state safety/backward compatibility
+  2) security correctness
+  3) build/test reliability
+  4) performance/operability
+  5) developer experience
+- Validate frequently:
+  - `gofmt` touched files
+  - `go build ./...`
+  - `go test ./...` when behavior changes
+- Fix root causes.
+- Treat log schema changes as compatibility-sensitive.
+
+## Established patterns (prefer these over inventing new ones)
+- **Goroutine shutdown**: Use done-channel (`close(done)`) not direct Close() from other goroutines.
+- **TOML tri-state**: Use `*bool` when need to distinguish "not set" from "false" in TOML config.
+- **Background batching**: dirty-flag + ticker pattern for periodic I/O (not per-request writes).
+- **sync.Map lifecycle**: Always pair sync.Map with a sweeper goroutine to prevent unbounded growth.
+- **IP header validation**: Always `net.ParseIP()` untrusted header values before logging/using.
+- **Regex caching**: Cache compiled regexes keyed by input params; protect with `sync.RWMutex`.
+- **Embedded web GUI**: Use `html/template` + `go:embed` + htmx for admin dashboards; no JS framework, single-binary deployment.
+- **CLI dual-output**: Use `splitLogWriter{stdout, file}` for any CLI command that must appear in both the terminal and journalctl (e.g. `--backup`, `start`); file-only output is invisible to systemd journal.
+- **TOML > .env priority**: TOML config files are the source of truth for all runtime settings; `.env` is for deployment secrets and per-environment overrides only. When both exist, TOML wins.
+- **SSE keepalive**: All SSE handlers use a background goroutine sending `: ping\n\n` every 15s (done-channel shutdown via `defer close(kaDone)`); always pass `context.Background()` (not `r.Context()`) to streaming operations — Apache `ProxyTimeout` cancels `r.Context()` before long operations finish. Keepalive interval (15s) must be less than `ProxyTimeout` (60s). Applied in vLog: `handleAPIInvestigate`, `handleAPIEnrich`, `handleAPIosint`.
+- **Service management**: Use `runServiceCommand(action)` → `sudo service vProx <action>` for daemon start/stop/restart. Never call `systemctl` directly from Go code. Sudoers NOPASSWD setup via `make systemd` grants passwordless access to `/usr/sbin/service vProx start|stop|restart`.
+- **External HTTP probe (check-host.net)**: Submit GET `https://check-host.net/check-http?host=URL&node=NODE` (Accept: application/json) → receive `request_id`; poll `/check-result/{id}` every 2s up to 12s. Result shape per node: `[[status_int, latency_secs_float, msg_str, code_str|null, ip_str|null]]`. `status==1` → success; `row[1]` → latency; `row[3]` (string) → HTTP code. Verified live nodes at `/nodes/hosts` endpoint. Run CA+WW concurrently with `sync.WaitGroup`. Applied in vLog `handleAPIProbe`.
+- **Static probe columns**: In HTML tables, use 3 separate `<td class="probe-local|probe-ca|probe-ww">` columns per row (not inline `<span>`). Insert `<span class="probe-spinner">` (CSS `@keyframes` ring) during loading. Set `cell.title` for hover tooltip. Find cells via `btn.closest('tr').querySelector('.probe-*')`.
+- **SSE writer serialization**: `http.ResponseWriter` is NOT safe for concurrent use. SSE handlers that have a keepalive goroutine AND an emit() path MUST serialize all writes with a `sync.Mutex` (or a single-writer goroutine pattern). Failure to do so produces corrupt SSE framing. This applies to every handler in `internal/vlog/web/handlers.go` that uses the 15s keepalive pattern.
+- **WebSocket hardening**: After every `upgrader.Upgrade()` call, immediately set `conn.SetReadLimit(n)` on both the client and backend connections to prevent OOM from unbounded frames (e.g., `1<<20` for client, `4<<20` for backend). Track active connection count with `sync/atomic`; reject upgrades when over a configurable max. Validate `Origin` header against allowed hosts instead of `CheckOrigin: always true`.
+- **Trusted proxy CIDR**: Rate limiter and IP detection logic MUST only honor proxy headers (`CF-Connecting-IP`, `X-Forwarded-For`, `Forwarded`) when `r.RemoteAddr` matches a configured trusted proxy CIDR allowlist (e.g., Cloudflare IP ranges, `127.0.0.1`). Without this, any client can spoof IP and bypass per-IP rate limiting.
+- **Admin server loopback bind**: Any HTTP server that serves admin/management endpoints (vLog, future GUI) MUST bind to `127.0.0.1:<port>`, NOT `0.0.0.0`. Apache/nginx proxies the public path. Binding to all interfaces bypasses the Apache IP-restriction layer.
+- **API auth middleware**: Every HTTP endpoint that mutates state (block/unblock, ingest trigger, config changes) MUST be wrapped with an auth middleware (API key header check: `X-VLog-Key`) regardless of the assumed network boundary. Apply with: `mux.HandleFunc("POST /api/v1/block/{ip}", s.requireAPIKey(s.handleAPIBlock))`.
+- **Error response sanitization**: NEVER return `err.Error()` in HTTP JSON responses. Database errors, file path errors, and SQLite diagnostics MUST stay server-side in logs. Return `{"error":"internal error"}` (or a fixed human-readable message) to the client. Pattern: `log.Printf("block %s: %v", ip, err); writeJSON(w, 500, errResp("internal error"))`.
+- **io.LimitReader on external responses**: Every `io.ReadAll(resp.Body)` on an outbound HTTP response (VirusTotal, AbuseIPDB, Shodan, check-host.net) MUST be wrapped: `io.ReadAll(io.LimitReader(resp.Body, 1<<20))`. Unbounded reads are DoS-ready if the external API is compromised or misconfigured. Exception: already-bounded cases like `io.ReadFull`.
+- **Backup write order (data safety)**: In `internal/backup/backup.go`, NEVER truncate or delete source files until AFTER `writeTarGz` returns nil AND the archive file has been `os.Stat`-verified. Truncating before the write is a data loss footgun — if the write fails (disk full, permission), the only copies of the data are gone. Pattern: `if err := writeTarGz(...); err != nil { return err }; truncateSources(...)`.
+- **SSRF private-IP guard**: Any handler that accepts an IP from user input and makes outbound network connections (TCP probe, HTTP GET, DNS lookup) MUST validate: `net.ParseIP(ip) != nil && !parsed.IsPrivate() && !parsed.IsLoopback() && !parsed.IsLinkLocalUnicast() && !parsed.IsUnspecified()`. Applies to: `handleAPIosint`, `handleAPIEnrich`, any future probe endpoint.
+
+## Quality gates (minimum)
+- Expected behavior and constraints are explicit before patching.
+- Root cause is identified (not only symptoms).
+- All touched files are formatted.
+- Build succeeds after changes.
+- Tests run at appropriate scope for the change.
+- Behavior/config docs updated when needed.
+
+## Uncertainty protocol
+- If multiple viable outcomes exist, present options with risks and recommendation.
+- Ask for confirmation when path choice changes behavior or compatibility.
+- Prefer smallest safe change that preserves existing functionality.
+
+## Session completion standard
+- End with: changed files, verification performed, open follow-ups, and next first steps.
+
+## Memory dump format
+Each save entry should include:
+- timestamp (UTC)
+- goal
+- completed work
+- files changed
+- verification
+- open follow-ups
+- next first steps

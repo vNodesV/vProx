@@ -3,12 +3,15 @@ package ufw
 import (
 	"fmt"
 	"net"
+	"os"
 	"os/exec"
 )
 
-// IsAvailable reports whether ufw is installed and accessible.
+// IsAvailable reports whether ufw is installed at the canonical path.
+// Uses os.Stat on the absolute path because Block/Unblock invoke /usr/sbin/ufw
+// directly, and systemd PATH may not include /usr/sbin.
 func IsAvailable() bool {
-	_, err := exec.LookPath("ufw")
+	_, err := os.Stat("/usr/sbin/ufw")
 	return err == nil
 }
 

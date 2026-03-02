@@ -460,7 +460,36 @@ func (d *DB) ListRateLimitEventsByIP(ip string, limit int) ([]*RateLimitEvent, e
 	return out, rows.Err()
 }
 
-// ListTopThreatAccounts returns the top limit accounts by threat_score descending.
+// ListBlockedAccounts returns all ip_accounts with status='blocked',
+// ordered by last_seen descending.
+func (d *DB) ListBlockedAccounts() ([]*IPAccount, error) {
+	const q = `SELECT
+		ip, first_seen, last_seen, total_requests, ratelimit_events,
+		country, asn, org, hostnames, open_ports, services,
+		vt_malicious, vt_data, abuse_score, abuse_data, shodan_data,
+		threat_score, threat_flags, intel_updated_at, notes, tags, status
+	FROM ip_accounts WHERE status = 'blocked' ORDER BY last_seen DESC`
+	rows, err := d.Query(q)
+	if err != nil {
+		return nil, fmt.Errorf("list blocked accounts: %w", err)
+	}
+	defer rows.Close()
+	var out []*IPAccount
+	for rows.Next() {
+		a := &IPAccount{}
+		if err := rows.Scan(
+			&a.IP, &a.FirstSeen, &a.LastSeen, &a.TotalRequests, &a.RatelimitEvents,
+			&a.Country, &a.ASN, &a.Org, &a.Hostnames, &a.OpenPorts, &a.Services,
+			&a.VTMalicious, &a.VTData, &a.AbuseScore, &a.AbuseData, &a.ShodanData,
+			&a.ThreatScore, &a.ThreatFlags, &a.IntelUpdatedAt, &a.Notes, &a.Tags, &a.Status,
+		); err != nil {
+			return nil, fmt.Errorf("scan blocked account: %w", err)
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
 // Only accounts with threat_score >= 0 are included.
 func (d *DB) ListTopThreatAccounts(limit int) ([]*IPAccount, error) {
 	const q = `SELECT
@@ -559,6 +588,7 @@ func (d *DB) Stats() (map[string]int64, error) {
 		"total_ratelimit_events": 0,
 		"total_archives":         0,
 		"flagged_ips":            0,
+		"blocked_ips":            0,
 	}
 
 	queries := []struct {
@@ -570,6 +600,7 @@ func (d *DB) Stats() (map[string]int64, error) {
 		{"total_ratelimit_events", `SELECT COUNT(*) FROM ratelimit_events`},
 		{"total_archives", `SELECT COUNT(*) FROM ingested_archives`},
 		{"flagged_ips", `SELECT COUNT(*) FROM ip_accounts WHERE threat_score > 0`},
+		{"blocked_ips", `SELECT COUNT(*) FROM ip_accounts WHERE status = 'blocked'`},
 	}
 
 	for _, q := range queries {
@@ -580,4 +611,305 @@ func (d *DB) Stats() (map[string]int64, error) {
 		m[q.key] = n
 	}
 	return m, nil
+}
+
+// ---------------------------------------------------------------------------
+// Chart data
+// ---------------------------------------------------------------------------
+
+// ChartPoint is a single label+value pair for chart rendering.
+type ChartPoint struct {
+	Label string  `json:"label"`
+	Value float64 `json:"value"`
+}
+
+// IPsOverTime returns daily new-IP counts for the last days days,
+// grouped by the date portion of first_seen.
+func (d *DB) IPsOverTime(days int) ([]ChartPoint, error) {
+	const q = `
+		SELECT date(first_seen) AS day, COUNT(*) AS n
+		FROM ip_accounts
+		WHERE first_seen >= date('now', ?)
+		GROUP BY day ORDER BY day`
+	return d.timeSeriesQuery(q, fmt.Sprintf("-%d days", days))
+}
+
+// RequestsOverTime returns daily request counts for the last days days,
+// grouped by the date portion of ts.
+func (d *DB) RequestsOverTime(days int) ([]ChartPoint, error) {
+	const q = `
+		SELECT date(ts) AS day, COUNT(*) AS n
+		FROM request_events
+		WHERE ts >= date('now', ?)
+		GROUP BY day ORDER BY day`
+	return d.timeSeriesQuery(q, fmt.Sprintf("-%d days", days))
+}
+
+// RateLimitsOverTime returns daily rate-limit event counts for the last days days.
+func (d *DB) RateLimitsOverTime(days int) ([]ChartPoint, error) {
+	const q = `
+		SELECT date(ts) AS day, COUNT(*) AS n
+		FROM ratelimit_events
+		WHERE ts >= date('now', ?)
+		GROUP BY day ORDER BY day`
+	return d.timeSeriesQuery(q, fmt.Sprintf("-%d days", days))
+}
+
+func (d *DB) timeSeriesQuery(q, arg string) ([]ChartPoint, error) {
+	rows, err := d.Query(q, arg)
+	if err != nil {
+		return nil, fmt.Errorf("time series query: %w", err)
+	}
+	defer rows.Close()
+	var out []ChartPoint
+	for rows.Next() {
+		var p ChartPoint
+		var v int64
+		if err := rows.Scan(&p.Label, &v); err != nil {
+			return nil, fmt.Errorf("scan time series: %w", err)
+		}
+		p.Value = float64(v)
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+// TopCountries returns the top limit countries by IP count.
+func (d *DB) TopCountries(limit int) ([]ChartPoint, error) {
+	const q = `
+		SELECT COALESCE(NULLIF(country,''), 'Unknown') AS c, COUNT(*) AS n
+		FROM ip_accounts GROUP BY c ORDER BY n DESC LIMIT ?`
+	return d.labelCountQuery(q, limit)
+}
+
+// StatusBreakdown returns the count of IPs per status value.
+func (d *DB) StatusBreakdown() ([]ChartPoint, error) {
+	const q = `
+		SELECT COALESCE(NULLIF(status,''), 'unknown') AS s, COUNT(*) AS n
+		FROM ip_accounts GROUP BY s ORDER BY n DESC`
+	rows, err := d.Query(q)
+	if err != nil {
+		return nil, fmt.Errorf("status breakdown: %w", err)
+	}
+	defer rows.Close()
+	var out []ChartPoint
+	for rows.Next() {
+		var p ChartPoint
+		var v int64
+		if err := rows.Scan(&p.Label, &v); err != nil {
+			return nil, fmt.Errorf("scan status breakdown: %w", err)
+		}
+		p.Value = float64(v)
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+// ThreatDistribution returns IP counts bucketed by threat score range.
+func (d *DB) ThreatDistribution() ([]ChartPoint, error) {
+	const q = `
+		SELECT
+			CASE
+				WHEN threat_score < 0  THEN 'No Data'
+				WHEN threat_score = 0  THEN 'Clean (0)'
+				WHEN threat_score < 25 THEN 'Low (1-24)'
+				WHEN threat_score < 50 THEN 'Medium (25-49)'
+				WHEN threat_score < 75 THEN 'High (50-74)'
+				ELSE 'Critical (75+)'
+			END AS bucket,
+			COUNT(*) AS n
+		FROM ip_accounts GROUP BY bucket`
+	rows, err := d.Query(q)
+	if err != nil {
+		return nil, fmt.Errorf("threat distribution: %w", err)
+	}
+	defer rows.Close()
+	var out []ChartPoint
+	for rows.Next() {
+		var p ChartPoint
+		var v int64
+		if err := rows.Scan(&p.Label, &v); err != nil {
+			return nil, fmt.Errorf("scan threat distribution: %w", err)
+		}
+		p.Value = float64(v)
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+// TopIPsByRequests returns the top limit IPs by total_requests.
+func (d *DB) TopIPsByRequests(limit int) ([]ChartPoint, error) {
+	const q = `SELECT ip, total_requests FROM ip_accounts ORDER BY total_requests DESC LIMIT ?`
+	return d.labelCountQuery(q, limit)
+}
+
+// RequestsByCountry returns the top 10 countries by request count.
+func (d *DB) RequestsByCountry(limit int) ([]ChartPoint, error) {
+	const q = `
+		SELECT COALESCE(NULLIF(country,''), 'Unknown') AS c, SUM(total_requests) AS n
+		FROM ip_accounts GROUP BY c ORDER BY n DESC LIMIT ?`
+	return d.labelCountQuery(q, limit)
+}
+
+func (d *DB) labelCountQuery(q string, limit int) ([]ChartPoint, error) {
+	rows, err := d.Query(q, limit)
+	if err != nil {
+		return nil, fmt.Errorf("label count query: %w", err)
+	}
+	defer rows.Close()
+	var out []ChartPoint
+	for rows.Next() {
+		var p ChartPoint
+		var v int64
+		if err := rows.Scan(&p.Label, &v); err != nil {
+			return nil, fmt.Errorf("scan label count: %w", err)
+		}
+		p.Value = float64(v)
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+// ---------------------------------------------------------------------------
+// Multi-series chart data
+// ---------------------------------------------------------------------------
+
+// ChartSeries is a multi-line/multi-bar dataset for Chart.js.
+type ChartSeries struct {
+	Labels []string     `json:"labels"`
+	Series []SeriesLine `json:"series"`
+}
+
+// SeriesLine is one dataset within a ChartSeries.
+type SeriesLine struct {
+	Name   string    `json:"name"`
+	Color  string    `json:"color"`
+	Values []float64 `json:"values"`
+}
+
+// IPsOverTimeMulti returns two series for the last days days:
+//   - "New IPs"   — daily new accounts (first_seen on that day)
+//   - "Total IPs" — true all-time running cumulative at end of each day
+func (d *DB) IPsOverTimeMulti(days int) (*ChartSeries, error) {
+	const q = `
+WITH daily AS (
+SELECT date(first_seen) AS day, COUNT(*) AS n
+FROM ip_accounts GROUP BY day
+),
+cumul AS (
+SELECT day, n,
+SUM(n) OVER (ORDER BY day ROWS UNBOUNDED PRECEDING) AS total
+FROM daily
+)
+SELECT day, n, total FROM cumul
+WHERE day >= date('now', ?) ORDER BY day`
+	rows, err := d.Query(q, fmt.Sprintf("-%d days", days))
+	if err != nil {
+		return nil, fmt.Errorf("ips over time multi: %w", err)
+	}
+	defer rows.Close()
+
+	var labels []string
+	var newVals, totalVals []float64
+	for rows.Next() {
+		var day string
+		var n, total int64
+		if err := rows.Scan(&day, &n, &total); err != nil {
+			return nil, fmt.Errorf("scan ips over time multi: %w", err)
+		}
+		labels = append(labels, day)
+		newVals = append(newVals, float64(n))
+		totalVals = append(totalVals, float64(total))
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return &ChartSeries{
+		Labels: labels,
+		Series: []SeriesLine{
+			{Name: "New IPs", Color: "#4e8cf7", Values: newVals},
+			{Name: "Total IPs", Color: "#f97316", Values: totalVals},
+		},
+	}, nil
+}
+
+// ---------------------------------------------------------------------------
+// Endpoint summary
+// ---------------------------------------------------------------------------
+
+// EndpointStat holds aggregated per-host metrics from request_events.
+type EndpointStat struct {
+	Host      string `json:"host"`
+	Requests  int64  `json:"requests"`
+	UniqueIPs int64  `json:"unique_ips"`
+	LastSeen  string `json:"last_seen"`
+}
+
+// EndpointSummary returns per-host request stats ordered by request count.
+func (d *DB) EndpointSummary(limit int) ([]EndpointStat, error) {
+	const q = `
+SELECT LOWER(host) AS host, COUNT(*) AS reqs, COUNT(DISTINCT ip) AS ips, MAX(ts) AS last_seen
+FROM request_events
+WHERE host != ''
+GROUP BY LOWER(host) ORDER BY reqs DESC LIMIT ?`
+	rows, err := d.Query(q, limit)
+	if err != nil {
+		return nil, fmt.Errorf("endpoint summary: %w", err)
+	}
+	defer rows.Close()
+	var out []EndpointStat
+	for rows.Next() {
+		var e EndpointStat
+		if err := rows.Scan(&e.Host, &e.Requests, &e.UniqueIPs, &e.LastSeen); err != nil {
+			return nil, fmt.Errorf("scan endpoint stat: %w", err)
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
+// RequestsOverTimeMulti returns two series for the last days days:
+//   - "New Requests"   — daily request count
+//   - "Total Requests" — true all-time running cumulative at end of each day
+func (d *DB) RequestsOverTimeMulti(days int) (*ChartSeries, error) {
+	const q = `
+WITH daily AS (
+SELECT date(ts) AS day, COUNT(*) AS n
+FROM request_events GROUP BY day
+),
+cumul AS (
+SELECT day, n,
+SUM(n) OVER (ORDER BY day ROWS UNBOUNDED PRECEDING) AS total
+FROM daily
+)
+SELECT day, n, total FROM cumul
+WHERE day >= date('now', ?) ORDER BY day`
+	rows, err := d.Query(q, fmt.Sprintf("-%d days", days))
+	if err != nil {
+		return nil, fmt.Errorf("requests over time multi: %w", err)
+	}
+	defer rows.Close()
+
+	var labels []string
+	var newVals, totalVals []float64
+	for rows.Next() {
+		var day string
+		var n, total int64
+		if err := rows.Scan(&day, &n, &total); err != nil {
+			return nil, fmt.Errorf("scan requests over time multi: %w", err)
+		}
+		labels = append(labels, day)
+		newVals = append(newVals, float64(n))
+		totalVals = append(totalVals, float64(total))
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return &ChartSeries{
+		Labels: labels,
+		Series: []SeriesLine{
+			{Name: "New Requests", Color: "#22c55e", Values: newVals},
+			{Name: "Total Requests", Color: "#a855f7", Values: totalVals},
+		},
+	}, nil
 }

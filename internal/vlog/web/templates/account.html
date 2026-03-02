@@ -1,5 +1,9 @@
 {{define "title"}}Account — {{.Account.IP}}{{end}}
 {{define "content"}}
+<nav class="page-nav">
+  <a href="{{.BasePath}}/">Dashboard</a>
+  <a href="{{.BasePath}}/accounts" class="active">Accounts</a>
+</nav>
 <div class="detail-header">
   <h2 style="margin:0;">{{.Account.IP}}</h2>
   <span class="badge badge-{{.Account.Status}}">{{.Account.Status}}</span>

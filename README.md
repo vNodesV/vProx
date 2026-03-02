@@ -8,7 +8,7 @@ Production-grade reverse proxy for Cosmos SDK node services — RPC, REST, gRPC,
 - **WebSocket proxying** — bidirectional with configurable idle timeout and max lifetime.
 - **Rate limiting** — per-IP token bucket with optional auto-quarantine and JSONL audit log.
 - **Geo enrichment** — country and ASN logged per request via MMDB lookup (optional).
-- **HTML banner injection** — custom banners on RPC index and REST swagger pages.
+- **HTML banner injection** — per-service banners (`msg_rpc`, `msg_api`) on RPC index and REST swagger, independent of address masking.
 - **Backup automation** — TOML-configured scheduled backups with multi-file archive support.
 - **Service management** — `start -d`, `stop`, `restart` with passwordless sudoers integration.
 - **Systemd-ready** — `make install` renders and optionally installs the service unit + sudoers rule.
@@ -41,6 +41,30 @@ vProx start -d        # start as systemd service (daemon)
 vProx stop            # stop the service
 vProx restart         # restart the service
 ```
+
+## 🔍 vLog — Log Archive Analyzer (v1.0.0)
+
+vLog is a companion binary that analyzes vProx log archives and provides a CRM-like security intelligence UI.
+
+```bash
+make install-vlog           # build + install vLog binary + config
+vlog start                  # foreground server (default: :8889)
+vlog start -d               # start as background service
+vlog stop                   # stop the service
+vlog restart                # restart the service
+vlog ingest                 # one-shot archive ingest and exit
+vlog status                 # show database stats
+```
+
+**Features:**
+- Per-IP accounts with request history, rate-limit events, block/unblock status
+- Threat scoring (VirusTotal + AbuseIPDB + Shodan) — parallel queries, composite score 0–100
+- Full OSINT suite — concurrent DNS, port scan, org/geo, protocol probe, Cosmos RPC (~5s)
+- Live investigation UI with SSE progress streams
+- **Multi-location endpoint probe** — local + 🇨🇦 Canada + 🌍 worldwide nodes (check-host.net), latency in ms, hover tooltips
+- Accounts page: search, sort (URL-persistent, back-nav safe), per-page 25–All, Status column
+
+See [`MODULES.md §11`](./MODULES.md#11-vlog--log-archive-analyzer) for full documentation.
 
 ## 📚 Documentation
 
