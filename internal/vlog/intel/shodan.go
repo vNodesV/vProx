@@ -13,7 +13,7 @@ import (
 // ShodanResult represents the enriched host data returned from Shodan.
 type ShodanResult struct {
 	IP          string          // IP address as string
-	Org         string          // Organisation name
+	Org         string          // Organization name
 	ISP         string          // Internet service provider
 	Country     string          // Full country name
 	CountryCode string          // ISO country code
@@ -155,7 +155,7 @@ func hostToResult(h *goshodan.Host) *ShodanResult {
 }
 
 // hostDataToResult maps a *goshodan.HostData (search-result match) to *ShodanResult.
-// Each HostData represents one service banner; Ports is synthesised as [d.Port].
+// Each HostData represents one service banner; Ports is synthesized as [d.Port].
 func hostDataToResult(d *goshodan.HostData) *ShodanResult {
 	if d == nil {
 		return nil

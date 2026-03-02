@@ -1,6 +1,7 @@
 package intel
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -30,7 +31,7 @@ const abuseIPDBCheckURL = "https://api.abuseipdb.com/api/v2/check"
 // Returns (score 0-100, raw JSON response body, error).
 // Returns (0, "", nil) if apiKey is empty — no-op, not an error.
 // Uses maxAgeInDays=90 for report lookback.
-func CheckAbuseIPDB(apiKey, ip string, httpClient *http.Client) (score int64, rawJSON string, err error) {
+func CheckAbuseIPDB(ctx context.Context, apiKey, ip string, httpClient *http.Client) (score int64, rawJSON string, err error) {
 	if apiKey == "" {
 		return 0, "", nil
 	}
@@ -42,7 +43,7 @@ func CheckAbuseIPDB(apiKey, ip string, httpClient *http.Client) (score int64, ra
 	params.Set("ipAddress", ip)
 	params.Set("maxAgeInDays", "90")
 
-	req, err := http.NewRequest(http.MethodGet, abuseIPDBCheckURL+"?"+params.Encode(), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, abuseIPDBCheckURL+"?"+params.Encode(), nil)
 	if err != nil {
 		return 0, "", fmt.Errorf("abuseipdb: build request: %w", err)
 	}

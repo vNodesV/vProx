@@ -89,7 +89,7 @@ func buildPortInfo(openPortsJSON string) []portInfo {
 	return out
 }
 
-// newPageBase returns a pageBase initialised from server config.
+// newPageBase returns a pageBase initialized from server config.
 func (s *Server) newPageBase() pageBase {
 	return pageBase{
 		BasePath:    s.cfg.VLog.BasePath,
@@ -672,7 +672,7 @@ func checkHostProbe(ctx context.Context, targetURL, node string) locResult {
 	for time.Now().Before(deadline) {
 		select {
 		case <-ctx.Done():
-			return locResult{Error: "cancelled", Node: shortNode}
+			return locResult{Error: "canceled", Node: shortNode}
 		case <-time.After(2 * time.Second):
 		}
 		req2, _ := http.NewRequestWithContext(ctx, http.MethodGet, pollURL, nil)
@@ -782,8 +782,8 @@ func (s *Server) handleAPIProbe(w http.ResponseWriter, r *http.Request) {
 		caR = locResult{Error: "no reachable URL"}
 		wwR = locResult{Error: "no reachable URL"}
 	} else {
-		caNode := caProbeNodes[rand.Intn(len(caProbeNodes))]
-		wwNode := wwProbeNodes[rand.Intn(len(wwProbeNodes))]
+		caNode := caProbeNodes[rand.Intn(len(caProbeNodes))] //nolint:gosec // G404: probe node selection is not security-sensitive
+		wwNode := wwProbeNodes[rand.Intn(len(wwProbeNodes))] //nolint:gosec // G404: probe node selection is not security-sensitive
 		var wg sync.WaitGroup
 		wg.Add(2)
 		go func() { defer wg.Done(); caR = checkHostProbe(ctx, bestURL, caNode) }()

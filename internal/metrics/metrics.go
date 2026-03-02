@@ -100,7 +100,7 @@ func RecordRequest(method, route string, statusCode int, duration time.Duration)
 }
 
 // RecordProxyError increments ProxyErrorsTotal for the given route and error type.
-// Recognised error types: backend_error, request_build_error, unknown_host.
+// Recognized error types: backend_error, request_build_error, unknown_host.
 func RecordProxyError(route, errorType string) {
 	ProxyErrorsTotal.WithLabelValues(route, errorType).Inc()
 }

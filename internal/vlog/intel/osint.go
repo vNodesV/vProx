@@ -49,7 +49,7 @@ type ipAPIResponse struct {
 //   - Cosmos RPC probe (port 26657)
 //
 // All five operations run concurrently; total time ≈ max of their durations.
-func CheckOSINT(ip string) (*OSINTResult, error) {
+func CheckOSINT(ctx context.Context, ip string) (*OSINTResult, error) {
 	res := &OSINTResult{LatencyMs: -1}
 
 	// Shared HTTP client for all sub-requests (ip-api, protocol probe, Cosmos RPC).
@@ -127,7 +127,7 @@ func CheckOSINT(ip string) (*OSINTResult, error) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		if info, err := checkIPInfo(client, ip); err == nil {
+		if info, err := checkIPInfo(ctx, client, ip); err == nil {
 			mu.Lock()
 			res.Org = info.Org
 			res.Country = info.Country
@@ -144,9 +144,9 @@ func CheckOSINT(ip string) (*OSINTResult, error) {
 	go func() {
 		defer wg.Done()
 		var proto string
-		if probeHTTP(client, "https://"+ip) {
+		if probeHTTP(ctx, client, "https://"+ip) {
 			proto = "https"
-		} else if probeHTTP(client, "http://"+ip) {
+		} else if probeHTTP(ctx, client, "http://"+ip) {
 			proto = "http"
 		}
 		if proto != "" {
@@ -161,7 +161,7 @@ func CheckOSINT(ip string) (*OSINTResult, error) {
 	go func() {
 		defer wg.Done()
 		for _, base := range []string{"http://" + ip + ":26657", "https://" + ip + ":26657"} {
-			m, c, err := checkCosmosRPC(client, base)
+			m, c, err := checkCosmosRPC(ctx, client, base)
 			if err == nil && (m != "" || c != "") {
 				mu.Lock()
 				res.Moniker = m
@@ -192,7 +192,7 @@ func (e *Enricher) OSINTStream(ctx context.Context, ip string, emit func(EnrichP
 	}
 	ch := make(chan osintDone, 1)
 	go func() {
-		r, err := CheckOSINT(ip)
+		r, err := CheckOSINT(ctx, ip)
 		ch <- osintDone{r, err}
 	}()
 
@@ -306,8 +306,12 @@ func (e *Enricher) OSINTStream(ctx context.Context, ip string, emit func(EnrichP
 	}
 }
 
-func probeHTTP(client *http.Client, url string) bool {
-	resp, err := client.Get(url)
+func probeHTTP(ctx context.Context, client *http.Client, url string) bool {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return false
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return false
 	}
@@ -315,8 +319,12 @@ func probeHTTP(client *http.Client, url string) bool {
 	return resp.StatusCode > 0
 }
 
-func checkCosmosRPC(client *http.Client, baseURL string) (moniker, chainID string, err error) {
-	resp, err := client.Get(baseURL + "/status")
+func checkCosmosRPC(ctx context.Context, client *http.Client, baseURL string) (moniker, chainID string, err error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/status", nil)
+	if err != nil {
+		return "", "", err
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", "", err
 	}
@@ -343,9 +351,13 @@ func checkCosmosRPC(client *http.Client, baseURL string) (moniker, chainID strin
 }
 
 // checkIPInfo queries ip-api.com (free, no key, 45 req/min) for geo/org data.
-func checkIPInfo(client *http.Client, ip string) (*ipAPIResponse, error) {
+func checkIPInfo(ctx context.Context, client *http.Client, ip string) (*ipAPIResponse, error) {
 	url := "http://ip-api.com/json/" + ip + "?fields=status,country,countryCode,org,as,query"
-	resp, err := client.Get(url)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}

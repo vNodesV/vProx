@@ -37,7 +37,7 @@ type Enricher struct {
 }
 
 // NewEnricher creates a new Enricher with the given config and database.
-// It initialises an HTTP client with a 10s timeout, a rate limiter based on
+// It initializes an HTTP client with a 10s timeout, a rate limiter based on
 // RateLimitRPM, and a buffered enrichment queue (capacity 100).
 func NewEnricher(cfg config.IntelConfig, d *db.DB) *Enricher {
 	rpm := cfg.RateLimitRPM
@@ -158,7 +158,7 @@ func (e *Enricher) EnrichStream(ctx context.Context, ip string, force bool, emit
 	// Rate-limit once per investigation (not per provider) — all 3 providers
 	// call different APIs so their individual quotas are independent.
 	if err := e.limiter.Wait(ctx); err != nil {
-		return nil, fmt.Errorf("intel: rate limit cancelled: %w", err)
+		return nil, fmt.Errorf("intel: rate limit canceled: %w", err)
 	}
 
 	go func() {
@@ -170,7 +170,7 @@ func (e *Enricher) EnrichStream(ctx context.Context, ip string, force bool, emit
 			vtCh <- vtRes{malicious: -1, cached: true}
 			return
 		}
-		m, raw, err := CheckVirusTotal(e.cfg.Keys.VirusTotal, ip, e.httpClient)
+		m, raw, err := CheckVirusTotal(ctx, e.cfg.Keys.VirusTotal, ip, e.httpClient)
 		vtCh <- vtRes{malicious: m, raw: raw, err: err}
 	}()
 
@@ -183,7 +183,7 @@ func (e *Enricher) EnrichStream(ctx context.Context, ip string, force bool, emit
 			abuseCh <- abuseRes{score: -1, cached: true}
 			return
 		}
-		s, raw, err := CheckAbuseIPDB(e.cfg.Keys.AbuseIPDB, ip, e.httpClient)
+		s, raw, err := CheckAbuseIPDB(ctx, e.cfg.Keys.AbuseIPDB, ip, e.httpClient)
 		abuseCh <- abuseRes{score: s, raw: raw, err: err}
 	}()
 

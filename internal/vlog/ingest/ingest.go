@@ -173,7 +173,7 @@ func (ing *Ingester) ingestCore(path string) error {
 	if err != nil {
 		return fmt.Errorf("begin tx %s: %w", name, err)
 	}
-	defer tx.Rollback() // no-op after commit
+	defer func() { _ = tx.Rollback() }() // no-op after commit
 
 	for _, e := range requests {
 		const q = `INSERT INTO request_events (

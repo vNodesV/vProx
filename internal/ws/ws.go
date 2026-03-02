@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+
 	applog "github.com/vNodesV/vProx/internal/logging"
 )
 
@@ -152,7 +153,7 @@ func HandleWS(d Deps) http.HandlerFunc {
 			hdr.Set(applog.RequestIDHeader, requestID)
 		}
 
-		bConn, _, err := websocket.DefaultDialer.Dial(backendURL, hdr)
+		bConn, _, err := websocket.DefaultDialer.Dial(backendURL, hdr) //nolint:bodyclose // websocket upgrade response body managed by gorilla/websocket
 		if err != nil {
 			_ = cConn.WriteControl(
 				websocket.CloseMessage,
@@ -209,7 +210,7 @@ func HandleWS(d Deps) http.HandlerFunc {
 		var upBytes int64   // client -> backend
 		var downBytes int64 // backend -> client
 		var wg sync.WaitGroup
-		// Fix CR-4: one mutex per connection to serialise concurrent writes
+		// Fix CR-4: one mutex per connection to serialize concurrent writes
 		// (WriteMessage in pump goroutines vs WriteControl in the closer below).
 		var cMu, bMu sync.Mutex
 

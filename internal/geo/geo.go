@@ -47,7 +47,7 @@ var OnCacheHit func()
 // Wire up in main.go: geo.OnCacheMiss = metrics.RecordGeoCacheMiss
 var OnCacheMiss func()
 
-// IsReady reports whether at least one geo database reader is initialised.
+// IsReady reports whether at least one geo database reader is initialized.
 func IsReady() bool {
 	dbMu.RLock()
 	defer dbMu.RUnlock()
@@ -174,7 +174,7 @@ func logIP2LMeta(db *maxminddb.Reader) {
 		return
 	}
 	meta := db.Metadata
-	build := time.Unix(int64(meta.BuildEpoch), 0).UTC().Format("2006-01-02")
+	build := time.Unix(int64(meta.BuildEpoch), 0).UTC().Format("2006-01-02") //nolint:gosec // G115: BuildEpoch is a MaxMind MMDB timestamp, will not overflow int64
 	desc := ""
 	if meta.Description != nil {
 		if v, ok := meta.Description["en"]; ok {
@@ -339,7 +339,7 @@ func Info() string {
 
 	if ip2lDB != nil {
 		meta := ip2lDB.Metadata
-		build := time.Unix(int64(meta.BuildEpoch), 0).UTC().Format("2006-01-02")
+		build := time.Unix(int64(meta.BuildEpoch), 0).UTC().Format("2006-01-02") //nolint:gosec // G115: BuildEpoch is a MaxMind MMDB timestamp, will not overflow int64
 		parts = append(parts, fmt.Sprintf("ip2location-mmdb type=%s build=%s path=%s", meta.DatabaseType, build, ip2lPathUsed))
 	} else {
 		msg := "ip2location-mmdb not loaded"

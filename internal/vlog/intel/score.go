@@ -254,7 +254,7 @@ func ExtractRiskFlagsFromResult(sr *ShodanResult) int64 {
 		if !riskyPorts[p] {
 			continue
 		}
-		// Port 8080 only counts if the service is labelled as a proxy.
+		// Port 8080 only counts if the service is labeled as a proxy.
 		if p == 8080 {
 			if !strings.Contains(portLabels[p], "proxy") {
 				continue

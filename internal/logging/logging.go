@@ -220,6 +220,8 @@ func encodeValue(v any) string {
 			return x
 		}
 		return strconv.Quote(x)
+	case time.Duration:
+		return x.String()
 	case fmt.Stringer:
 		s := strings.TrimSpace(x.String())
 		if s == "" {
@@ -229,8 +231,6 @@ func encodeValue(v any) string {
 			return s
 		}
 		return strconv.Quote(s)
-	case time.Duration:
-		return x.String()
 	case bool:
 		if x {
 			return "true"

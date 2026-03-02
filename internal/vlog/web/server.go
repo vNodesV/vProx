@@ -231,6 +231,8 @@ func (s *Server) checkCredentials(username, password string) bool {
 // requireAPIKey is middleware that enforces API key authentication.
 // The key must be provided via the X-API-Key request header.
 // If the server's configured APIKey is empty, all requests are rejected (key not configured).
+//
+//nolint:unused // middleware registered dynamically in future auth expansion
 func (s *Server) requireAPIKey(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if s.cfg.VLog.APIKey == "" {

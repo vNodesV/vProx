@@ -11,7 +11,7 @@ import (
 	"log"
 	"net"
 	"net/http"
-	_ "net/http/pprof" // registers /debug/pprof/ handlers on http.DefaultServeMux
+	_ "net/http/pprof" //nolint:gosec // G108: pprof intentionally exposed on debug port (localhost only)
 	"os"
 	"os/exec"
 	"os/signal"
@@ -25,6 +25,7 @@ import (
 
 	toml "github.com/pelletier/go-toml/v2"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+
 	backup "github.com/vNodesV/vProx/internal/backup"
 	"github.com/vNodesV/vProx/internal/config"
 	"github.com/vNodesV/vProx/internal/counter"
@@ -484,11 +485,6 @@ func closeChainLoggers() {
 	}
 }
 
-func envBool(key string) bool {
-	v := strings.TrimSpace(os.Getenv(key))
-	return v == "1" || strings.EqualFold(v, "true") || strings.EqualFold(v, "yes")
-}
-
 func envBoolDefault(key string, def bool) bool {
 	v := strings.TrimSpace(os.Getenv(key))
 	if v == "" {
@@ -625,7 +621,7 @@ func disableBackupInConfig(path string) error {
 	if err != nil {
 		if os.IsNotExist(err) {
 			// Write minimal file with automation=false
-			return os.WriteFile(path, []byte("[backup]\nautomation = false\n"), 0o644)
+			return os.WriteFile(path, []byte("[backup]\nautomation = false\n"), 0o600)
 		}
 		return err
 	}
@@ -646,7 +642,7 @@ func disableBackupInConfig(path string) error {
 			content += "\n[backup]\nautomation = false\n"
 		}
 	}
-	return os.WriteFile(path, []byte(content), 0o644)
+	return os.WriteFile(path, []byte(content), 0o600)
 }
 
 // printBackupStatus prints backup automation state, trigger conditions, and
@@ -942,7 +938,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Build upstream request (preserve method/body/headers)
-	req, err := http.NewRequest(r.Method, targetURL, r.Body)
+	req, err := http.NewRequestWithContext(r.Context(), r.Method, targetURL, r.Body)
 	if err != nil {
 		http.Error(w, "Request build error", http.StatusInternalServerError)
 		metrics.RecordProxyError(route, "request_build_error")
@@ -1621,7 +1617,7 @@ func main() {
 		// via the blank import of net/http/pprof at the top of this file.
 		go func() {
 			applog.Print("INFO", "debug", "pprof_server_started", applog.F("addr", ":"+debugPort))
-			if err := http.ListenAndServe(":"+debugPort, http.DefaultServeMux); err != nil {
+			if err := http.ListenAndServe(":"+debugPort, http.DefaultServeMux); err != nil { //nolint:gosec // G114: debug server intentionally uses default timeouts
 				applog.Print("ERROR", "debug", "pprof_server_error", applog.F("error", err.Error()))
 			}
 		}()
@@ -1672,7 +1668,12 @@ func notifyVLog(vlogURL string) {
 		return
 	}
 	client := &http.Client{Timeout: 5 * time.Second}
-	resp, err := client.Post(vlogURL+"/api/v1/ingest", "application/json", nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, vlogURL+"/api/v1/ingest", nil)
+	if err != nil {
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := client.Do(req)
 	if err != nil {
 		return
 	}

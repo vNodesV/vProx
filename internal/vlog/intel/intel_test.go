@@ -1,6 +1,7 @@
 package intel_test
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -261,7 +262,7 @@ func TestParseShodanJSON(t *testing.T) {
 
 func TestCheckVirusTotal_EmptyKey(t *testing.T) {
 	t.Parallel()
-	m, raw, err := intel.CheckVirusTotal("", "1.2.3.4", nil)
+	m, raw, err := intel.CheckVirusTotal(context.Background(), "", "1.2.3.4", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -288,7 +289,7 @@ func TestCheckVirusTotal_HappyPath(t *testing.T) {
 	origTransport := client.Transport
 	client.Transport = rewriteTransport{base: origTransport, target: srv.URL}
 
-	m, raw, err := intel.CheckVirusTotal("test-key", "1.2.3.4", client)
+	m, raw, err := intel.CheckVirusTotal(context.Background(), "test-key", "1.2.3.4", client)
 	if err != nil {
 		t.Fatalf("CheckVirusTotal: %v", err)
 	}
@@ -311,7 +312,7 @@ func TestCheckVirusTotal_HTTPError(t *testing.T) {
 	client := srv.Client()
 	client.Transport = rewriteTransport{base: client.Transport, target: srv.URL}
 
-	_, _, err := intel.CheckVirusTotal("test-key", "1.2.3.4", client)
+	_, _, err := intel.CheckVirusTotal(context.Background(), "test-key", "1.2.3.4", client)
 	if err == nil {
 		t.Error("expected error for 403 response")
 	}
@@ -323,7 +324,7 @@ func TestCheckVirusTotal_HTTPError(t *testing.T) {
 
 func TestCheckAbuseIPDB_EmptyKey(t *testing.T) {
 	t.Parallel()
-	s, raw, err := intel.CheckAbuseIPDB("", "1.2.3.4", nil)
+	s, raw, err := intel.CheckAbuseIPDB(context.Background(), "", "1.2.3.4", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -346,7 +347,7 @@ func TestCheckAbuseIPDB_HappyPath(t *testing.T) {
 	client := srv.Client()
 	client.Transport = rewriteTransport{base: client.Transport, target: srv.URL}
 
-	score, raw, err := intel.CheckAbuseIPDB("test-abuse-key", "1.2.3.4", client)
+	score, raw, err := intel.CheckAbuseIPDB(context.Background(), "test-abuse-key", "1.2.3.4", client)
 	if err != nil {
 		t.Fatalf("CheckAbuseIPDB: %v", err)
 	}
@@ -369,7 +370,7 @@ func TestCheckAbuseIPDB_HTTPError(t *testing.T) {
 	client := srv.Client()
 	client.Transport = rewriteTransport{base: client.Transport, target: srv.URL}
 
-	_, _, err := intel.CheckAbuseIPDB("test-key", "1.2.3.4", client)
+	_, _, err := intel.CheckAbuseIPDB(context.Background(), "test-key", "1.2.3.4", client)
 	if err == nil {
 		t.Error("expected error for 429 response")
 	}
@@ -513,7 +514,7 @@ func TestComputeScoreEdgeCases(t *testing.T) {
 func TestCheckOSINT(t *testing.T) {
 	// CheckOSINT does real DNS lookups so we test with localhost/loopback
 	// which should complete quickly and not fail
-	result, err := intel.CheckOSINT("127.0.0.1")
+	result, err := intel.CheckOSINT(context.Background(), "127.0.0.1")
 	if err != nil {
 		t.Logf("CheckOSINT(127.0.0.1) error (may be expected in CI): %v", err)
 		return

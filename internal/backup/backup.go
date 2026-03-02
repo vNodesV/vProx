@@ -438,5 +438,5 @@ func writeLastRun(statePath string, t time.Time) error {
 	if err := os.MkdirAll(filepath.Dir(statePath), 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(statePath, []byte(strconv.FormatInt(t.Unix(), 10)), 0o644)
+	return os.WriteFile(statePath, []byte(strconv.FormatInt(t.Unix(), 10)), 0o600)
 }
