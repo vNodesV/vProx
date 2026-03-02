@@ -141,7 +141,12 @@ func RunOnce(opts Options) error {
 	var entries []archiveEntry
 	var tmpPaths []string
 	for _, src := range presentSources {
-		info, _ := os.Stat(src)
+		info, err := os.Stat(src)
+		if err != nil {
+			// File may have been removed between discovery and snapshot (TOCTOU).
+			_ = cleanupTemps(tmpPaths)
+			return fmt.Errorf("backup: stat %s: %w", filepath.Base(src), err)
+		}
 		copyName := fmt.Sprintf("%s.%s.copy", filepath.Base(src), stamp)
 		copyPath := filepath.Join(logDir, copyName)
 		if err := copyFile(src, copyPath, info.Mode()); err != nil {
