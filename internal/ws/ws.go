@@ -108,6 +108,9 @@ func HandleWS(d Deps) http.HandlerFunc {
 		// Emit CONNECTED log now that both sides are up.
 		d.LogRequestSummary(r, true, "websocket", host, start)
 
+		// Emit CONNECTED log now that both sides are up.
+		d.LogRequestSummary(r, true, "websocket", host, start)
+
 		// Defaults
 		if idle <= 0 {
 			idle = 3600 * time.Second
