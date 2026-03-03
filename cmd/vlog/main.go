@@ -312,9 +312,20 @@ func openDB(f flags) (config.Config, string, *db.DB, error) {
 // ---------------------------------------------------------------------------
 
 func cmdStart(f flags) int {
-	// -d / --daemon → hand off to the service manager.
+	// -d / --daemon → hand off to the service manager, then confirm.
 	if f.daemon {
-		return runServiceCommand("start")
+		code := runServiceCommand("start")
+		if code != 0 {
+			return code
+		}
+		time.Sleep(1500 * time.Millisecond)
+		if serviceIsActive() {
+			fmt.Fprintln(os.Stdout, "✓ vLog service started successfully.")
+		} else {
+			fmt.Fprintln(os.Stderr, "✗ vLog service did not start. Check: journalctl -u vLog -n 50")
+			return 1
+		}
+		return 0
 	}
 
 	cfg, home, err := loadConfig(f)
@@ -495,6 +506,7 @@ func cmdStatus(f flags) int {
 	fmt.Fprintf(os.Stdout, "  Request events:     %s\n", fmtInt(stats["total_requests"]))
 	fmt.Fprintf(os.Stdout, "  Rate-limit events:  %s\n", fmtInt(stats["total_ratelimit_events"]))
 	fmt.Fprintf(os.Stdout, "  Flagged IPs:        %s\n", fmtInt(stats["flagged_ips"]))
+	printServiceStatus()
 	return 0
 }
 
@@ -786,6 +798,22 @@ func runServiceCommand(action string) int {
 		return 1
 	}
 	return 0
+}
+
+// serviceIsActive returns true when systemctl reports the vLog unit as active.
+func serviceIsActive() bool {
+	out, _ := exec.Command("systemctl", "is-active", "vLog").Output()
+	return strings.TrimSpace(string(out)) == "active"
+}
+
+// printServiceStatus appends the full systemctl status for vLog.
+// Silently skips on systems without systemctl or when the unit is unknown.
+func printServiceStatus() {
+	cmd := exec.Command("systemctl", "status", "vLog", "--no-pager", "-l")
+	out, _ := cmd.CombinedOutput() // exit!=0 when inactive; output is still useful
+	if len(out) > 0 {
+		fmt.Fprintf(os.Stdout, "\nService:\n%s", string(out))
+	}
 }
 
 // ---------------------------------------------------------------------------
