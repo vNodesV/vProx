@@ -22,6 +22,8 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/vNodesV/vProx/internal/push"
+	"github.com/vNodesV/vProx/internal/push/api"
 	"github.com/vNodesV/vProx/internal/vlog/config"
 	"github.com/vNodesV/vProx/internal/vlog/db"
 	"github.com/vNodesV/vProx/internal/vlog/ingest"
@@ -59,6 +61,7 @@ type Server struct {
 	cfg      config.Config
 	httpSrv  *http.Server
 	pages    map[string]*template.Template
+	push     *api.Handlers // nil when push module is not configured
 
 	// Session state for dashboard login.
 	sessions   map[string]time.Time // token → expiry
@@ -68,7 +71,8 @@ type Server struct {
 
 // New creates a Server, parses embedded templates, registers all routes,
 // and returns a server ready to Start().
-func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg config.Config) (*Server, error) {
+// pushSvc is optional — pass nil to disable the push module routes.
+func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg config.Config, pushSvc *push.Service) (*Server, error) {
 	// Each page template is parsed together with the base layout so
 	// that block overrides (title, content) are scoped per page.
 	pageFiles := []string{"dashboard.html", "accounts.html", "account.html"}
@@ -105,6 +109,9 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 		sessions:   make(map[string]time.Time),
 		sessionKey: sessionKey,
 	}
+	if pushSvc != nil {
+		s.push = api.New(pushSvc)
+	}
 
 	mux := http.NewServeMux()
 
@@ -138,8 +145,26 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 	mux.Handle("GET /api/v1/stats", s.requireSession(http.HandlerFunc(s.handleAPIStats)))
 	mux.Handle("GET /api/v1/chart", s.requireSession(http.HandlerFunc(s.handleAPIChart)))
 	mux.Handle("GET /api/v1/probe", s.requireSession(http.HandlerFunc(s.handleAPIProbe)))
-	mux.Handle("GET /api/v1/chains", s.requireSession(http.HandlerFunc(s.handleAPIChains)))
-	mux.Handle("GET /api/v1/chains/{chain}", s.requireSession(http.HandlerFunc(s.handleAPIChainStatus)))
+
+	// Push module routes — only registered when push is configured.
+	if s.push != nil {
+		mux.Handle("GET /api/v1/push/vms",
+			s.requireSession(http.HandlerFunc(s.push.HandleVMs)))
+		mux.Handle("GET /api/v1/push/chains",
+			s.requireSession(http.HandlerFunc(s.push.HandleChains)))
+		mux.Handle("GET /api/v1/push/chains/{chain}",
+			s.requireSession(http.HandlerFunc(s.push.HandleChainStatus)))
+		mux.Handle("GET /api/v1/push/deployments",
+			s.requireSession(http.HandlerFunc(s.push.HandleDeployments)))
+		mux.Handle("POST /api/v1/push/deploy",
+			s.requireSession(http.HandlerFunc(s.push.HandleDeploy)))
+		mux.Handle("GET /api/v1/push/chains/registered",
+			s.requireSession(http.HandlerFunc(s.push.HandleRegisteredChains)))
+		mux.Handle("POST /api/v1/push/chains/registered",
+			s.requireSession(http.HandlerFunc(s.push.HandleRegisteredChains)))
+		mux.Handle("DELETE /api/v1/push/chains/registered/{chain}",
+			s.requireSession(http.HandlerFunc(s.push.HandleRegisteredChainDelete)))
+	}
 
 	readTimeout := time.Duration(cfg.VLog.Server.ReadTimeoutSec) * time.Second
 	writeTimeout := time.Duration(cfg.VLog.Server.WriteTimeoutSec) * time.Second

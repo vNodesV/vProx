@@ -41,10 +41,8 @@ type VLogSection struct {
 	// WatchIntervalSec is the poll interval (seconds) for new archives.
 	WatchIntervalSec int `toml:"watch_interval_sec"`
 
-	// VDeployURL is the base URL of the vdeploy API server.
-	// Example: "http://localhost:8888"
-	// Leave empty to disable the Validators panel on the dashboard.
-	VDeployURL string `toml:"vdeploy_url"`
+	// Push holds configuration for the integrated push validator deployment module.
+	Push PushConfig `toml:"push"`
 
 	// Intel holds IP intelligence enrichment settings.
 	Intel IntelConfig `toml:"intel"`
@@ -84,6 +82,21 @@ type IntelKeys struct {
 	AbuseIPDB  string `toml:"abuseipdb"`
 	VirusTotal string `toml:"virustotal"`
 	Shodan     string `toml:"shodan"`
+}
+
+// PushConfig configures the integrated push validator deployment module.
+type PushConfig struct {
+	// VMsPath is the path to the VM registry TOML file.
+	// Default: $VPROX_HOME/config/push/vms.toml
+	VMsPath string `toml:"vms_path"`
+
+	// DBPath is the path to the push SQLite state database.
+	// Default: $VPROX_HOME/data/push.db
+	DBPath string `toml:"db_path"`
+
+	// PollIntervalSec is how often (seconds) chain status is refreshed.
+	// Default: 60. Set 0 to disable background polling.
+	PollIntervalSec int `toml:"poll_interval_sec"`
 }
 
 // AuthConfig holds dashboard login credentials.
@@ -127,6 +140,9 @@ func DefaultConfig(home string) Config {
 			},
 			Auth: AuthConfig{
 				Username: "admin",
+			},
+			Push: PushConfig{
+				PollIntervalSec: 60,
 			},
 		},
 	}
@@ -183,6 +199,15 @@ func Load(path string) (Config, error) {
 	}
 	if strings.TrimSpace(cfg.VLog.BindAddress) == "" {
 		cfg.VLog.BindAddress = "127.0.0.1"
+	}
+	if cfg.VLog.Push.PollIntervalSec <= 0 {
+		cfg.VLog.Push.PollIntervalSec = 60
+	}
+	if strings.TrimSpace(cfg.VLog.Push.VMsPath) == "" {
+		cfg.VLog.Push.VMsPath = filepath.Join(home, "config", "push", "vms.toml")
+	}
+	if strings.TrimSpace(cfg.VLog.Push.DBPath) == "" {
+		cfg.VLog.Push.DBPath = filepath.Join(home, "data", "push.db")
 	}
 
 	return cfg, nil

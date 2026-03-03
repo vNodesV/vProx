@@ -1,0 +1,207 @@
+// Package api exposes push Service functionality as HTTP JSON handlers.
+// Handlers are methods on Handlers and are wired into the vLog mux by server.go.
+package api
+
+import (
+	"encoding/json"
+	"log"
+	"net/http"
+
+	"github.com/vNodesV/vProx/internal/push"
+	"github.com/vNodesV/vProx/internal/push/config"
+)
+
+// Handlers holds a reference to the push Service.
+type Handlers struct {
+	svc *push.Service
+}
+
+// New returns an Handlers backed by svc.
+func New(svc *push.Service) *Handlers { return &Handlers{svc: svc} }
+
+// ── GET /api/v1/push/vms ─────────────────────────────────────────────────────
+
+type vmView struct {
+	Name       string       `json:"name"`
+	Host       string       `json:"host"`
+	Datacenter string       `json:"datacenter"`
+	Chains     []chainBrief `json:"chains"`
+}
+
+type chainBrief struct {
+	Name       string   `json:"name"`
+	Components []string `json:"components"`
+}
+
+// HandleVMs returns the list of registered VMs.
+func (h *Handlers) HandleVMs(w http.ResponseWriter, r *http.Request) {
+	vms := h.svc.VMs()
+	out := make([]vmView, 0, len(vms))
+	for _, vm := range vms {
+		view := vmView{Name: vm.Name, Host: vm.Host, Datacenter: vm.Datacenter}
+		for _, ch := range vm.Chains {
+			view.Chains = append(view.Chains, chainBrief{Name: ch.Name, Components: ch.Components})
+		}
+		out = append(out, view)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"vms": out})
+}
+
+// ── GET /api/v1/push/chains ──────────────────────────────────────────────────
+
+// HandleChains returns all chain statuses (VM-managed + registered).
+func (h *Handlers) HandleChains(w http.ResponseWriter, r *http.Request) {
+	statuses := h.svc.AllStatuses()
+	writeJSON(w, http.StatusOK, map[string]any{"chains": statuses})
+}
+
+// ── GET /api/v1/push/chains/{chain} ──────────────────────────────────────────
+
+// HandleChainStatus returns the polled status for a single chain.
+func (h *Handlers) HandleChainStatus(w http.ResponseWriter, r *http.Request) {
+	chain := r.PathValue("chain")
+	if chain == "" {
+		http.Error(w, "chain required", http.StatusBadRequest)
+		return
+	}
+	st := h.svc.Status(chain)
+	if st == nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "chain not found or not yet polled"})
+		return
+	}
+	writeJSON(w, http.StatusOK, st)
+}
+
+// ── GET /api/v1/push/deployments ─────────────────────────────────────────────
+
+// HandleDeployments returns recent deployment history.
+func (h *Handlers) HandleDeployments(w http.ResponseWriter, r *http.Request) {
+	chain := r.URL.Query().Get("chain")
+	deps, err := h.svc.DB().ListDeployments(chain)
+	if err != nil {
+		log.Printf("[push/api] list deployments: %v", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"deployments": deps})
+}
+
+// ── POST /api/v1/push/deploy ─────────────────────────────────────────────────
+
+type deployRequest struct {
+	VM        string            `json:"vm"`
+	Chain     string            `json:"chain"`
+	Component string            `json:"component"`
+	Script    string            `json:"script"`
+	DryRun    bool              `json:"dry_run"`
+	Env       map[string]string `json:"env"`
+}
+
+// HandleDeploy runs a chain script on a VM and records the result.
+func (h *Handlers) HandleDeploy(w http.ResponseWriter, r *http.Request) {
+	var req deployRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if req.VM == "" || req.Chain == "" || req.Component == "" || req.Script == "" {
+		http.Error(w, "vm, chain, component, script required", http.StatusBadRequest)
+		return
+	}
+
+	vm := h.svc.FindVM(req.VM)
+	if vm == nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "vm not found: " + req.VM})
+		return
+	}
+
+	id, err := h.svc.DB().InsertDeployment(req.Chain, req.Component, req.VM)
+	if err != nil {
+		log.Printf("[push/api] insert deployment: %v", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	// Run asynchronously so the HTTP response returns immediately.
+	go func(vm config.VM, id int64) {
+		_ = h.svc.DB().UpdateDeployment(id, "running", "")
+		result := h.svc.Runner().Deploy(vm, req.Chain, req.Component, req.Script, req.DryRun, req.Env)
+		status := "done"
+		if result.Err != nil {
+			status = "failed"
+		}
+		if err := h.svc.DB().UpdateDeployment(id, status, result.Output); err != nil {
+			log.Printf("[push/api] update deployment %d: %v", id, err)
+		}
+	}(*vm, id)
+
+	writeJSON(w, http.StatusAccepted, map[string]any{"deployment_id": id, "status": "running"})
+}
+
+// ── GET+POST+DELETE /api/v1/push/chains/registered ───────────────────────────
+
+type registerRequest struct {
+	Chain   string `json:"chain"`
+	RPCURL  string `json:"rpc_url"`
+	RESTURL string `json:"rest_url"`
+	Note    string `json:"note"`
+}
+
+// HandleRegisteredChains handles GET (list) and POST (add) for registered chains.
+func (h *Handlers) HandleRegisteredChains(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		chains, err := h.svc.DB().ListRegisteredChains()
+		if err != nil {
+			log.Printf("[push/api] list registered: %v", err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"registered_chains": chains})
+
+	case http.MethodPost:
+		var req registerRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			return
+		}
+		if req.Chain == "" || req.RPCURL == "" {
+			http.Error(w, "chain and rpc_url required", http.StatusBadRequest)
+			return
+		}
+		if err := h.svc.DB().AddRegisteredChain(req.Chain, req.RPCURL, req.RESTURL, req.Note); err != nil {
+			log.Printf("[push/api] add registered chain: %v", err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		writeJSON(w, http.StatusCreated, map[string]string{"status": "added", "chain": req.Chain})
+
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// HandleRegisteredChainDelete handles DELETE /api/v1/push/chains/registered/{chain}.
+func (h *Handlers) HandleRegisteredChainDelete(w http.ResponseWriter, r *http.Request) {
+	chain := r.PathValue("chain")
+	if chain == "" {
+		http.Error(w, "chain required", http.StatusBadRequest)
+		return
+	}
+	if err := h.svc.DB().RemoveRegisteredChain(chain); err != nil {
+		log.Printf("[push/api] remove registered chain: %v", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "removed", "chain": chain})
+}
+
+// ── helper ────────────────────────────────────────────────────────────────────
+
+func writeJSON(w http.ResponseWriter, code int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	if err := json.NewEncoder(w).Encode(v); err != nil {
+		log.Printf("[push/api] encode response: %v", err)
+	}
+}

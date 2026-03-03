@@ -1,0 +1,39 @@
+# vms.toml — push VM registry
+#
+# One [[vm]] block per validator VM.
+# The push module SSHes into each VM using the dedicated push key
+# and runs bash scripts already cloned via vm_push (~/vApp/...).
+#
+# Generate the push key:
+#   ssh-keygen -t ed25519 -C "vprox-push" -f /etc/vprox/push/id.push
+# Authorize it on target VMs:
+#   ssh-copy-id -i /etc/vprox/push/id.push.pub jarvis@10.0.0.68
+
+[[vm]]
+name       = "akash-jarvis"
+host       = "10.0.0.68"
+port       = 22
+user       = "jarvis"
+key_path   = "/etc/vprox/push/id.push"
+datacenter = "QC"
+
+  # One [[vm.chain]] per chain deployed on this VM.
+  [[vm.chain]]
+  name       = "akash"
+  rpc_url    = "http://10.0.0.68:26657"
+  rest_url   = "http://10.0.0.68:1317"
+  components = ["node", "validator", "provider", "relayer"]
+
+# [[vm]]
+# name       = "elys-rbx"
+# host       = "198.51.100.10"
+# port       = 22
+# user       = "validator"
+# key_path   = "/etc/vprox/push/id.push"
+# datacenter = "RBX"
+#
+#   [[vm.chain]]
+#   name       = "elys"
+#   rpc_url    = "http://198.51.100.10:26657"
+#   rest_url   = "http://198.51.100.10:1317"
+#   components = ["node", "validator"]

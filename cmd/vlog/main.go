@@ -15,6 +15,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/vNodesV/vProx/internal/push"
 	"github.com/vNodesV/vProx/internal/vlog/config"
 	"github.com/vNodesV/vProx/internal/vlog/db"
 	"github.com/vNodesV/vProx/internal/vlog/ingest"
@@ -368,7 +369,23 @@ func cmdStart(f flags) int {
 		watcher.Start()
 	}
 
-	server, err := web.New(database, enricher, ingester, cfg)
+	// Push module — initialise if vms.toml exists at the configured path.
+	var pushSvc *push.Service
+	if _, err := os.Stat(cfg.VLog.Push.VMsPath); err == nil {
+		svc, err := push.New(cfg.VLog.Push.VMsPath, cfg.VLog.Push.DBPath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "vlog: push init warning: %v (push module disabled)\n", err)
+		} else {
+			pushSvc = svc
+			defer svc.Close()
+			go svc.StartPolling(context.Background(), time.Duration(cfg.VLog.Push.PollIntervalSec)*time.Second)
+			if !f.quiet {
+				fmt.Fprintf(os.Stdout, "  push:     %s (%ds poll)\n", cfg.VLog.Push.VMsPath, cfg.VLog.Push.PollIntervalSec)
+			}
+		}
+	}
+
+	server, err := web.New(database, enricher, ingester, cfg, pushSvc)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "vlog: web server error: %v\n", err)
 		return 1

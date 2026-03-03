@@ -35,11 +35,14 @@ port = 8889
 # Default: 60
 watch_interval_sec = 60
 
-# URL of the vdeploy API server (vDeploy/validators module).
-# Enables the "Validator Nodes" panel on the vLog dashboard.
-# Example: "http://localhost:8888"
-# Leave commented out (or empty) to disable the panel.
-# vdeploy_url = "http://localhost:8888"
+# ── push module (validator deployment control plane) ───────────────────────
+# Enables the Deploy Wizard and Chain Status panels on the vLog dashboard.
+# The push module SSHes to validator VMs and runs chain scripts from vApp.
+# Leave vms_path unset (or point to a non-existent file) to disable.
+[vlog.push]
+# vms_path        = "/etc/vprox/config/push/vms.toml"   # VM registry
+# db_path         = "/etc/vprox/data/push.db"            # deployment history
+# poll_interval_sec = 60                                  # chain status refresh
 
 [vlog.intel]
 # Automatically enrich new IP accounts with threat intelligence.
