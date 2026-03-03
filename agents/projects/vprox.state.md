@@ -1135,3 +1135,47 @@ runner.go constant `scriptBase` must be updated to `~/vProx/scripts/chains`.
 - PR: `vLog/v1.2.0` → `develop` → `main`
 - Release tag: `vProxVL-v1.2.0`
 
+
+---
+
+## Session Dump — 2026-03-03 (agentupgrade + CEO decommission)
+
+### Session Summary
+- **Branch**: `vLog/v1.2.0` — HEAD `19f3ddd`
+- **Commits this session**: `77c0ad7` (agentupgrade rev14), `19f3ddd` (CEO decommission)
+
+### Work Completed
+
+#### 1. agentupgrade rev14 (commit `77c0ad7`)
+7-file patch: push module scope, Phase E CLI plan, 15-entry Cosmos SDK proxy intelligence table,
+§18 Infrastructure Deployment Management (NEW), §2b Cosmos SDK Hidden Gems resources (NEW),
+8 Cosmos proxy patterns in base.agent.md, 6 new reviewer criteria.
+
+#### 2. CEO Agent Decommissioned (commit `19f3ddd`)
+- **Decision**: CEO was pure pass-through — every task routed immediately to jarvis5.0.
+  Added zero value for single-developer setup. Unique value (new project protocol) absorbed.
+- **Files deleted**: `.github/agents/ceo.agent.md`, `agents/ceo_state.md`
+- **Absorbed**: Full 5-step `new project` protocol copied into `jarvis5.0.agent.md`
+  (Discovery Q1–Q8 → Research → Team Assembly → Phase Workflow → State Bootstrap)
+- **assignments.yml**: CEO entry removed; jarvis5.0 is now top-level orchestrator
+- **Session command**: `new` → `new project`
+
+### Current Agent Org (post-CEO)
+```
+vNodesV (Owner)
+    │
+jarvis5.0  (primary — implements + orchestrates)
+    ├── reviewer              (PR gate / security compliance)
+    ├── jarvis5.0_vscode      (local VSCode counterpart)
+    ├── explore               (fast codebase research)
+    ├── task                  (build / test / lint)
+    ├── code-review           (diff-level review)
+    └── SE specialists        (se-security, se-arch, se-gitops, se-techwriter, se-pm, se-ux)
+```
+
+### Open Work (unchanged from prior session)
+- Script migration: `vApp/modules/vDeploy/validators/chains/akash/` → `vProx/scripts/chains/akash/`; update `runner.go` `scriptBase`
+- Phase E CLI: `pe-push-cmd` → `pe-mod-pkg+cmd` → `pe-chain-pkg+cmd`
+- P2/P3 security findings: CR-2, CR-6, CR-8, SEC-H3, SEC-M4, SEC-M6, SEC-L1–L4
+- PR: `vLog/v1.2.0` → `develop` → `main`
+- Release tag: `vProxVL-v1.2.0`
