@@ -1,24 +1,65 @@
 # vProx
 
-Production-grade reverse proxy for Cosmos SDK node services — RPC, REST, gRPC, WebSocket, and API alias — with per-chain routing, rate limiting, geo enrichment, and automated log management.
+[![CI](https://github.com/vNodesV/vProx/actions/workflows/ci.yml/badge.svg)](https://github.com/vNodesV/vProx/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/vNodesV/vProx/actions/workflows/codeql.yml/badge.svg)](https://github.com/vNodesV/vProx/actions/workflows/codeql.yml)
+![Go Version](https://img.shields.io/github/go-mod/go-version/vNodesV/vProx)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
 
-## ✨ Features
+Production-grade reverse proxy for Cosmos SDK blockchain nodes. vProx routes RPC, REST, gRPC, gRPC-Web, and WebSocket traffic to backend nodes with per-chain configuration, IP-based rate limiting, geo enrichment, Prometheus metrics, and structured logging. Includes **vLog**, a standalone log analysis dashboard with threat intelligence and OSINT capabilities.
 
-- **Per-chain routing** — match by Host header; route to path prefixes (`/rpc`, `/rest`, `/grpc`, `/grpc-web`, `/api`) or subdomains (`rpc.<host>`, `api.<host>`).
-- **WebSocket proxying** — bidirectional with configurable idle timeout and max lifetime.
-- **Rate limiting** — per-IP token bucket with optional auto-quarantine and JSONL audit log.
-- **Geo enrichment** — country and ASN logged per request via MMDB lookup (optional).
-- **HTML banner injection** — per-service banners (`msg_rpc`, `msg_api`) on RPC index and REST swagger, independent of address masking.
-- **Backup automation** — TOML-configured scheduled backups with multi-file archive support.
-- **Service management** — `start -d`, `stop`, `restart` with passwordless sudoers integration.
-- **Systemd-ready** — `make install` renders and optionally installs the service unit + sudoers rule.
+## Features
 
-## 📦 Requirements
+**Proxy & Routing**
 
-- Go **1.25+** (see `go.mod`)
-- Linux (for production/systemd); macOS supported for development
+- Per-chain TOML configuration with host-header matching
+- Path-based routing (`/rpc`, `/rest`, `/grpc`, `/grpc-web`, `/api`) and subdomain routing (`rpc.<host>`, `api.<host>`)
+- WebSocket proxying with configurable idle timeout and max lifetime
+- HTML banner injection and RPC address masking
 
-## ⚡ Quick Start
+**Security & Rate Limiting**
+
+- Per-IP token bucket rate limiting with auto-quarantine
+- Trusted proxy CIDR configuration (XFF header trust scoping)
+- WebSocket origin allowlist (same-origin by default)
+- JSONL rate-limit audit log
+
+**Observability**
+
+- Prometheus metrics endpoint (`/metrics`) — 8 metrics covering requests, connections, latency, errors, rate limits, geo cache, and backups
+- Health check endpoint (`/healthz`) — JSON status with uptime; returns 503 on subsystem failure
+- pprof debug server on separate port (`VPROX_DEBUG=1` only)
+- Structured dual-sink logging (stdout + file) with typed request IDs (`RPC{hex}`, `API{hex}`)
+
+**Geo Enrichment**
+
+- IP2Location MMDB lookup for country and ASN per request
+- Bundled database (`assets/geo/ip2location.mmdb.gz`) — no external download required
+- In-memory cache with periodic refresh
+
+**Backup & Operations**
+
+- Automated log backup with TOML-configured scheduling and multi-file archive support
+- Service management: `start -d`, `stop`, `restart` with systemd integration
+- Passwordless sudoers rule for daemon control
+
+**CI/CD**
+
+- golangci-lint with 14 linters enforced on every PR
+- Test coverage gate (≥60%)
+- Automated release workflow: cross-compilation for linux/darwin × amd64/arm64
+
+## Quick Start
+
+### Prerequisites
+
+| Tool | Version | Notes |
+|------|---------|-------|
+| Go | 1.25+ | See `go.mod` |
+| make | GNU make | Build automation |
+| git | Any | Clone the repo |
+| apache2-utils | Any | `htpasswd` for vLog auth (optional) |
+
+### Install
 
 ```bash
 git clone https://github.com/vNodesV/vProx.git
@@ -26,56 +67,127 @@ cd vProx
 make install
 ```
 
-Then create a chain config:
+`make install` validates Go, creates `~/.vProx/` directories, decompresses the GeoIP database, installs sample configs, creates `.env`, and builds the binary to `$GOPATH/bin/vProx`.
+
+### GeoIP database
+
+The geo database is installed automatically by `make install`. To install or update it separately:
 
 ```bash
-cp $HOME/.vProx/config/chains/chain.sample.toml $HOME/.vProx/config/chains/my-chain.toml
-$EDITOR $HOME/.vProx/config/chains/my-chain.toml
+make geo
 ```
 
-Start the proxy:
+This extracts `assets/geo/ip2location.mmdb.gz` to `~/.vProx/data/geolocation/ip2location.mmdb`. No sudo required.
+
+### Configure a chain
 
 ```bash
-vProx start           # foreground, listens on :3000 by default
-vProx start -d        # start as systemd service (daemon)
-vProx stop            # stop the service
-vProx restart         # restart the service
+cp ~/.vProx/config/chains/chain.sample.toml ~/.vProx/config/chains/my-chain.toml
+$EDITOR ~/.vProx/config/chains/my-chain.toml
 ```
 
-## 🔍 vLog — Log Archive Analyzer (v1.0.0)
-
-vLog is a companion binary that analyzes vProx log archives and provides a CRM-like security intelligence UI.
+### Run
 
 ```bash
-make install-vlog           # build + install vLog binary + config
-vlog start                  # foreground server (default: :8889)
-vlog start -d               # start as background service
-vlog stop                   # stop the service
-vlog restart                # restart the service
-vlog ingest                 # one-shot archive ingest and exit
-vlog status                 # show database stats
+vProx start             # foreground, listens on :3000 by default
+vProx start -d          # start as systemd service (daemon)
+vProx stop              # stop the service
+vProx restart           # restart the service
+vProx --validate        # validate config and exit
 ```
 
-**Features:**
-- Per-IP accounts with request history, rate-limit events, block/unblock status
-- Threat scoring (VirusTotal + AbuseIPDB + Shodan) — parallel queries, composite score 0–100
-- Full OSINT suite — concurrent DNS, port scan, org/geo, protocol probe, Cosmos RPC (~5s)
-- Live investigation UI with SSE progress streams
-- **Multi-location endpoint probe** — local + 🇨🇦 Canada + 🌍 worldwide nodes (check-host.net), latency in ms, hover tooltips
-- Accounts page: search, sort (URL-persistent, back-nav safe), per-page 25–All, Status column
+## Architecture
 
-See [`MODULES.md §11`](./MODULES.md#11-vlog--log-archive-analyzer) for full documentation.
+vProx follows a modular internal architecture with clearly separated concerns:
 
-## 📚 Documentation
+| Package | Responsibility |
+|---------|---------------|
+| `cmd/vprox` | CLI entrypoint, flag parsing, server lifecycle |
+| `internal/config` | Chain and port TOML loading, validation |
+| `internal/counter` | Per-IP access counter with disk persistence |
+| `internal/logging` | Structured logging, typed request IDs (`RPC{hex}`, `API{hex}`) |
+| `internal/metrics` | Prometheus metric registration and recording helpers |
+| `internal/backup` | Scheduled log archival with tar.gz compression |
+| `internal/geo` | MMDB geo lookup with in-memory cache |
+| `internal/limit` | Token bucket rate limiter with auto-quarantine |
+| `internal/ws` | WebSocket proxy with idle/lifetime timers |
+
+**Data flow**: Incoming request → host-header match → chain config lookup → rate limiter → geo enrichment → reverse proxy → structured log + metrics.
+
+For the full module-by-module reference, see [`MODULES.md`](./MODULES.md).
+
+## vLog
+
+vLog is a standalone companion binary for analyzing vProx log archives. It provides a web-based dashboard with:
+
+- Per-IP account profiles with request history and block/unblock controls
+- Threat intelligence scoring (AbuseIPDB + VirusTotal + Shodan) — composite score 0–100
+- OSINT engine: concurrent DNS, port scan, org/geo, protocol probe, Cosmos RPC (~5s)
+- Multi-location endpoint probing (local + 🇨🇦 Canada + 🌍 worldwide)
+- Dashboard authentication with bcrypt password hashing
+- Machine-to-machine ingest API with API key auth
+
+### Install and run
+
+```bash
+make install-vlog        # build + install vLog binary + config
+vlog start               # foreground server (default: :8889)
+vlog start -d            # start as background service
+```
+
+For full setup including authentication, API key configuration, and block/unblock, see the [Installing vLog](./INSTALLATION.md#installing-vlog) section in `INSTALLATION.md`.
+
+## Configuration
+
+vProx uses TOML configuration files stored under `~/.vProx/`:
+
+| File | Purpose |
+|------|---------|
+| `config/ports.toml` | Default service ports for all chains |
+| `config/chains/*.toml` | Per-chain routing, services, and feature flags |
+| `config/backup/backup.toml` | Backup automation schedule and settings |
+| `config/vlog/vlog.toml` | vLog server settings, auth, intel API keys |
+| `.env` | Environment variables (rate limits, geo paths, server address) |
+
+Override the config base path:
+
+```bash
+export VPROX_HOME=/opt/vprox
+# or
+vProx --home /opt/vprox
+```
+
+For the complete CLI flag reference, see [`CLI_FLAGS_GUIDE.md`](./CLI_FLAGS_GUIDE.md).
+
+## Security
+
+- Run vProx behind a TLS-terminating reverse proxy (nginx, Cloudflare).
+- Set `trusted_proxies` in chain config to restrict X-Forwarded-For trust to known CIDR ranges.
+- Keep vLog's `bind_address` set to `127.0.0.1` (the default).
+- Rotate API keys regularly.
+
+To report a vulnerability, see [`SECURITY.md`](./SECURITY.md).
+
+## Documentation
 
 | Document | Description |
-|---|---|
-| [`INSTALLATION.md`](./INSTALLATION.md) | Full install guide: build, configure, systemd, troubleshoot |
+|----------|-------------|
+| [`INSTALLATION.md`](./INSTALLATION.md) | Full install guide: build, configure, systemd, auth, observability |
 | [`MODULES.md`](./MODULES.md) | Module-by-module operations and configuration reference |
 | [`CLI_FLAGS_GUIDE.md`](./CLI_FLAGS_GUIDE.md) | Complete CLI flag reference with examples |
 | [`docs/UPGRADE.md`](./docs/UPGRADE.md) | Upgrade guide (v0.x → v1.x migration notes) |
 | [`CHANGELOG.md`](./CHANGELOG.md) | Version history |
+| [`SECURITY.md`](./SECURITY.md) | Security policy and vulnerability reporting |
 
-## 📄 License
+## Contributing
+
+Contributions are welcome. Please:
+
+1. Open an issue describing the change before submitting a PR.
+2. Ensure `make build` and `go test ./...` pass.
+3. Maintain test coverage above the 60% gate.
+4. Follow existing code style; `golangci-lint` runs on every PR.
+
+## License
 
 Apache-2.0. See [`LICENSE`](./LICENSE).

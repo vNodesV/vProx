@@ -16,8 +16,9 @@ This guide covers building, installing, and configuring vProx from source on a L
 - [Geo Database](#geo-database)
 - [Systemd Service](#systemd-service)
 - [Running vProx](#running-vprox)
-- [Installing vLog](#installing-vlog)
+- [Observability](#observability)
 - [Upgrading](#upgrading)
+- [Installing vLog](#installing-vlog)
 - [Troubleshooting](#troubleshooting)
 
 ---
@@ -89,7 +90,7 @@ This runs the following steps in order:
 
 1. **validate-go** — Confirms `GOROOT` and `GOPATH` are set and prints the Go version.
 2. **dirs** — Creates the runtime directory tree under `$HOME/.vProx/` (idempotent).
-3. **geo** — Decompresses `ip2l/ip2location.mmdb.gz` → `$HOME/.vProx/data/geolocation/ip2location.mmdb`.
+3. **geo** — Decompresses `assets/geo/ip2location.mmdb.gz` → `$HOME/.vProx/data/geolocation/ip2location.mmdb`.
 4. **config** — Copies `config/chains/chain.sample.toml` and creates `config/ports.toml` if missing; installs `backup.sample.toml`.
 5. **env** — Creates `$HOME/.vProx/.env` with default values if missing.
 6. **binary** — Builds and installs to `$GOPATH/bin/vProx`. Prompts (y/n) to create a symlink at `/usr/local/bin/vProx`.
@@ -225,21 +226,27 @@ vhost = false   # Enable rpc.<host>, api.<host> subdomains
 
 ## Geo Database
 
-The IP2Location MMDB provides country and ASN enrichment for log lines. It is bundled in the repo as a compressed archive (`ip2l/ip2location.mmdb.gz`, 6.8 MB) and decompressed during `make install` to:
+The IP2Location MMDB provides country and ASN enrichment for log lines. It is bundled in the repo as a compressed archive (`assets/geo/ip2location.mmdb.gz`, 6.8 MB) and decompressed during `make install` to:
 
 ```
 $HOME/.vProx/data/geolocation/ip2location.mmdb
 ```
 
-If the database is missing at runtime, geo enrichment is silently disabled — all other proxy functionality continues normally.
-
-To provide an alternative or updated database:
+To install or update the database separately (no sudo required):
 
 ```bash
-# Set explicit path in .env:
+make geo
+```
+
+If the database is missing at runtime, geo enrichment is silently disabled — all other proxy functionality continues normally.
+
+To use an alternative or updated database, set the path in `.env`:
+
+```bash
+# Override with a custom IP2Location database:
 IP2LOCATION_MMDB=/path/to/your/ip2location.mmdb
 
-# Or use GeoLite2 fallback:
+# Or use GeoLite2 as a fallback:
 GEOLITE2_COUNTRY_DB=/path/to/GeoLite2-Country.mmdb
 GEOLITE2_ASN_DB=/path/to/GeoLite2-ASN.mmdb
 ```
@@ -327,6 +334,60 @@ For the complete flag reference, see [`CLI_FLAGS_GUIDE.md`](./CLI_FLAGS_GUIDE.md
 
 ---
 
+## Observability
+
+### Prometheus metrics (`/metrics`)
+
+vProx exposes a Prometheus-compatible metrics endpoint at `/metrics` on the main listen port. The following 8 metrics are exported:
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `vprox_requests_total` | Counter | `method`, `route`, `status_code` | Total proxied HTTP requests |
+| `vprox_active_connections` | Gauge | — | Currently active proxy connections |
+| `vprox_request_duration_seconds` | Histogram | `method`, `route` | Proxy request latency distribution |
+| `vprox_proxy_errors_total` | Counter | `route`, `error_type` | Proxy errors (`backend_error`, `request_build_error`, `unknown_host`) |
+| `vprox_rate_limit_hits_total` | Counter | — | Requests that received a 429 response |
+| `vprox_geo_cache_hits_total` | Counter | — | Geo lookup cache hits |
+| `vprox_geo_cache_misses_total` | Counter | — | Geo lookup cache misses |
+| `vprox_backup_events_total` | Counter | `status` | Backup lifecycle events (`started`, `completed`, `failed`) |
+
+Example Prometheus scrape configuration:
+
+```yaml
+scrape_configs:
+  - job_name: "vprox"
+    scrape_interval: 15s
+    static_configs:
+      - targets: ["localhost:3000"]
+```
+
+### Health check (`/healthz`)
+
+The `/healthz` endpoint returns a JSON object with server status and uptime:
+
+```json
+{
+  "status": "ok",
+  "uptime": "2h15m30s"
+}
+```
+
+Returns HTTP 200 when healthy, HTTP 503 when a subsystem has failed. Use this endpoint for load balancer health checks and uptime monitoring.
+
+### pprof debug server
+
+When the `VPROX_DEBUG=1` environment variable is set, vProx starts a separate pprof HTTP server on port 6060 (default). This exposes Go runtime profiling data at the standard `/debug/pprof/` paths.
+
+```bash
+VPROX_DEBUG=1 vProx start
+# Then in another terminal:
+go tool pprof http://localhost:6060/debug/pprof/heap
+```
+
+> **Warning**: The pprof server exposes internal runtime state. Never expose port 6060 publicly. It runs on a separate port specifically to prevent accidental exposure through the main proxy port.
+
+---
+
 ## Upgrading
 
 1. Pull the latest code:
@@ -388,16 +449,44 @@ auto_enrich    = true
 
 ### Dashboard authentication (optional)
 
-By default the dashboard is open with no login. To enable password protection, generate a bcrypt hash and add it to `vlog.toml`:
+By default the vLog dashboard is open with no login required. To enable password protection, generate a bcrypt password hash and configure it in `vlog.toml`.
+
+**Why bcrypt?** Bcrypt is a one-way hash — the plaintext password is never stored. The cost factor (12) means each hash verification takes ~250ms. This is intentional: it rate-limits brute-force attacks even if the hash file is compromised. Bcrypt is the OWASP-recommended algorithm for password storage, and Cost=12 is their minimum recommended work factor.
+
+**Generating the hash with `htpasswd`:**
+
+The `htpasswd` utility ships with the `apache2-utils` package (Debian/Ubuntu) or `httpd-tools` (RHEL/Fedora). We use only its bcrypt output format (`-B` flag) — Apache itself is not required. It is the most widely available CLI tool for generating bcrypt hashes on Linux and macOS.
 
 ```bash
-# Requires apache2-utils
+# Install htpasswd (Debian/Ubuntu)
 sudo apt install apache2-utils
 
+# Generate bcrypt hash
 htpasswd -nbBC 12 admin yourpassword | cut -d: -f2
 ```
 
-Paste the output (the `$2y$12$...` string) into `vlog.toml`:
+Flag breakdown:
+
+| Flag | Purpose |
+|------|---------|
+| `-n` | Print output to stdout (don't write to a file) |
+| `-b` | Read the password from the command line argument |
+| `-B` | Use bcrypt algorithm (not MD5 or SHA) |
+| `-C 12` | Bcrypt cost factor 12 (~250ms per hash; OWASP minimum recommendation) |
+
+The `cut -d: -f2` strips the `admin:` username prefix, leaving only the `$2y$12$...` hash string.
+
+**Alternative if `htpasswd` is unavailable:**
+
+```bash
+python3 -c "import bcrypt; print(bcrypt.hashpw(b'yourpassword', bcrypt.gensalt(rounds=12)).decode())"
+```
+
+Requires the `bcrypt` Python package (`pip3 install bcrypt`).
+
+**Configure the hash in `vlog.toml`:**
+
+Paste the hash into the `[vlog.auth]` block:
 
 ```toml
 [vlog.auth]
@@ -405,7 +494,34 @@ username      = "admin"
 password_hash = "$2y$12$..."   # paste hash here
 ```
 
-Restart vLog for the change to take effect. Set `password_hash = ""` to disable authentication.
+Restart vLog for the change to take effect.
+
+> **Security note**: If `password_hash` is empty or the `[vlog.auth]` block is absent, authentication is bypassed entirely. This is a convenience for development — always set a password hash in production.
+
+### vLog API key
+
+The `/api/v1/ingest` endpoint is a machine-to-machine (M2M) call — vProx pushes log data to vLog after each backup, not a browser user. API keys are the correct auth pattern for M2M communication: stateless, no session cookie overhead, and easy to rotate independently of user credentials.
+
+**Generate a secure key:**
+
+```bash
+openssl rand -hex 32
+```
+
+**Set the key in `vlog.toml`:**
+
+```toml
+[vlog]
+api_key = "your-generated-key-here"
+```
+
+**How vProx uses it:** When `vlog_url` is configured in `config/ports.toml`, vProx sends the API key in the `X-API-Key` header when POSTing to `/api/v1/ingest` after `--new-backup`. See [vProx integration](#vprox-integration) below.
+
+> **Note**: The API key protects only the ingest endpoint. Block/unblock actions and other dashboard operations from the vLog web UI use session authentication (login), not the API key.
+
+### Block and unblock
+
+The accounts page in the vLog dashboard provides block/unblock controls for individual IP addresses. These actions require only an active login session — no API key is needed from the browser UI. If dashboard authentication is disabled (no `password_hash` set), block/unblock is available without login.
 
 ### Run
 
@@ -424,13 +540,13 @@ Proxy vLog behind Apache with IP restriction (admin-only). See `.vscode/vlog.apa
 
 ### vProx integration
 
-To enable automatic ingest after each vProx backup, add to `$VPROX_HOME/config/ports.toml`:
+To enable automatic ingest after each vProx backup, add to `$HOME/.vProx/config/ports.toml`:
 
 ```toml
 vlog_url = "http://localhost:8889"
 ```
 
-vProx will POST to `$VLOG_URL/api/v1/ingest` after `--new-backup`. Non-fatal if vLog is unavailable.
+When `vlog_url` is set, vProx POSTs to `/api/v1/ingest` with the `X-API-Key` header after each `--new-backup`. Ensure the key matches the `api_key` value in `vlog.toml` (see [vLog API key](#vlog-api-key)). The call is non-fatal — if vLog is unavailable, vProx continues normally.
 
 ---
 

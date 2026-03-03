@@ -7,7 +7,7 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [v1.2.0] — 2026-03-01
+## [v1.2.0] — 2026-03-03
 
 This release ships **vProx v1.2.0** and **vLog v1.0.0** together as **vProxVL v1.2.0**.
 
@@ -31,12 +31,23 @@ This release ships **vProx v1.2.0** and **vLog v1.0.0** together as **vProxVL v1
 
 ### Added — vProx v1.2.0
 
+- **vLog dashboard authentication** — bcrypt (Cost=12) + session tokens; configurable via `[vlog.auth]` in `vlog.toml`; optional (backward compatible)
+- **Prometheus metrics** — `/metrics` endpoint with 8 metrics: request counters, active connections, duration histogram, proxy errors, rate-limit hits, geo cache hit/miss, backup events
+- **Health endpoint** — `/healthz` returns JSON status + uptime; 503 on subsystem failure
+- **pprof debug server** — separate port, `VPROX_DEBUG=1` only
+- **GeoIP MMDB bundled** — `assets/geo/ip2location.mmdb.gz` ships with repo; `make geo` installs to `~/.vProx/data/geolocation/`
+- **golangci-lint CI** — 14 linters enforced on every PR
+- **Coverage gate** — CI fails if test coverage drops below 60%
+- **Release workflow** — automated cross-compilation for linux/darwin × amd64/arm64
 - Chain log auto-discovery: `--new-backup` auto-includes all `*.log` files from `data/logs/` (except `main.log`); per-chain logs included without manual declaration
 - vLog push hook: vProx POSTs to `vlog_url` after `--new-backup` (non-fatal if vLog unreachable)
 - Typed request IDs: `RPC{24HEX}`, `API{24HEX}`, `REQ{24HEX}` stamped on every proxied request (vhost + alias routes included)
 
 ### Changed — vProx v1.2.0
 
+- `internal/` packages extracted from `cmd/vprox/main.go`: `config`, `counter`, `logging`, `metrics`
+- `ip2l/` folder renamed to `assets/geo/` (conventional asset directory)
+- vLog block/unblock no longer requires API key from browser UI (session auth sufficient)
 - **Chain config format refactored** (`config/chains/*.toml`):
   - `msg = bool` split into `msg_rpc = bool` and `msg_api = bool` (independent per-service banner control)
   - `[aliases]` sub-table removed; replaced by flat top-level `rpc_aliases`, `rest_aliases`, `api_aliases` string arrays
@@ -50,6 +61,14 @@ This release ships **vProx v1.2.0** and **vLog v1.0.0** together as **vProxVL v1
 
 ### Fixed — vProx v1.2.0
 
+- **SEC-H3**: XFF trust scoped to configured CIDR ranges; untrusted XFF headers ignored
+- **SEC-M4**: WebSocket origin enforcement (same-origin by default; configurable)
+- **SEC-M6**: Admin state sweep removed from auto-refresh path
+- **SEC-L1**: SQL LIKE metacharacter escaping in vLog search
+- **SEC-L4**: Security policy header removed from proxy responses
+- **CR-2**: Backup nil pointer panic on missing file
+- **CR-6**: Geo DB mutex-guarded nil assignment
+- **CR-8**: `time.Tick` replaced with `time.NewTicker` (no goroutine leak)
 - Request ID missing on vhost-mode and alias routes (api.*, grpc) — now always assigned before log
 - REST probe path stripped `/api/` prefix incorrectly — now probes `/cosmos/base/tendermint/v1beta1/node_info` directly
 - Banner (`rpc_msg`) injected even when `msg = false` — root cause: injection gated on `InjectRPCIndex` only, ignoring `Msg` flag; now fully decoupled
