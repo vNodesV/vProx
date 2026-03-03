@@ -49,6 +49,9 @@ jobs:
       - name: Test with coverage
         run: go test -coverprofile=coverage.out -covermode=atomic ./...
 
+      - name: Benchmark smoke run
+        run: go test -bench=. -benchtime=1x -run=^$ ./internal/...
+
       - name: Coverage gate (≥60%)
         run: |
           COVERAGE=$(go tool cover -func=coverage.out | grep '^total:' | awk '{print $NF}' | tr -d '%')
