@@ -57,7 +57,17 @@ performance claim is benchmarked, every recommendation is trade-off-aware.
 - **Web GUI** (P4 planned): embedded admin dashboard via `html/template` + `go:embed` + htmx; single-binary, zero JS framework
 - **vProxWeb expansion** (next): replace Apache/nginx with embedded Go webserver — HTTP listener, TLS cert management, reverse proxy, static file serving
 
-### vLog (module — v1.1.0 branch `vLog/v1.1.0`, targeting v1.2.0 release)
+### push module (`internal/push/` — shipped on `vLog/v1.2.0` branch)
+- **Purpose**: centralized control plane — vProx SSHes to validator VMs to execute bash scripts
+- **Architecture**: vApp cut; scripts migrated to `vProx/scripts/chains/{chain}/{component}/{script}.sh`
+- **Packages**: `config/` (vms.toml loader), `ssh/` (dispatcher, `x/crypto/ssh`), `runner/` (remote bash via SSH), `state/` (SQLite: deployments + registered_chains), `status/` (Cosmos RPC poller: height, gov, upgrade plan), `api/` (HTTP handlers)
+- **VM registry**: `config/push/vms.toml` — per-VM: name, host, port, user, key_path, datacenter, [[chain]] list
+- **SSH key**: dedicated push→VM key (separate from `id.file`); sudoers NOPASSWD on VMs for script execution
+- **Script path**: `~/vProx/scripts/chains/{chain}/{component}/{script}.sh` (VMs clone vProx)
+- **API routes**: `GET /api/v1/push/vms`, `GET /api/v1/push/chains`, `POST /api/v1/push/deploy`, `GET /api/v1/push/deployments`, `POST /api/v1/push/chains/registered`, `DELETE /api/v1/push/chains/registered/{chain}`
+- **Dashboard**: Phase B deployed (Deploy Wizard + Chain Status Table panels on vLog dashboard)
+
+### vLog (module — `vLog/v1.2.0` branch, active)
 - **Binary**: standalone `vLog` — mirrors vProx architecture (single binary, embedded HTTP server, Apache-proxied)
 - **Purpose**: log archive analyzer with CRM-like IP accounts, security intelligence, and query UI
 - **Database**: SQLite via `modernc.org/sqlite` (pure Go, no CGO, WAL mode)
@@ -89,14 +99,49 @@ All CRITICAL/HIGH findings from the 2026-03-01 audit applied in `70a46db` + `a1e
 
 **P2/P3 Remaining (not blocking release):** CR-2, CR-6, CR-8, SEC-H3, SEC-M4, SEC-M6, SEC-L1–L4. Full list in `agents/projects/vprox.state.md`.
 
-### Cosmos SDK node context (upstream knowledge)
-- **Cosmos SDK v0.50.14** — proxied upstream protocol knowledge
-- **CometBFT v0.38.19** — RPC/WS endpoint patterns
-- **IBC-go v8.7.0** — REST routes awareness
+### Cosmos SDK node context (upstream knowledge + proxy intelligence)
+- **Cosmos SDK v0.50.14** — proxied upstream; full module system + upgrade/gov/evidence REST knowledge
+- **CometBFT v0.38.19** — RPC/WS endpoint patterns; subscription limits; WS ping period ~27s
+- **IBC-go v8.7.0** — REST routes; `/channels` has no built-in pagination → DoS risk; enforce page size at proxy
 - **CosmWasm wasmvm v2.2.1** — contract query patterns
 
-### Rust / CosmWasm
-- CosmWasm contracts where applicable
+#### Cosmos SDK hidden gems (proxy intelligence, researched 2026-03-03)
+| Pattern | Endpoint | Proxy Action |
+|---------|----------|-------------|
+| **Liveness vs status** | `/health` (200 OK, zero cost) vs `/status` (full state) | Route health checks to `/health`; poll `/status` only for sync detection |
+| **Sync detection** | `/status` → `sync_info.catching_up` bool | Exclude `catching_up=true` nodes from query routing |
+| **Upgrade halt** | `/cosmos/upgrade/v1beta1/current_plan` → `Plan.Height` | Cache with 60s TTL; when `latest_block >= Plan.Height`, pre-failover validator |
+| **Module versions** | `/cosmos/upgrade/v1beta1/module_versions` | Detect version mismatches across node pool after upgrades |
+| **Mempool health** | `/num_unconfirmed_txs` → `Count`, `TotalBytes` | Route broadcasts away from overloaded nodes; use as DoS canary |
+| **tx_commit circuit breaker** | `broadcast_tx_commit` blocks on event subscription | If node hits `max_subscription_clients` (default 100), fall back to `broadcast_tx_sync` |
+| **IBC DoS** | `/ibc/core/channel/v1/channels` — no pagination, unbounded | Enforce proxy-side page size; route to dedicated query nodes; canary for latency |
+| **ABCI cost split** | `abci_query?prove=true` (merkle proof, expensive) vs `prove=false` (cheap) | Route `prove=true` to query-only replicas |
+| **Dump consensus expensive** | `/dump_consensus_state` — marshals all peer states | Rate-limit to 1 req/min per IP at proxy level; never cache |
+| **WS subscription limits** | `max_subscription_clients=100`, `max_subscriptions_per_client=5` | Pool WS connections; queue/reject excess subscriptions gracefully |
+| **WS ping period** | CometBFT default: 27s | Proxy WS keepalive must flush within 27s or client disconnects |
+| **Evidence slashing** | `/cosmos/evidence/v1beta1/evidence` | Monitor growth; spike = validator double-sign or node issues |
+| **gRPC reflection** | `grpc.reflection.v1.ServerReflection` | Block or auth-gate; leaks full proto schema |
+| **Governance cost** | `/cosmos/gov/v1/proposals/{id}/votes` | Paginate; can return unbounded results → timeout |
+| **Config sanitization** | Error messages leak `MaxSubscriptionClients`, mempool limits | Return generic "service unavailable" at proxy; never forward node error details |
+
+### Phase E CLI commands (planned, `vLog/v1.2.0` branch)
+- **`vProx mod [list|add|update|remove] --name mod@version`**: `internal/modules/` package + `config/modules.toml` state; `mod add vLog@v1.2.0` → git fetch + build + install binary + systemd service
+- **`vProx push [hosts|vms|add|update|remove]`**: CLI layer over `internal/push/`; `push add --chain akash --type validator --host qc-vm-01 --mainnet`; `push update [--host]` → SSH apt upgrade
+- **`vProx chain [status|upgrade --prop N]`**: `internal/chain/upgrade/` package; fetches proposal via REST → name/halt-height/binary URL; manages binary swap at halt; tracks in push SQLite
+
+### Cosmos SDK hidden gems (proxy intelligence — researched 2026-03-03)
+Key patterns for proxy-level intelligence:
+- **`/health`** (zero-cost liveness) vs **`/status`** (full state, sync detection via `catching_up`)
+- **`/cosmos/upgrade/v1beta1/current_plan`** — cache 60s; pre-failover at `block_height ≥ Plan.Height`
+- **`/num_unconfirmed_txs`** — mempool health; route broadcasts away from overloaded nodes
+- **`broadcast_tx_commit`** circuit breaker — falls back to `broadcast_tx_sync` when node hits `max_subscription_clients=100`
+- **IBC `/channels`** — no built-in pagination → DoS vector; enforce page size at proxy layer
+- **`/dump_consensus_state`** — most expensive RPC; rate-limit to 1/min/IP at proxy level
+- **WS subscription limits**: `max_subscription_clients=100`, `max_subscriptions_per_client=5`; pool at proxy
+- **WS ping period**: CometBFT default ~27s; proxy WS keepalive must be < this
+- **`abci_query?prove=true`** (merkle proof, expensive) — route to query-only replicas; `prove=false` is cheap
+- **gRPC reflection** endpoint — block/auth-gate; leaks full proto schema
+- Full table in Cosmos SDK node context section above
 
 ### Data Science (PhD level)
 - Statistics, ML/AI, data pipelines, experiment design

@@ -51,14 +51,15 @@
 | Skill | Depth | Notes |
 |-------|-------|-------|
 | Cosmos SDK v0.50.x | 4 | Module system, keeper, ante handlers, ABCI |
-| CometBFT v0.38 | 3 | Consensus, mempool, RPC, P2P |
-| IBC-go v8.x | 3 | Channels, packets, light clients |
+| CometBFT v0.38 | 4 | Consensus, mempool, RPC, P2P; WS subscription limits (100/5), ping period ~27s |
+| IBC-go v8.x | 4 | Channels, packets, light clients; `/channels` DoS risk (no pagination), proxy enforcement |
 | CosmWasm v2.x | 4 | Contract patterns, migrations, gas optimization |
-| Protobuf / gRPC | 3 | .proto design, buf tooling, gRPC-gateway |
-| Tendermint RPC | 4 | Endpoints, websocket subscription, JSONRPC |
-| Cosmos REST/API | 4 | REST routes, pagination, protobuf JSON |
-| Chain upgrade flow | 3 | Software upgrade proposals, handler registration |
+| Protobuf / gRPC | 3 | .proto design, buf tooling, gRPC-gateway; reflection endpoint leaks schema |
+| Tendermint RPC | 4 | Endpoints, WS subscription/JSONRPC; `/health` vs `/status` routing; expensive: `/dump_consensus_state` |
+| Cosmos REST/API | 4 | REST routes, pagination, protobuf JSON; gov/evidence/upgrade module patterns |
+| Chain upgrade flow | 4 | Software upgrade proposals; `/current_plan` proxy caching + halt-height failover pattern |
 | State compatibility | 4 | Backward-compatible store migrations |
+| Cosmos proxy intelligence | 4 | ABCI `prove=true` routing, `broadcast_tx_commit` circuit breaker, mempool health via RPC, WS pool mgmt |
 
 ---
 
@@ -363,6 +364,35 @@
 
 ---
 
+## 17. UI/UX Design Systems
+
+| Skill | Depth | Notes |
+|-------|-------|-------|
+| CSS design tokens | 4 | `--var-*` system, dark/light theme switching, token inheritance — production in vLog Matrix [V] |
+| Glass morphism UI | 4 | `backdrop-filter:blur()`, translucent bg, glow borders — production in vLog cards |
+| Viewport-fill backgrounds | 4 | `background-size:100% 100% fixed`, `body::before` overlay pattern — production in vLog |
+| Sticky footer (flex) | 4 | `flex-direction:column` + `main{flex:1}` — production in vLog base.html |
+| Session auth UX | 4 | Login page (standalone, no base.html dep), `HttpOnly`/`SameSite` cookie, bcrypt, HMAC session — production vLog auth |
+| CSS animations | 3 | `@keyframes`, spinner rings (`probe-spinner`), transition timing |
+| Responsive layout | 3 | CSS Grid, flexbox, media queries (700px breakpoint), per-page controls |
+
+---
+
+## 18. Infrastructure Deployment Management
+
+| Skill | Depth | Notes |
+|-------|-------|-------|
+| SSH dispatcher (Go) | 4 | `golang.org/x/crypto/ssh` client; dedicated key per service; `exec.Command` alternative for remote ops; production in `internal/push/ssh/` |
+| Remote script execution | 4 | SSH channel exec, stdout/stderr capture, exit code handling, timeout via context; `~/vProx/scripts/chains/{chain}/{component}/{script}.sh` pattern |
+| VM registry management | 3 | TOML-based VM inventory (vms.toml); per-VM: host, port, user, key_path, datacenter, chain list |
+| Validator chain operations | 4 | Node/validator/provider/relayer component types; chain script layout (`scripts/chains/{chain}/{component}/{script}.sh`); akash patterns |
+| Chain status polling | 3 | Cosmos RPC height + gov + upgrade plan polling; stale-node detection |
+| Deployment tracking (SQLite) | 3 | `deployments` + `registered_chains` tables; deployment history; upgrade state machine |
+| Module management | 3 | `internal/modules/` pattern; git fetch + `go build` + binary install + service restart automation |
+| Chain upgrade automation | 4 | `/current_plan` polling → halt-height detection → binary pre-download → swap at halt → snapshot → service restart |
+
+---
+
 | Area | Current | Target | Notes |
 |------|---------|--------|-------|
 | GPU computing (CUDA) | 1 | 2 | Not required for vProx now |
@@ -383,7 +413,7 @@
 
 ```
 Go Systems:           ████████████████████ 4/4
-Cosmos SDK (context): ████████████████     3.5/4  (upstream protocol knowledge)
+Cosmos SDK (context): ████████████████████ 4/4  (proxy intelligence: /health routing, upgrade detection, IBC DoS, WS pooling)
 Rust/CosmWasm:        ████████████████     3.5/4
 Statistics:           ████████████████████ 4/4
 Machine Learning:     ████████████████     3.5/4
@@ -400,10 +430,12 @@ AI Agent Design:      ███████████████████�
 Web Server Eng:       ████████████████████ 4/4
 Web Service Arch:     ████████████████████ 4/4
 Web GUI Eng:          ████████████████     3/4    (architecture selected, implementation pending)
-Log Analysis & Intel: ████████████         3/4    (production: accounts UI, SSE intel handlers, archive ingestion)
+Log Analysis & Intel: ████████████████████ 4/4  (production: auth, Matrix theme, SSE intel, accounts, ingestion, vLog v1.2.0)
+UI/UX Design Systems: ████████████████████ 4/4  (CSS tokens, glass morphism, viewport-fill, sticky footer, session auth UX — production)
+Infrastructure Deploy:████████████         3/4    (SSH dispatcher, VM registry, chain scripts — active; Phase E CLI planned)
 ```
 
 ---
 
 *Skills are living documentation. Update this file when capabilities change or new domains are acquired.*
-*Last updated: 2026-03-01 (rev12: §5 auth 3→4, UFW 3→4, new entries: rate limiter hardening, error response hygiene, concurrent HTTP handler safety; §5 input validation +io.LimitReader/SSRF guard; §14 SSE depth 3→4 + concurrency safety note; §15 WS proxying hardening notes; capability index security note updated)*
+*Last updated: 2026-03-03 (rev14: §2 Cosmos SDK CometBFT 3→4 + IBC 3→4 + proxy intelligence row added; §17 UI/UX Design Systems CONFIRMED present; §18 Infrastructure Deployment Management NEW; §19 capability index: Cosmos SDK 3.5→4, Log Analysis 3→4, UI/UX 4/4, Infra Deploy 3/4 added; Last-updated timestamp refreshed)*

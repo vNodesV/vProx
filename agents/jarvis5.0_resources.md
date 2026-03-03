@@ -64,6 +64,19 @@
 | CometBFT RPC | https://docs.cometbft.com/v0.38/rpc | Full RPC API |
 | Cosmos REST API | https://cosmos.github.io/cosmos-rest-api | REST API reference |
 
+### 2b. Cosmos SDK Hidden Gems (Proxy Intelligence — researched 2026-03-03)
+| Resource | URL | Notes |
+|----------|-----|-------|
+| CometBFT config.go | https://github.com/cometbft/cometbft/blob/v0.38.x/config/config.go | `max_open_connections`, `max_subscription_clients`, `max_subscriptions_per_client` defaults |
+| CometBFT WS handler | https://github.com/cometbft/cometbft/blob/v0.38.x/rpc/jsonrpc/server/ws_handler.go | WS ping period, write wait, buffer sizing |
+| CometBFT RPC routes | https://github.com/cometbft/cometbft/blob/v0.38.x/rpc/core/routes.go | `Cacheable()` markers; expensive vs cheap route classification |
+| Cosmos upgrade proto | https://github.com/cosmos/cosmos-sdk/blob/main/proto/cosmos/upgrade/v1beta1/query.proto | `/current_plan`, `/applied_plan/{name}`, `/module_versions` |
+| IBC channel proto | https://github.com/cosmos/ibc-go/blob/main/proto/ibc/core/channel/v1/query.proto | `/channels` (no pagination — DoS risk), `packet_commitments`, `unreceived_packets` |
+| gRPC reflection | https://github.com/cosmos/cosmos-sdk/tree/main/server/grpc/reflection | Reflection endpoint; leaks proto schema — consider auth-gate |
+| CometBFT mempool | https://github.com/cometbft/cometbft/blob/v0.38.x/rpc/core/mempool.go | `num_unconfirmed_txs`, `broadcast_tx_commit` subscription blocking |
+| Cosmos gov v1 proto | https://github.com/cosmos/cosmos-sdk/blob/main/proto/cosmos/gov/v1/query.proto | Proposal/votes/tally endpoints; votes can be unbounded |
+| CometBFT ABCI query | https://github.com/cometbft/cometbft/blob/v0.38.x/rpc/core/abci.go | `prove=true` (merkle, expensive) vs `prove=false` (cheap) |
+
 ---
 
 ## 3. Statistics & Data Science
@@ -540,4 +553,16 @@ resources css         → Section 15 (CSS custom props, glass morphism, backgrou
 
 ---
 
-*Last updated: 2026-03-02 (rev13: §15 CSS & Dashboard UI — Pico dark mode, CSS custom props, backdrop-filter, glass morphism, background-size refs added; §16 Session Auth NEW — bcrypt, crypto/rand, cookie flags, OWASP session management; Quick Domain Lookup updated)*
+## 17. Infrastructure Deployment & SSH (vProx push module)
+
+| Resource | URL | Notes |
+|----------|-----|-------|
+| golang.org/x/crypto/ssh | https://pkg.go.dev/golang.org/x/crypto/ssh | SSH client — production in `internal/push/ssh/` |
+| SSH authorized_keys format | https://man.openbsd.org/sshd.8#AUTHORIZED_KEYS_FILE_FORMAT | Key options, from= restriction, command= restriction |
+| CometBFT `/status` sync_info | https://docs.cometbft.com/v0.38/rpc/#/Info/status | `catching_up` bool; `latest_block_height`; used for node health routing |
+| Cosmos upgrade API | https://docs.cosmos.network/api#tag/Upgrade | `/current_plan`, `/applied_plan`, `/module_versions` — upgrade automation |
+| gobreaker (circuit breaker) | https://github.com/sony/gobreaker | Circuit breaker for `broadcast_tx_commit` fallback pattern |
+
+---
+
+*Last updated: 2026-03-03 (rev14: §2b Cosmos SDK Hidden Gems NEW — WS limits, upgrade detection, IBC DoS patterns, ABCI cost split, mempool health; §17 Infrastructure Deployment NEW — SSH, sync detection, upgrade API, circuit breaker; Cosmos SDK depth 3.5→4 across CometBFT+IBC; Quick Domain Lookup updated)*

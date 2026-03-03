@@ -1082,3 +1082,56 @@ runner.go constant `scriptBase` must be updated to `~/vProx/scripts/chains`.
   Priority order: pe-push-cmd (trivial, wraps existing) → pe-mod-pkg+cmd → pe-chain-pkg+cmd
   Then: migrate akash scripts from vApp → vProx/scripts/chains/akash/
   Then: update runner.go scriptBase constant
+
+---
+
+## Session: 2026-03-03 — agentupgrade rev14 + Cosmos SDK research
+
+### Branch: `vLog/v1.2.0` | HEAD: `9c13843`
+
+### agentupgrade rev14 — Files Patched
+
+| File | Changes |
+|------|---------|
+| `.github/agents/jarvis5.0.agent.md` | push module scope added (internal/push/ layout, API routes, Phase B dashboard); Phase E CLI plan (mod/push/chain subcommands); Cosmos SDK hidden gems table (15 entries); Cosmos SDK node context expanded from 4 bullets to full proxy intelligence table |
+| `agents/jarvis5.0_skills.md` | §2 Cosmos SDK: CometBFT 3→4, IBC 3→4, proxy intelligence row added; §18 Infrastructure Deployment Management NEW (8 skills: SSH dispatcher, remote exec, VM registry, chain ops, status polling, SQLite tracking, module mgmt, chain upgrade automation); capability index: Cosmos SDK 3.5→4, Log Analysis 3→4, UI/UX 4/4, Infra Deploy 3/4 |
+| `agents/jarvis5.0_resources.md` | §2b Cosmos SDK Hidden Gems NEW (9 refs: CometBFT config/WS/routes, upgrade proto, IBC channel proto, gRPC reflection, mempool RPC, gov proto, ABCI query); §17 Infrastructure Deployment NEW (SSH, sync detection, upgrade API, circuit breaker); last-updated timestamp |
+| `agents/base.agent.md` | 9 new patterns: push/SSH, Cosmos /health vs /status, upgrade pre-failover, IBC /channels DoS, broadcast_tx_commit circuit breaker, WS subscription pooling, ABCI prove= routing, dump_consensus_state rate limit |
+| `.github/agents/reviewer.agent.md` | 6 new security criteria: push SSH dedicated key, push script path allowlist, IBC pagination enforcement, upgrade detection caching; push module added to module awareness |
+| `agents/jarvis5.0_state.md` | rev14 history entry added |
+
+### Cosmos SDK Hidden Gems (researched 2026-03-03, proxy-actionable)
+
+| Pattern | Endpoint/Config | Priority |
+|---------|----------------|----------|
+| Liveness check | `/health` (zero cost) vs `/status` | **Use immediately** for health probes |
+| Sync detection | `/status` → `sync_info.catching_up` | Route queries away from lagging nodes |
+| Upgrade halt detection | `/cosmos/upgrade/v1beta1/current_plan` | Cache 60s; pre-failover at halt-height |
+| Mempool health | `/num_unconfirmed_txs` | Route broadcasts away from overloaded nodes |
+| tx_commit circuit breaker | `broadcast_tx_commit` + `max_subscription_clients=100` | Fall back to tx_sync on overload |
+| IBC DoS guard | `/ibc/core/channel/v1/channels` (no pagination) | Enforce page size at proxy; critical |
+| ABCI cost routing | `abci_query?prove=true` (expensive) vs `prove=false` | Route prove=true to query replicas |
+| WS subscription pooling | `max_subscription_clients=100`, ping ~27s | Pool proxy-side; queue/reject excess |
+| dump_consensus_state | Most expensive RPC; live peer state | Rate-limit 1/min/IP; never cache |
+| gRPC reflection | `grpc.reflection.v1.ServerReflection` | Auth-gate or block; leaks proto schema |
+| Evidence monitoring | `/cosmos/evidence/v1beta1/evidence` | Monitor growth; spike = validator issue |
+| Config sanitization | Error messages leak node limits | Return generic "service unavailable" |
+| Module versions | `/cosmos/upgrade/v1beta1/module_versions` | Post-upgrade version mismatch detection |
+| Gov vote cost | `/cosmos/gov/v1/proposals/{id}/votes` | Unbounded; enforce pagination proxy-side |
+| WS ping period | CometBFT default ~27s (9/10 of read wait) | Proxy keepalive must flush < 27s |
+
+### Future Enhancement Ideas (from Cosmos research)
+- **Smart routing**: route `prove=true` ABCI queries to query-only replicas automatically (vProx chain-type detection)
+- **Upgrade monitor**: vLog + vProx poll `/current_plan` + surface countdown to halt-height on dashboard
+- **IBC canary**: track `/channels` response time as DoS health indicator
+- **Mempool circuit**: integrate `/num_unconfirmed_txs` into vProx routing decisions (overloaded node avoidance)
+- **WS subscription budget**: track per-node subscription count; proxy-level pooling to stay under 100
+- **Governance watch**: poll proposal status; surface governance alerts in vLog dashboard
+
+### Open Follow-ups (reconciled, unchanged)
+- Phase E CLI: `pe-push-cmd` → `pe-mod-pkg/cmd` → `pe-chain-pkg/cmd`
+- Migrate akash scripts from vApp → `scripts/chains/akash/`; update `runner.go` `scriptBase`
+- P2/P3 security findings: CR-2, CR-6, CR-8, SEC-H3, SEC-M4, SEC-M6, SEC-L1–L4
+- PR: `vLog/v1.2.0` → `develop` → `main`
+- Release tag: `vProxVL-v1.2.0`
+
