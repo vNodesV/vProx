@@ -40,10 +40,24 @@ GOPATH_BIN := $(GOPATH)/bin
 _TOOLCHAIN_GOROOT := $(shell find $(GOPATH)/pkg/mod/golang.org -maxdepth 1 -name 'toolchain@*' 2>/dev/null | sort -V | tail -1)
 EFFECTIVE_GOROOT  := $(if $(_TOOLCHAIN_GOROOT),$(_TOOLCHAIN_GOROOT),$(GOROOT))
 
-.PHONY: all validate-go dirs geo config config-push config-vlog config-modules \
-        build build-vlog install clean systemd service-vlog ufw-vlog
+.PHONY: all install clean ufw help \
+        validate-go dirs geo config config-push config-vlog config-modules \
+        build build-vlog systemd service-vlog
 
-all: install
+all: help
+
+## ─── Public targets ──────────────────────────────────────────────────────────
+
+help:
+	@echo ""
+	@echo "  vProx / vLog — available targets"
+	@echo ""
+	@echo "  make install          Full install: vProx + vLog, config, systemd"
+	@echo "  make add-<module>     Reinstall one module  (e.g. make add-vLog)"
+	@echo "  make clean            Remove local build artifacts"
+	@echo "  make ufw              Passwordless UFW sudoers for vLog block/unblock"
+	@echo ""
+
 install: validate-go dirs geo config config-vlog config-push config-modules env
 
 ## Validate Go environment
@@ -212,6 +226,29 @@ install:
 		echo "✓ Skipped symlinks. Run binaries from $(GOPATH_BIN)/"; \
 	fi
 	@echo ""
+
+## Reinstall a single module — make add-vLog | make add-vProx
+
+add-%: validate-go dirs
+	@case "$*" in \
+	  vLog|vlog) \
+	    GOROOT="$(EFFECTIVE_GOROOT)" go build -o "$(GOPATH_BIN)/$(VLOG_NAME)" "$(VLOG_SRC)"; \
+	    echo "✓ $(VLOG_NAME) → $(GOPATH_BIN)/$(VLOG_NAME)"; \
+	    $(MAKE) config-vlog; \
+	    $(MAKE) service-vlog; \
+	    ;; \
+	  vProx|vprox) \
+	    GOROOT="$(EFFECTIVE_GOROOT)" go build -o "$(GOPATH_BIN)/$(APP_NAME)" "$(BUILD_SRC)"; \
+	    echo "✓ $(APP_NAME) → $(GOPATH_BIN)/$(APP_NAME)"; \
+	    $(MAKE) systemd; \
+	    ;; \
+	  *) \
+	    echo "ERROR: Unknown module '$*'"; \
+	    echo "       Available: vProx  vLog"; \
+	    exit 1; \
+	    ;; \
+	esac
+
 ## Clean local build artifacts (never touches installed binary)
 
 clean:
@@ -390,7 +427,7 @@ service-vlog:
 ## ─── UFW passwordless setup for vLog ─────────────────────────────────────────
 
 ## Set up passwordless UFW block/unblock for vLog
-ufw-vlog:
+ufw:
 	@SUDOERS_FILE="/etc/sudoers.d/vlog"; \
 	SUDOERS_LINE="$(USER) ALL=(ALL) NOPASSWD: /usr/sbin/ufw deny from *, /usr/sbin/ufw delete deny from *"; \
 	if [[ -f "$$SUDOERS_FILE" ]]; then \
