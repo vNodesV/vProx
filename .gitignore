@@ -32,7 +32,7 @@ Temporary Items
 *.dll
 *.so
 *.dylib
-vProx
+/vProx
 
 # Local build output (optional `make build`)
 .build/
@@ -95,5 +95,5 @@ ip2l/ip2location.mmdb
 *.sqlite
 
 # Built binaries
-vprox
-vlog
+/vprox
+/vlog
