@@ -700,3 +700,21 @@ border-radius: 3px;
 .chain-dot-warn   { color: #ffa726; }
 .chain-dot-err    { color: #ef4444; }
 .chain-dot-unknown{ color: #6b7280; }
+
+/* ── Chain Status Table ───────────────────────────────────── */
+#chain-status-panel table td,
+#chain-status-panel table th {
+  padding: .22rem .35rem;
+  border-bottom: 1px solid var(--vn-border);
+  white-space: nowrap;
+}
+#chain-status-panel table tbody tr:hover {
+  background: rgba(0,255,65,.04);
+}
+
+/* ── Deploy Wizard ────────────────────────────────────────── */
+#wizard-panel select:disabled { opacity: .38; cursor: not-allowed; }
+#wizard-panel select { background: var(--vn-bg); color: var(--vn-text); border: 1px solid var(--vn-border); border-radius: 4px; padding: .25rem .4rem; }
+#wizard-panel input[type=checkbox] { accent-color: var(--vn-green); }
+#wiz-deploy-btn:not(:disabled) { background: var(--vn-green); color: #000; font-weight: 600; border: none; border-radius: 4px; cursor: pointer; }
+#wiz-deploy-btn:disabled { opacity: .35; cursor: not-allowed; }

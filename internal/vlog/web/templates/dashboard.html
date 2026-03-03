@@ -132,12 +132,71 @@
 </div>
 
 <!-- VALIDATORS / CHAIN STATUS panel -->
-<div class="chart-block" style="margin-bottom:1.5rem;">
-  <div class="chart-header" style="margin-bottom:0.5rem;">
-    <strong style="font-size:.9rem;">⛓ Validator Nodes</strong>
-    <button id="btn-reload-validators" onclick="loadValidators()" style="padding:.15rem .65rem;font-size:.8rem;margin-left:.75rem;">↻ Refresh</button>
+<div class="chart-row" style="margin-bottom:1.5rem">
+
+  <!-- LEFT: Deploy Wizard -->
+  <div class="chart-block">
+    <div class="chart-header">
+      <strong style="font-size:.9rem;">🚀 Deploy</strong>
+      <button id="wiz-reset-btn" onclick="resetWizard()" style="padding:.15rem .65rem;font-size:.8rem;margin-left:.75rem;" disabled>↺ Reset</button>
+    </div>
+    <div id="wizard-panel" style="padding:.5rem 0">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem .75rem;align-items:end">
+        <div>
+          <label style="font-size:.75rem;opacity:.7;display:block;margin-bottom:.2rem">Chain</label>
+          <select id="wiz-chain" onchange="wizChainChange()" style="width:100%;font-size:.82rem">
+            <option value="">— chain —</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:.75rem;opacity:.7;display:block;margin-bottom:.2rem">Service</label>
+          <select id="wiz-component" onchange="wizComponentChange()" disabled style="width:100%;font-size:.82rem">
+            <option value="">— service —</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:.75rem;opacity:.7;display:block;margin-bottom:.2rem">Datacenter</label>
+          <select id="wiz-dc" onchange="wizDCChange()" disabled style="width:100%;font-size:.82rem">
+            <option value="">— datacenter —</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:.75rem;opacity:.7;display:block;margin-bottom:.2rem">VM</label>
+          <select id="wiz-vm" onchange="wizVMChange()" disabled style="width:100%;font-size:.82rem">
+            <option value="">— vm —</option>
+          </select>
+        </div>
+      </div>
+      <div style="margin-top:.65rem;display:flex;align-items:center;gap:.75rem">
+        <label style="font-size:.8rem;display:flex;align-items:center;gap:.35rem;cursor:pointer">
+          <input type="checkbox" id="wiz-dry-run"> Dry Run
+        </label>
+        <button id="wiz-deploy-btn" disabled onclick="wizDeploy()" style="padding:.25rem .9rem;font-size:.82rem">Deploy</button>
+      </div>
+      <div id="wizard-result" style="margin-top:.5rem;font-size:.78rem;min-height:1.2rem"></div>
+    </div>
   </div>
-  <div id="validator-panel" class="chain-cards-wrap"></div>
+
+  <!-- RIGHT: Chain Status Table -->
+  <div class="chart-block">
+    <div class="chart-header">
+      <strong style="font-size:.9rem;">⛓ Chain Status</strong>
+      <button onclick="loadChainStatus()" style="padding:.15rem .65rem;font-size:.8rem;margin-left:.75rem;">↻ Refresh</button>
+    </div>
+    <div id="chain-status-panel" style="overflow-x:auto;max-height:220px;font-size:.78rem"></div>
+    <details style="margin-top:.6rem">
+      <summary style="cursor:pointer;font-size:.78rem;opacity:.65">+ Add Chain to Monitor</summary>
+      <div style="display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.4rem;align-items:center">
+        <input id="add-chain-name" placeholder="chain" style="width:7rem;font-size:.8rem">
+        <input id="add-chain-rpc"  placeholder="rpc_url :26657" style="width:13rem;font-size:.8rem">
+        <input id="add-chain-rest" placeholder="rest_url :1317 (opt)" style="width:13rem;font-size:.8rem">
+        <input id="add-chain-note" placeholder="note" style="width:8rem;font-size:.8rem">
+        <button onclick="addChain()" style="padding:.2rem .7rem;font-size:.8rem">Add</button>
+      </div>
+      <div id="add-chain-result" style="font-size:.78rem;margin-top:.25rem;min-height:1rem"></div>
+    </details>
+  </div>
+
 </div>
 
 <section>
@@ -312,62 +371,237 @@
   window.loadChart    = loadChart;
   window.loadEndpoints = loadEndpoints;
 
-  // ── Validators / Chain Status panel ─────────────────────────────────────
-  function loadValidators() {
-    var panel = document.getElementById('validator-panel');
-    if (!panel) return;
-    panel.innerHTML = '<p style="padding:.4rem;opacity:.6">Loading…</p>';
-    fetch(BASE + '/api/v1/chains')
+  // ── Deploy Wizard ────────────────────────────────────────────────────────
+  var wizVMs = [];   // raw VMs from /api/v1/push/vms
+
+  function initWizard() {
+    fetch(BASE + '/api/v1/push/vms')
       .then(function(r) { return r.json(); })
       .then(function(data) {
-        if (!data.configured) {
-          panel.innerHTML = '<p style="padding:.4rem;opacity:.5;font-size:.8rem">vdeploy not configured — set <code>vdeploy_url</code> in vlog.toml to enable.</p>';
-          return;
-        }
-        var chains = data.chains;
-        if (!chains || chains.length === 0) {
-          panel.innerHTML = '<p style="padding:.4rem;opacity:.5;font-size:.8rem">No chains configured in vdeploy.</p>';
-          return;
-        }
-        // Render skeleton cards, then hydrate each with status.
-        panel.innerHTML = chains.map(function(c) {
-          return '<div class="chain-card" id="chain-card-' + escH(c) + '">' +
-            '<div class="chain-card-name">' + escH(c) + '</div>' +
-            '<div class="chain-card-status" id="chain-status-' + escH(c) + '">' +
-            '<span class="chain-dot chain-dot-unknown">●</span> Loading…</div>' +
-            '</div>';
-        }).join('');
-        // Hydrate each card.
-        chains.forEach(function(c) { fetchChainStatus(c); });
+        wizVMs = data.vms || [];
+        var chains = [];
+        wizVMs.forEach(function(vm) {
+          (vm.chains || []).forEach(function(ch) {
+            if (chains.indexOf(ch.name) < 0) chains.push(ch.name);
+          });
+        });
+        var sel = document.getElementById('wiz-chain');
+        chains.sort().forEach(function(c) {
+          var o = document.createElement('option'); o.value = c; o.textContent = c;
+          sel.appendChild(o);
+        });
       })
-      .catch(function() {
-        panel.innerHTML = '<p style="padding:.4rem;color:#ef4444;font-size:.8rem">Failed to reach vdeploy API.</p>';
-      });
+      .catch(function() {/* push not configured — wizard stays empty */});
   }
 
-  function fetchChainStatus(chain) {
-    var el = document.getElementById('chain-status-' + chain);
-    if (!el) return;
-    fetch(BASE + '/api/v1/chains/' + encodeURIComponent(chain))
+  function wizChainChange() {
+    var chain = document.getElementById('wiz-chain').value;
+    var compSel = document.getElementById('wiz-component');
+    var dcSel   = document.getElementById('wiz-dc');
+    var vmSel   = document.getElementById('wiz-vm');
+    [compSel, dcSel, vmSel].forEach(function(s) { s.innerHTML = '<option value="">—</option>'; s.disabled = true; });
+    document.getElementById('wiz-deploy-btn').disabled = true;
+    document.getElementById('wiz-reset-btn').disabled = false;
+    document.getElementById('wizard-result').textContent = '';
+    if (!chain) return;
+    // Collect unique components from VMs that have this chain.
+    var comps = [];
+    wizVMs.forEach(function(vm) {
+      (vm.chains || []).forEach(function(ch) {
+        if (ch.name === chain) (ch.components || []).forEach(function(cp) {
+          if (comps.indexOf(cp) < 0) comps.push(cp);
+        });
+      });
+    });
+    comps.sort().forEach(function(c) {
+      var o = document.createElement('option'); o.value = c; o.textContent = c; compSel.appendChild(o);
+    });
+    compSel.disabled = false;
+  }
+
+  function wizComponentChange() {
+    var chain = document.getElementById('wiz-chain').value;
+    var comp  = document.getElementById('wiz-component').value;
+    var dcSel = document.getElementById('wiz-dc');
+    var vmSel = document.getElementById('wiz-vm');
+    [dcSel, vmSel].forEach(function(s) { s.innerHTML = '<option value="">—</option>'; s.disabled = true; });
+    document.getElementById('wiz-deploy-btn').disabled = true;
+    if (!comp) return;
+    var dcs = [];
+    wizVMs.forEach(function(vm) {
+      (vm.chains || []).forEach(function(ch) {
+        if (ch.name === chain && (ch.components || []).indexOf(comp) >= 0) {
+          if (dcs.indexOf(vm.datacenter) < 0) dcs.push(vm.datacenter);
+        }
+      });
+    });
+    dcs.sort().forEach(function(d) {
+      var o = document.createElement('option'); o.value = d; o.textContent = d; dcSel.appendChild(o);
+    });
+    dcSel.disabled = false;
+  }
+
+  function wizDCChange() {
+    var chain = document.getElementById('wiz-chain').value;
+    var comp  = document.getElementById('wiz-component').value;
+    var dc    = document.getElementById('wiz-dc').value;
+    var vmSel = document.getElementById('wiz-vm');
+    vmSel.innerHTML = '<option value="">—</option>'; vmSel.disabled = true;
+    document.getElementById('wiz-deploy-btn').disabled = true;
+    if (!dc) return;
+    wizVMs.forEach(function(vm) {
+      if (vm.datacenter !== dc) return;
+      (vm.chains || []).forEach(function(ch) {
+        if (ch.name === chain && (ch.components || []).indexOf(comp) >= 0) {
+          var o = document.createElement('option');
+          o.value = vm.name; o.textContent = vm.name + ' (' + vm.host + ')'; vmSel.appendChild(o);
+        }
+      });
+    });
+    vmSel.disabled = false;
+  }
+
+  function wizVMChange() {
+    document.getElementById('wiz-deploy-btn').disabled =
+      !document.getElementById('wiz-vm').value;
+  }
+
+  function resetWizard() {
+    ['wiz-chain','wiz-component','wiz-dc','wiz-vm'].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) { el.value = ''; if (id !== 'wiz-chain') { el.innerHTML = '<option value="">—</option>'; el.disabled = true; } }
+    });
+    document.getElementById('wiz-deploy-btn').disabled = true;
+    document.getElementById('wiz-reset-btn').disabled = true;
+    document.getElementById('wizard-result').textContent = '';
+  }
+
+  function wizDeploy() {
+    var chain = document.getElementById('wiz-chain').value;
+    var comp  = document.getElementById('wiz-component').value;
+    var vm    = document.getElementById('wiz-vm').value;
+    var dry   = document.getElementById('wiz-dry-run').checked;
+    if (!chain || !comp || !vm) return;
+    var btn = document.getElementById('wiz-deploy-btn');
+    var res = document.getElementById('wizard-result');
+    btn.disabled = true; btn.textContent = 'Dispatching…';
+    res.textContent = '';
+    // Map component to install script name.
+    var script = comp === 'node' ? 'install' : comp === 'validator' ? 'create_key' :
+                 comp === 'provider' ? 'install' : comp === 'relayer' ? 'install' : 'install';
+    fetch(BASE + '/api/v1/push/deploy', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({vm: vm, chain: chain, component: comp, script: script, dry_run: dry})
+    })
       .then(function(r) { return r.json(); })
       .then(function(d) {
-        var node = d.node;
-        if (!node) {
-          el.innerHTML = '<span class="chain-dot chain-dot-warn">●</span> Node unreachable';
-          return;
-        }
-        var dotCls = node.synced ? 'chain-dot-ok' : 'chain-dot-warn';
-        var label  = node.synced ? 'Synced' : 'Syncing';
-        el.innerHTML =
-          '<span class="chain-dot ' + dotCls + '">●</span> ' + label +
-          ' <span class="chain-height">#' + Number(node.height).toLocaleString() + '</span>';
+        btn.disabled = false; btn.textContent = 'Deploy';
+        res.style.color = '#4caf50';
+        res.textContent = 'Deployment #' + d.deployment_id + ' dispatched — status: ' + d.status;
       })
       .catch(function() {
-        el.innerHTML = '<span class="chain-dot chain-dot-err">●</span> Error';
+        btn.disabled = false; btn.textContent = 'Deploy';
+        res.style.color = '#ef4444'; res.textContent = 'Dispatch failed.';
       });
   }
 
-  window.loadValidators = loadValidators;
+  window.resetWizard = resetWizard;
+  window.wizChainChange = wizChainChange;
+  window.wizComponentChange = wizComponentChange;
+  window.wizDCChange = wizDCChange;
+  window.wizVMChange = wizVMChange;
+  window.wizDeploy = wizDeploy;
+
+  // ── Chain Status Table ───────────────────────────────────────────────────
+  function loadChainStatus() {
+    var panel = document.getElementById('chain-status-panel');
+    if (!panel) return;
+    panel.innerHTML = '<p style="padding:.4rem;opacity:.6;font-size:.8rem">Loading…</p>';
+    fetch(BASE + '/api/v1/push/chains')
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        var chains = data.chains;
+        if (!chains || chains.length === 0) {
+          panel.innerHTML = '<p style="padding:.4rem;opacity:.5;font-size:.78rem">No chains configured — add a VM in vms.toml or use "Add Chain" below.</p>';
+          return;
+        }
+        var rows = chains.map(function(c) {
+          var dot = c.node_status === 'synced' ? 'chain-dot-ok' :
+                    c.node_status === 'syncing' ? 'chain-dot-warn' : 'chain-dot-err';
+          var height = c.height ? Number(c.height).toLocaleString() : '—';
+          var earliest = c.earliest_height ? Number(c.earliest_height).toLocaleString() : '—';
+          var props = c.active_proposals > 0 ?
+            '<span style="color:#ffa726">⚠ '+c.active_proposals+'</span>' : '—';
+          var upg = c.upgrade_pending ?
+            '<span style="color:#ef5350" title="'+escH(c.upgrade_name)+' @ '+c.upgrade_height+'">⬆ '+escH(c.upgrade_name)+'</span>' : '—';
+          var estTime = c.upgrade_est_utc ? escH(c.upgrade_est_utc.replace('T',' ').replace('Z',' UTC')) : '—';
+          var latestTime = c.latest_block_time ? escH(c.latest_block_time.replace ? c.latest_block_time.slice(0,19).replace('T',' ') : '') : '—';
+          var rmBtn = c.rpc_url ? '' :
+            '<button onclick="removeChain(\''+escH(c.chain)+'\')" style="padding:.1rem .4rem;font-size:.72rem;background:transparent;border:1px solid #ef5350;color:#ef5350;cursor:pointer">✕</button>';
+          return '<tr><td><span class="chain-dot '+dot+'">●</span> '+escH(c.chain)+'</td>' +
+            '<td style="text-align:center">'+escH(c.node_status||'—')+'</td>' +
+            '<td style="text-align:right;font-variant-numeric:tabular-nums">'+height+'</td>' +
+            '<td style="text-align:center">'+props+'</td>' +
+            '<td style="text-align:center">'+upg+'</td>' +
+            '<td style="text-align:center;white-space:nowrap">'+estTime+'</td>' +
+            '<td style="text-align:right;font-variant-numeric:tabular-nums">'+earliest+'</td>' +
+            '<td style="text-align:left;white-space:nowrap">'+latestTime+'</td>' +
+            '<td>'+rmBtn+'</td>' +
+            '</tr>';
+        }).join('');
+        panel.innerHTML =
+          '<table style="width:100%;border-collapse:collapse"><thead>' +
+          '<tr style="font-size:.72rem;opacity:.6;border-bottom:1px solid var(--vn-border)">' +
+          '<th style="text-align:left;padding:.2rem .35rem">Chain</th>' +
+          '<th style="padding:.2rem .35rem">Status</th>' +
+          '<th style="text-align:right;padding:.2rem .35rem">Height</th>' +
+          '<th style="padding:.2rem .35rem">Proposals</th>' +
+          '<th style="padding:.2rem .35rem">Upgrade</th>' +
+          '<th style="padding:.2rem .35rem">Est. UTC</th>' +
+          '<th style="text-align:right;padding:.2rem .35rem">Earliest</th>' +
+          '<th style="text-align:left;padding:.2rem .35rem">Latest Block</th>' +
+          '<th style="padding:.2rem .35rem"></th>' +
+          '</tr></thead><tbody>'+rows+'</tbody></table>';
+      })
+      .catch(function() {
+        panel.innerHTML = '<p style="padding:.4rem;color:#ef4444;font-size:.78rem">push module not configured or unreachable.</p>';
+      });
+  }
+
+  function addChain() {
+    var chain = document.getElementById('add-chain-name').value.trim();
+    var rpc   = document.getElementById('add-chain-rpc').value.trim();
+    var rest  = document.getElementById('add-chain-rest').value.trim();
+    var note  = document.getElementById('add-chain-note').value.trim();
+    var res   = document.getElementById('add-chain-result');
+    if (!chain || !rpc) { res.style.color='#ef4444'; res.textContent='chain and rpc_url required.'; return; }
+    fetch(BASE + '/api/v1/push/chains/registered', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({chain: chain, rpc_url: rpc, rest_url: rest, note: note})
+    })
+      .then(function(r) { return r.json(); })
+      .then(function() {
+        res.style.color = '#4caf50'; res.textContent = chain + ' added.';
+        ['add-chain-name','add-chain-rpc','add-chain-rest','add-chain-note'].forEach(function(id) {
+          var el = document.getElementById(id); if (el) el.value = '';
+        });
+        loadChainStatus();
+      })
+      .catch(function() { res.style.color='#ef4444'; res.textContent='Failed to add chain.'; });
+  }
+
+  function removeChain(chain) {
+    if (!confirm('Remove "'+chain+'" from monitoring?')) return;
+    fetch(BASE + '/api/v1/push/chains/registered/' + encodeURIComponent(chain), {method:'DELETE'})
+      .then(function() { loadChainStatus(); })
+      .catch(function() { alert('Failed to remove '+chain); });
+  }
+
+  window.loadChainStatus = loadChainStatus;
+  window.addChain        = addChain;
+  window.removeChain     = removeChain;
 
   // Lookup table: short node name → human label for tooltip.
   var nodeLabel = {
@@ -434,7 +668,8 @@
   loadChart('left');
   loadChart('right');
   loadEndpoints();
-  loadValidators();
+  initWizard();
+  loadChainStatus();
 })();
 </script>
 {{end}}
