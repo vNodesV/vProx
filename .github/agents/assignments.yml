@@ -1,0 +1,37 @@
+version: 2
+updated_at_utc: "2026-03-02T15:00:00Z"
+
+# Logical identities used for repository automation policy.
+# Note: these are policy identities; GitHub account provisioning must be done outside this repo.
+users:
+  - id: jarvis5.0
+    role: operator
+    agent_file: .github/agents/jarvis5.0.agent.md
+    skills_file: agents/jarvis5.0_skills.md
+    resources_file: agents/jarvis5.0_resources.md
+    state_file: agents/jarvis5.0_state.md
+    target: github-copilot
+    github_login: null
+    org: vNodes-Co
+  - id: jarvis5.0_vscode
+    role: operator
+    agent_file: .github/agents/jarvis5.0_vscode.agent.md
+    skills_file: agents/jarvis5.0_skills.md
+    resources_file: agents/jarvis5.0_resources.md
+    state_file: agents/jarvis5.0_vscode_state.md
+    target: vscode
+    github_login: null
+    org: vNodes-Co
+  - id: jarvisBoss
+    role: reviewer-approver
+    agent_file: .github/agents/reviewer.agent.md
+    github_login: jarvisBoss
+    org: vNodes-Co
+
+policy:
+  pull_request:
+    required_reviewer_ids:
+      - jarvisBoss
+  active_agents:
+    - jarvis5.0
+    - jarvis5.0_vscode

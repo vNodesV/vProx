@@ -316,7 +316,7 @@ Always specify `model:` in `task` calls. Parallelize when tasks are independent.
 | `load <project>` | Switch active project context |
 | `save` / `save state` | Append memory dump to active project state file |
 | `save new <project>` | Bootstrap new project state file |
-| `new` | Guided new project/repo initialization |
+| `new project` | Full new project onboarding: discovery (Q1–Q8) → research → team assembly → state bootstrap |
 | `model <task-type>` | Print recommended model for the task (e.g., `model arch`, `model build`, `model explore`) |
 | `skills [domain]` | Print skill tree (e.g., `skills go`, `skills ml`) |
 | `resources [domain]` | Print references (e.g., `resources go`, `resources security`) |
@@ -337,6 +337,235 @@ Always specify `model:` in `task` calls. Parallelize when tasks are independent.
 | `agents/projects/vprox.state.md` | vProx project memory (Copilot sessions) |
 | `agents/projects/vproxweb.vscode.state.md` | vProxWeb module project memory |
 | `.github/agents/reviewer.agent.md` | PR review quality gatekeeper |
+
+---
+
+## `new project` Protocol
+
+Triggered by `new project`. Fully interactive, research-driven onboarding flow that ends
+with a tailored team roster, role assignments, and a bootstrapped project state file.
+Run it completely before any code is written.
+
+---
+
+### STEP 1 — DISCOVERY (ask the human)
+
+Ask these questions **one at a time**. Wait for each answer before asking the next.
+Do NOT bundle them.
+
+```
+Q1. What is the project name or working title?
+
+Q2. Describe what this project does in 2–4 sentences.
+    (What problem does it solve? Who uses it? What does it produce?)
+
+Q3. What language(s), runtime(s), and key dependencies will it use?
+    (Or: "not sure yet" — I will research and propose)
+
+Q4. What already exists? (New from scratch / extends vProx / extends vLog / standalone)
+
+Q5. What are the top 3 things that must be true at launch?
+    (e.g., "must be secure", "must be fast", "must have a web UI", "must pass CI")
+
+Q6. What is the expected scale and deployment target?
+    (e.g., single-server daemon, embedded library, cloud service, CLI tool)
+
+Q7. Are there known security requirements or compliance concerns?
+    (e.g., auth required, external API calls, data persistence, public-facing)
+
+Q8. What is the target priority level?
+    (P0 blocking / P1 urgent / P2 normal / P3 backlog / exploratory)
+```
+
+Capture answers in a working brief:
+```
+PROJECT BRIEF
+─────────────
+Name:            <Q1>
+Description:     <Q2>
+Stack:           <Q3>
+Starting from:   <Q4>
+Launch criteria: <Q5>
+Scale/target:    <Q6>
+Security:        <Q7>
+Priority:        <Q8>
+```
+
+---
+
+### STEP 2 — RESEARCH
+
+Run ALL of the following in parallel before assembling the team:
+
+**2a. Technology research**
+- If stack is known: web_fetch / web_search for current best practices, known CVEs, Go module options.
+- If stack is unknown: propose 2–3 options with trade-off table; ask human to choose.
+
+**2b. Existing codebase scan**
+- `explore` sub-agent: "Does any existing code in vProx/vLog already solve or partially solve this?"
+- Check `go.mod` for relevant existing dependencies.
+- Check `agents/projects/*.state.md` for prior art or related work.
+
+**2c. Spike assessment**
+- Determine if any component requires a `technical-spike/research-technical-spike`:
+  - New external API integration → spike
+  - New protocol (gRPC, SSE, WS) → spike if not already in stack
+  - New storage backend → spike
+  - Performance-critical path → spike with benchmark design
+- If spikes needed: list them explicitly; they block implementation.
+
+**2d. Security threat model (preliminary)**
+- Identify attack surface from Q7 answers:
+  - Public-facing? → SSRF guard, input validation, auth required
+  - Data persistence? → SQLite schema review, injection prevention
+  - External APIs? → io.LimitReader, key storage, rate limiting
+  - Auth required? → bcrypt + HMAC session pattern (vLog precedent)
+
+**2e. Architecture assessment**
+- Flag if `se-system-architecture-reviewer` input is needed before design lock.
+- Flag if Well-Architected review is warranted (distributed, stateful, or security-critical).
+
+---
+
+### STEP 3 — TEAM ASSEMBLY
+
+Select agents from the full roster. For each chosen agent state **why** and in **which phase**.
+For each excluded agent state **why**.
+
+**Full agent roster to evaluate:**
+
+| Agent | Evaluate for |
+|-------|-------------|
+| `jarvis5.0` | Always included — primary implementor |
+| `jarvis5.0_vscode` | Include if local interactive debugging likely |
+| `reviewer` | Always included — PR gate |
+| `context-engineering/context-architect` | Include if multi-file changes span >3 files |
+| `technical-spike/research-technical-spike` | Include if any unproven technology |
+| `se-system-architecture-reviewer` | Include if distributed, stateful, or new module |
+| `se-security-reviewer` | Include if public-facing, auth, external APIs, or sensitive data |
+| `se-gitops-ci-specialist` | Include if new CI pipeline or deploy workflow needed |
+| `se-technical-writer` | Include if user-facing docs, CLI, or config changes |
+| `se-product-manager-advisor` | Include if GitHub issues/milestones/PRD needed |
+| `se-ux-ui-designer` | Include if web UI or CLI UX decisions involved |
+| `se-responsible-ai-code` | Include if ML inference, threat scoring, or AI-driven decisions |
+| `database-data-management/sql-optimization` | Include if SQLite or SQL queries involved |
+| `database-data-management/sql-code-review` | Include if any SQL/DB layer present |
+| `frontend-web-dev/playwright-explore-website` | Include if web UI present |
+| `frontend-web-dev/playwright-generate-test` | Include if web UI present |
+| `go-mcp-development/go-mcp-expert` | Include if MCP server/tool integration planned |
+| `awesome-copilot/meta-agentic-project-scaffold` | Include if new agent files needed |
+| `explore` sub-agent | Always included — fast research |
+| `task` sub-agent | Always included — build/test/lint |
+| `code-review` sub-agent | Always included — diff review |
+| `general-purpose` sub-agent | Include if complex multi-step subprocess tasks needed |
+
+Output the team as:
+
+```
+ASSEMBLED TEAM — <Project Name>
+═══════════════════════════════
+
+CORE (always active):
+  jarvis5.0              Primary implementor
+  reviewer               PR gate — blocks on security/correctness
+  explore                Fast research and codebase synthesis
+  task                   Build / test / lint execution
+  code-review            Diff-level review
+
+PRE-IMPLEMENTATION:
+  [agent]                [why selected / skipped]
+
+IMPLEMENTATION:
+  [agent]                [why selected / skipped]
+
+DATA LAYER:
+  [agent]                [why selected / skipped]
+
+TESTING:
+  [agent]                [why selected / skipped]
+
+QUALITY & SECURITY:
+  [agent]                [why selected / skipped]
+
+DELIVERY:
+  [agent]                [why selected / skipped]
+
+DESIGN:
+  [agent]                [why selected / skipped]
+
+NOT INCLUDED:
+  [agent]                [reason]
+```
+
+**Resource efficiency rules:**
+
+| Project size | Rule |
+|-------------|------|
+| Single-file / <100 LOC | jarvis5.0 + reviewer + task only. Skip all specialists. |
+| Small module, no DB/UI | Add context-architect. Skip sql-*, playwright-*, ux-ui. |
+| Module with DB | Add sql-optimization + sql-code-review. Skip playwright if no UI. |
+| Module with web UI | Add playwright-explore + playwright-generate + se-ux-ui-designer. |
+| Public-facing / auth | Add se-security-reviewer. Add technical-spike for any unproven auth pattern. |
+| New technology | Add technical-spike BEFORE anything else. Block implementation until spike completes. |
+| New CI/deploy pipeline | Add se-gitops-ci-specialist. |
+| User-facing docs | Add se-technical-writer. |
+| Strategic feature | Add se-product-manager-advisor for issue/PRD generation. |
+
+---
+
+### STEP 4 — PHASE WORKFLOW
+
+Generate a tailored workflow using only the selected agents:
+
+```
+PHASE 1 — PLAN
+  [selected pre-impl agents] — [what they do for this project]
+
+PHASE 2 — IMPLEMENT
+  [selected impl agents] — [what they do for this project]
+
+PHASE 3 — TEST
+  [selected test agents] — [what they do for this project]
+
+PHASE 4 — REVIEW
+  [selected review agents] — [what they do for this project]
+
+PHASE 5 — DELIVER
+  [selected delivery agents] — [what they do for this project]
+```
+
+For small/simple projects (single-file, no UI, no DB, no external APIs): collapse to 3 phases
+and skip agents that add no value — be explicit about the shortcuts and why they are safe.
+
+---
+
+### STEP 5 — CONFIRMATION & STATE BOOTSTRAP
+
+**5a. Confirm with human:**
+```
+Does this team and workflow look right?
+Anything to add, remove, or adjust before we start?
+```
+
+**5b. On confirmation:**
+
+1. Create `agents/projects/<project-name>.state.md` using `_template.state.md` as base.
+   Populate: name, description, stack, team roster, phase workflow, initial todos.
+
+2. Add new project to `agents/jarvis5.0_state.md` managed projects table.
+
+3. Update `agents/USERS.md` if new agent entries are needed (role, file, phase).
+
+4. Update `assignments.yml` with project entry and assigned agent IDs.
+
+5. Output first task dispatch:
+   ```
+   TASK: Bootstrap <project-name> — initial setup
+   CONTEXT: [project brief summary]
+   ACCEPTANCE: [launch criteria from Q5]
+   AGENTS: [phase 1 agents from assembled team]
+   PRIORITY: [from Q8]
+   ```
 
 ---
 
