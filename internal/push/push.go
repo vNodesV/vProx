@@ -131,3 +131,56 @@ func (s *Service) Runner() *runner.Runner { return s.runner }
 
 // FindVM looks up a VM by name.
 func (s *Service) FindVM(name string) *config.VM { return s.cfg.FindVM(name) }
+
+// BestVM returns the healthiest VM registered for chain.
+// Selection criteria (in priority order):
+//  1. Status == "synced" (not catching up)
+//  2. Highest block height (most up-to-date)
+//  3. First match (fallback)
+func (s *Service) BestVM(chain string) *config.VM {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var best *config.VM
+	var bestHeight int64
+
+	for i := range s.cfg.VMs {
+		vm := &s.cfg.VMs[i]
+		for _, ch := range vm.Chains {
+			if ch.Name != chain {
+				continue
+			}
+			// Candidate found — check its last polled status.
+			st := s.statuses[chain]
+			if best == nil {
+				best = vm
+				if st != nil {
+					bestHeight = st.Height
+				}
+				break
+			}
+			if st != nil && st.NodeStatus == "synced" {
+				if best == nil || st.Height > bestHeight {
+					best = vm
+					bestHeight = st.Height
+				}
+			}
+			break
+		}
+	}
+	return best
+}
+
+// RegisterVM adds or updates a VM entry in the in-memory config.
+// Callers are responsible for persisting vms.toml if desired.
+func (s *Service) RegisterVM(vm config.VM) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i, existing := range s.cfg.VMs {
+		if existing.Name == vm.Name {
+			s.cfg.VMs[i] = vm
+			return
+		}
+	}
+	s.cfg.VMs = append(s.cfg.VMs, vm)
+}

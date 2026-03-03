@@ -1058,6 +1058,24 @@ func main() {
 	restartSubcmd := false
 	stopSubcmd := false
 
+	// resolveHome scans args for --home <val> or --home=<val>, falling back to
+	// VPROX_HOME env and then ~/.vProx.
+	resolveHome := func(args []string) string {
+		for i, a := range args {
+			if a == "--home" && i+1 < len(args) {
+				return args[i+1]
+			}
+			if strings.HasPrefix(a, "--home=") {
+				return strings.TrimPrefix(a, "--home=")
+			}
+		}
+		if h := os.Getenv("VPROX_HOME"); h != "" {
+			return h
+		}
+		home, _ := os.UserHomeDir()
+		return filepath.Join(home, ".vProx")
+	}
+
 	// printHelp is defined early so it can be used before flag.Parse().
 	printHelp := func() {
 		out := flag.CommandLine.Output()
@@ -1067,6 +1085,9 @@ func main() {
 		fmt.Fprintln(out, "  start                   run in foreground, emit logs to stdout (journalctl friendly)")
 		fmt.Fprintln(out, "  stop                    stop the vProx.service daemon")
 		fmt.Fprintln(out, "  restart                 restart the vProx.service daemon")
+		fmt.Fprintln(out, "  push  <sub> [flags]     manage remote VMs and deployments")
+		fmt.Fprintln(out, "  mod   <sub> [flags]     manage vProx ecosystem modules")
+		fmt.Fprintln(out, "  chain <sub> [flags]     chain node status and upgrade tracking")
 		fmt.Fprintln(out, "")
 		fmt.Fprintln(out, "Flags:")
 		fmt.Fprintln(out, "  --addr string           listen address (default :3000)")
@@ -1113,6 +1134,15 @@ func main() {
 	case "stop":
 		stopSubcmd = true
 		rawArgs = rawArgs[1:]
+	case "push":
+		runPushCmd(resolveHome(rawArgs[1:]), rawArgs[1:])
+		os.Exit(0)
+	case "mod":
+		runModCmd(resolveHome(rawArgs[1:]), rawArgs[1:])
+		os.Exit(0)
+	case "chain":
+		runChainCmd(resolveHome(rawArgs[1:]), rawArgs[1:])
+		os.Exit(0)
 	default:
 		// Unknown bare word (not a flag) → error
 		if !strings.HasPrefix(rawArgs[0], "-") {

@@ -196,6 +196,62 @@ func (h *Handlers) HandleRegisteredChainDelete(w http.ResponseWriter, r *http.Re
 	writeJSON(w, http.StatusOK, map[string]string{"status": "removed", "chain": chain})
 }
 
+// ── POST /api/v1/push/register ────────────────────────────────────────────────
+
+type vmRegisterRequest struct {
+	Name       string `json:"name"`
+	Host       string `json:"host"`
+	Port       int    `json:"port"`
+	User       string `json:"user"`
+	KeyPath    string `json:"key_path"`
+	Datacenter string `json:"datacenter"`
+	Chains     []struct {
+		Name       string   `json:"name"`
+		RPCURL     string   `json:"rpc_url"`
+		RESTURL    string   `json:"rest_url"`
+		Components []string `json:"components"`
+	} `json:"chains"`
+}
+
+// HandleVMRegister handles POST /api/v1/push/register — VM self-registration.
+// A VM posts its own credentials and chain list so vProx can track and deploy to it.
+func (h *Handlers) HandleVMRegister(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req vmRegisterRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if req.Name == "" || req.Host == "" {
+		http.Error(w, "name and host required", http.StatusBadRequest)
+		return
+	}
+
+	vm := config.VM{
+		Name:       req.Name,
+		Host:       req.Host,
+		Port:       req.Port,
+		User:       req.User,
+		KeyPath:    req.KeyPath,
+		Datacenter: req.Datacenter,
+	}
+	for _, ch := range req.Chains {
+		vm.Chains = append(vm.Chains, config.VMChain{
+			Name:       ch.Name,
+			RPCURL:     ch.RPCURL,
+			RESTURL:    ch.RESTURL,
+			Components: ch.Components,
+		})
+	}
+
+	h.svc.RegisterVM(vm)
+	log.Printf("[push/api] VM %q registered from %s with %d chain(s)", req.Name, req.Host, len(req.Chains))
+	writeJSON(w, http.StatusOK, map[string]string{"status": "registered", "name": req.Name})
+}
+
 // ── helper ────────────────────────────────────────────────────────────────────
 
 func writeJSON(w http.ResponseWriter, code int, v any) {

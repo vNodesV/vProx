@@ -1,6 +1,6 @@
-// Package runner executes vDeploy bash scripts on remote VMs via SSH.
-// Scripts live at ~/vApp/modules/vDeploy/validators/chains/{chain}/{component}/{script}.sh
-// on every VM that was bootstrapped by vm_push (git_clones clones vApp).
+// Package runner executes chain bash scripts on remote VMs via SSH.
+// Scripts live at ~/vProx/scripts/chains/{chain}/{component}/{script}.sh
+// on every VM that has cloned the vProx repo.
 package runner
 
 import (
@@ -10,8 +10,8 @@ import (
 	pushssh "github.com/vNodesV/vProx/internal/push/ssh"
 )
 
-// vAppRoot is the path on remote VMs where vApp is cloned.
-const vAppRoot = "~/vApp/modules/vDeploy/validators"
+// scriptBase is the path on remote VMs where vProx scripts are cloned.
+const scriptBase = "~/vProx/scripts"
 
 // Result holds the output of a remote script execution.
 type Result struct {
@@ -39,7 +39,7 @@ func (r *Runner) Deploy(vm config.VM, chain, component, script string, dryRun bo
 	}
 	defer c.Close()
 
-	scriptPath := fmt.Sprintf("%s/chains/%s/%s/%s.sh", vAppRoot, chain, component, script)
+	scriptPath := fmt.Sprintf("%s/chains/%s/%s/%s.sh", scriptBase, chain, component, script)
 
 	var envStr string
 	for k, v := range env {
