@@ -953,3 +953,132 @@ password_hash = "$(htpasswd -nbBC 12 admin 'pass' | cut -d: -f2)"
 - **PR `vLog/v1.1.0` → `develop`** (34+ commits ahead — still pending)
 - **GitHub release `v1.2.0`**
 - Fix remaining P2/P3 audit findings (CR-2, CR-6, CR-8, SEC-H3, SEC-M4, SEC-M6, SEC-L1–L4)
+
+---
+
+## Session: 2026-03-03 — push module (vDeploy → vProx migration)
+
+### Architecture Decision
+vDeploy moves from `vApp/modules/vDeploy/` into vProx as `internal/push/`.
+Option C: centralized control plane — vProx SSHes to validator VMs to run bash scripts.
+Dedicated SSH key for push→VM connections (separate from id.file).
+
+### New Module Layout
+```
+internal/push/
+├── config/    — vms.toml loader + chain config discovery
+├── ssh/       — SSH dispatcher (x/crypto/ssh, already in go.mod)
+├── runner/    — remote bash script executor via SSH
+├── state/     — SQLite: deployments + registered_chains (modernc.org/sqlite in go.mod)
+├── status/    — Cosmos RPC poller (height, gov, upgrade plan)
+└── api/       — HTTP handlers wired into vlog web server
+config/push/vms.sample.toml  — VM registry schema
+cmd/push/main.go             — optional standalone CLI
+```
+
+### API Routes (replacing /api/v1/chains/* proxy)
+- GET  /api/v1/push/vms
+- GET  /api/v1/push/chains
+- GET  /api/v1/push/chains/{chain}
+- POST /api/v1/push/chains/registered
+- DELETE /api/v1/push/chains/registered/{chain}
+- POST /api/v1/push/deploy
+- GET  /api/v1/push/deployments
+
+### vm_push integration
+- Auto Go version selection (no interactive prompt — latest stable from go.dev/dl/)
+- Optional VM self-registration at end of makeInstall
+
+### Active Branch
+`vLog/v1.2.0` — HEAD: `91ba0d0` (feat: Validator Nodes panel — vdeploy proxy integration)
+Commits ahead of develop: 5
+
+### Pending Todos (Phase A)
+- pa-push-config, pa-push-ssh, pa-push-state, pa-push-status (ready — no deps)
+- pa-push-vms (ready), pa-push-runner (needs ssh+config), pa-push-api (needs runner+state+status)
+- pa-push-cleanup (needs api), pb-dash-deploy-wizard, pb-dash-chain-table
+
+### vApp bash scripts (stay in vApp, never move)
+vApp/modules/vDeploy/validators/chains/akash/{node,validator,provider,relayer}/*.sh
+vDeploy runs: `bash ~/vApp/modules/vDeploy/validators/chains/{chain}/{component}/{script}.sh`
+
+---
+
+## Session: 2026-03-03 — Architecture Pivot + CLI Expansion Plan
+
+### BREAKING CHANGE: vApp cut from the loop — everything in vProx
+
+**Previous:** bash scripts lived in `vApp/modules/vDeploy/validators/chains/...`; VMs cloned vApp.
+**New:** bash scripts live in `vProx/scripts/chains/{chain}/{component}/{script}.sh`.
+VMs clone vProx (already done on akash-jarvis). runner.go target path changes:
+
+```
+OLD: bash ~/vApp/modules/vDeploy/validators/chains/{chain}/{component}/{script}.sh
+NEW: bash ~/vProx/scripts/chains/{chain}/{component}/{script}.sh
+```
+
+vApp repo is no longer a dependency. vProx is the single source of truth for:
+- Reverse proxy (existing)
+- vLog module (cmd/vlog)
+- push module (internal/push)
+- Chain bash scripts (scripts/chains/)
+- CLI (cmd/vprox)
+
+### Akash bash scripts — migration needed
+Scripts currently in vApp/modules/vDeploy/validators/chains/akash/ must be
+copied/migrated to vProx/scripts/chains/akash/ in next session.
+runner.go constant `scriptBase` must be updated to `~/vProx/scripts/chains`.
+
+### New CLI command groups (Phase E)
+
+#### `vProx mod [list|add|update|remove] --name mod@version`
+- `mod add vLog@v1.2.0` → git fetch tag → `go build ./cmd/vlog` → install binary + systemd service
+- State: `config/modules.toml` — [[module]] name, version, bin_path, service_name, installed_at
+- New package: `internal/modules/` (build, install, service management)
+- CLI: `cmd/vprox/mod.go`
+
+#### `vProx push [hosts|vms|add|update|remove]`
+- CLI layer over existing `internal/push/` — no new packages needed
+- `push hosts/vms` → list from vms.toml
+- `push add --chain akash --type validator --host qc-vm-01 --mainnet`
+- `push update [--host qc-vm-01]` → SSH → `apt update && apt upgrade -y`
+- `push remove --chain akash --host qc-vm-01`
+- CLI: `cmd/vprox/push.go`
+
+#### `vProx chain [status|upgrade --prop N]`
+- `chain status [--chain akash]` → synced/syncing, height, proposals
+- `chain upgrade --chain akash --prop 123`:
+  1. Fetch proposal (REST) → name, halt-height, binary URL
+  2. Set halt-height in node config
+  3. Download new binary → `~/.vprox/data/chains/{chain}/upgraded_bin/{binary}`
+  4. At halt: pre-snapshot → move old to `~/go/bin/prev/{binary}_vX.X.X` → move new to `~/go/bin/{binary}` → start → post-snapshot
+  5. Track in push SQLite (upgrade_pending, upgrade_height, upgraded_at)
+- New package: `internal/chain/upgrade/`
+- CLI: `cmd/vprox/chain.go`
+
+### Phase E Todos (all pending)
+| id | title |
+|----|-------|
+| pe-mod-pkg | internal/modules package |
+| pe-mod-cmd | cmd/vprox mod subcommand |
+| pe-push-cmd | cmd/vprox push subcommand |
+| pe-chain-pkg | internal/chain upgrade package |
+| pe-chain-cmd | cmd/vprox chain subcommand |
+| pe-modules-toml | config/modules.toml schema |
+
+### Phase C/D Todos (still pending, updated scope)
+| id | title | note |
+|----|-------|------|
+| p4-multi-chain | Multi-chain scripts | Now in vProx/scripts/chains/ not vApp |
+| pc-vmpush-go-auto | vm_push Go auto-select | vm_push clones vProx now |
+| pc-vmpush-register | vm_push self-registration | same |
+
+### Active State
+- Branch: `vLog/v1.2.0`
+- HEAD: `9cc9d08` (Phase B dashboard — Deploy Wizard + Chain Status Table)
+- Ahead of origin: 2 commits (d640171, 9cc9d08)
+- Build: clean (`go build ./...`, `go vet ./...`, all tests pass)
+- Next session: start from vProx folder; implement Phase E CLI commands
+  Priority order: pe-push-cmd (trivial, wraps existing) → pe-mod-pkg+cmd → pe-chain-pkg+cmd
+  Then: migrate akash scripts from vApp → vProx/scripts/chains/akash/
+  Then: update runner.go scriptBase constant
