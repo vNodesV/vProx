@@ -20,7 +20,8 @@ SERVICE_DIR := $(VPROX_HOME)/service
 SERVICE_PATH := $(SERVICE_DIR)/vProx.service
 VLOG_SERVICE := $(SERVICE_DIR)/vLog.service
 GEO_DIR := $(DATA_DIR)/geolocation
-DIR_LIST := $(DATA_DIR) $(LOG_DIR) $(CFG_DIR) $(CFG_DIR)/chains $(CFG_DIR)/backup $(INTERNAL_DIR) $(ARCHIVE_DIR) $(SERVICE_DIR) $(GEO_DIR)
+DIR_LIST := $(DATA_DIR) $(LOG_DIR) $(CFG_DIR) $(CFG_DIR)/chains $(CFG_DIR)/backup \
+            $(CFG_DIR)/push $(CFG_DIR)/vlog $(INTERNAL_DIR) $(ARCHIVE_DIR) $(SERVICE_DIR) $(GEO_DIR)
 
 # GeoLocation database — bundled in assets/geo/, extracted to user data dir
 GEO_DB_SRC := assets/geo/ip2location.mmdb.gz
@@ -39,11 +40,11 @@ GOPATH_BIN := $(GOPATH)/bin
 _TOOLCHAIN_GOROOT := $(shell find $(GOPATH)/pkg/mod/golang.org -maxdepth 1 -name 'toolchain@*' 2>/dev/null | sort -V | tail -1)
 EFFECTIVE_GOROOT  := $(if $(_TOOLCHAIN_GOROOT),$(_TOOLCHAIN_GOROOT),$(GOROOT))
 
-.PHONY: all validate-go dirs geo config build install clean systemd env \
-        build-vlog install-vlog config-vlog service-vlog ufw-vlog
+.PHONY: all validate-go dirs geo config config-push config-vlog config-modules \
+        build build-vlog install clean systemd service-vlog ufw-vlog
 
 all: install
-install: validate-go dirs geo config env
+install: validate-go dirs geo config config-vlog config-push config-modules env
 
 ## Validate Go environment
 
@@ -120,7 +121,7 @@ env:
 
 ## Copy chain sample config to user's chains directory
 
-config: dirs
+config: dirs config-push config-modules
 	@echo "Installing sample chain configuration..."
 	@if [[ -f "config/chains/chain.sample.toml" ]]; then \
 		cp "config/chains/chain.sample.toml" "$(CFG_DIR)/chains/chain.sample.toml"; \
@@ -153,6 +154,34 @@ config: dirs
 		echo "✓ $(CFG_DIR)/backup/backup.toml already exists"; \
 	fi
 
+## Install push VM registry stub (activates push module in vLog)
+
+config-push:
+	@mkdir -p "$(CFG_DIR)/push"
+	@if [[ ! -f "$(CFG_DIR)/push/vms.toml" ]]; then \
+		if [[ -f "config/push/vms.sample.toml" ]]; then \
+			cp "config/push/vms.sample.toml" "$(CFG_DIR)/push/vms.toml"; \
+			echo "✓ Installed push config → $(CFG_DIR)/push/vms.toml"; \
+		else \
+			printf '# vms.toml — push VM registry\n# Add VMs with: vprox push add\n# Push module activates automatically when this file exists.\n' \
+				> "$(CFG_DIR)/push/vms.toml"; \
+			echo "✓ Created empty push config → $(CFG_DIR)/push/vms.toml"; \
+		fi \
+	else \
+		echo "✓ $(CFG_DIR)/push/vms.toml already exists"; \
+	fi
+
+## Install modules registry stub
+
+config-modules:
+	@if [[ ! -f "$(CFG_DIR)/modules.toml" ]]; then \
+		printf '# modules.toml — managed module registry\n# Use: vprox mod add <chain> <component>\n' \
+			> "$(CFG_DIR)/modules.toml"; \
+		echo "✓ Created modules registry → $(CFG_DIR)/modules.toml"; \
+	else \
+		echo "✓ $(CFG_DIR)/modules.toml already exists"; \
+	fi
+
 ## Build binary
 
 build:
@@ -162,25 +191,25 @@ build:
 	@echo "✓ Build complete"
 	@echo "  Output: $(BUILD_OUT)"
 
-## Install to GOPATH/bin and symlink to /usr/local/bin
-##
-## Note: this builds directly to GOPATH/bin and does not write a compiled binary into the repo directory.
+## Install vProx + vLog to GOPATH/bin and optional /usr/local/bin symlinks
 
 install:
-	@echo "Installing $(APP_NAME)..."
-# 	mkdir -p "$(GOPATH_BIN)"
+	@echo "Building $(APP_NAME) + $(VLOG_NAME)..."
 	GOROOT="$(EFFECTIVE_GOROOT)" go build -o "$(GOPATH_BIN)/$(APP_NAME)" "$(BUILD_SRC)"
+	GOROOT="$(EFFECTIVE_GOROOT)" go build -o "$(GOPATH_BIN)/$(VLOG_NAME)" "$(VLOG_SRC)"
+	@echo "✓ $(APP_NAME) → $(GOPATH_BIN)/$(APP_NAME)"
+	@echo "✓ $(VLOG_NAME) → $(GOPATH_BIN)/$(VLOG_NAME)"
 	@echo ""
-	@echo "The next step will create a symlink to /usr/local/bin/$(APP_NAME) which may require sudo permissions. If you do not have sudo access, you can add $(GOPATH_BIN) to your PATH instead."
-	@read -p "Do you want to create the symlink (y/n) " -n 1 -r; echo ""; \
+	@echo "The next step creates symlinks at /usr/local/bin/{$(APP_NAME),$(VLOG_NAME)} and may require sudo."
+	@read -p "Create symlinks? (y/n) " -n 1 -r; echo ""; \
 	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
 		sudo ln -sf "$(GOPATH_BIN)/$(APP_NAME)" "/usr/local/bin/$(APP_NAME)"; \
-		echo "✓ Symlink created at /usr/local/bin/$(APP_NAME)"; \
-		$(MAKE) dirs; \
+		sudo ln -sf "$(GOPATH_BIN)/$(VLOG_NAME)" "/usr/local/bin/$(VLOG_NAME)"; \
+		echo "✓ Symlinks created at /usr/local/bin/{$(APP_NAME),$(VLOG_NAME)}"; \
 		$(MAKE) systemd; \
+		$(MAKE) service-vlog; \
 	else \
-		echo "✓ Skipped symlink creation. You can run $(APP_NAME) using $(GOPATH_BIN)/$(APP_NAME) or add $(GOPATH_BIN) to your PATH."; \
-		$(MAKE) dirs; \
+		echo "✓ Skipped symlinks. Run binaries from $(GOPATH_BIN)/"; \
 	fi
 	@echo ""
 ## Clean local build artifacts (never touches installed binary)
@@ -275,22 +304,6 @@ build-vlog:
 	GOROOT="$(EFFECTIVE_GOROOT)" go build -o "$(VLOG_BUILD)" "$(VLOG_SRC)"
 	@echo "✓ Build complete"
 	@echo "  Output: $(VLOG_BUILD)"
-
-## Install vLog to GOPATH/bin + optional /usr/local/bin symlink
-
-install-vlog: validate-go dirs config-vlog
-	@echo "Installing $(VLOG_NAME)..."
-	GOROOT="$(EFFECTIVE_GOROOT)" go build -o "$(GOPATH_BIN)/$(VLOG_NAME)" "$(VLOG_SRC)"
-	@echo ""
-	@echo "The next step will create a symlink at /usr/local/bin/$(VLOG_NAME)."
-	@read -p "Create symlink? (y/n) " -n 1 -r; echo ""; \
-	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
-		sudo ln -sf "$(GOPATH_BIN)/$(VLOG_NAME)" "/usr/local/bin/$(VLOG_NAME)"; \
-		echo "✓ Symlink created at /usr/local/bin/$(VLOG_NAME)"; \
-		$(MAKE) service-vlog; \
-	else \
-		echo "✓ Skipped symlink. Run: $(GOPATH_BIN)/$(VLOG_NAME) start"; \
-	fi
 
 ## Install config/vlog/vlog.sample.toml → ~/.vProx/config/vlog/vlog.toml (only if absent)
 
