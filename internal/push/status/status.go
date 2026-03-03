@@ -85,7 +85,13 @@ type rpcStatusResponse struct {
 }
 
 func pollRPC(ctx context.Context, s *ChainStatus) error {
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, s.RPCURL+"/status", nil)
+	if s.RPCURL == "" {
+		return fmt.Errorf("rpc_url is empty")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, s.RPCURL+"/status", nil)
+	if err != nil {
+		return fmt.Errorf("rpc /status request: %w", err)
+	}
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("rpc /status: %w", err)
@@ -137,7 +143,10 @@ type govProposalsResponse struct {
 
 func pollGov(ctx context.Context, s *ChainStatus) {
 	url := s.RESTURL + "/cosmos/gov/v1beta1/proposals?proposal_status=2"
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return
+	}
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		return
@@ -163,7 +172,10 @@ type upgradeResponse struct {
 
 func pollUpgrade(ctx context.Context, s *ChainStatus) {
 	url := s.RESTURL + "/cosmos/upgrade/v1beta1/current_plan"
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return
+	}
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		return
