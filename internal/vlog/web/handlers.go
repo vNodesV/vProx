@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"math/rand"
 	"net"
@@ -511,6 +512,72 @@ func (s *Server) handleAPIInvestigate(w http.ResponseWriter, r *http.Request) {
 	if _, err := s.enricher.OSINTStream(context.Background(), ip, emitPhase("osint")); err != nil {
 		log.Printf("[web] investigate osint %s: %v", ip, err)
 	}
+}
+
+// handleAPIChains proxies GET /api/v1/chains to the vdeploy API and returns
+// the chain list with live node status. Returns an empty array if vdeploy is
+// not configured (vdeploy_url unset) or unreachable.
+func (s *Server) handleAPIChains(w http.ResponseWriter, r *http.Request) {
+	if s.cfg.VLog.VDeployURL == "" {
+		writeJSON(w, http.StatusOK, map[string]any{"chains": []any{}, "configured": false})
+		return
+	}
+
+	target := strings.TrimRight(s.cfg.VLog.VDeployURL, "/") + "/api/v1/chains"
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]any{"chains": []any{}, "error": "bad vdeploy_url"})
+		return
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]any{"chains": []any{}, "error": "vdeploy unreachable"})
+		return
+	}
+	defer resp.Body.Close()
+
+	var payload map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		writeJSON(w, http.StatusOK, map[string]any{"chains": []any{}, "error": "invalid vdeploy response"})
+		return
+	}
+	payload["configured"] = true
+	writeJSON(w, http.StatusOK, payload)
+}
+
+// handleAPIChainStatus proxies GET /api/v1/chains/{chain} to vdeploy for
+// live node + validator status of a single chain.
+func (s *Server) handleAPIChainStatus(w http.ResponseWriter, r *http.Request) {
+	chain := r.PathValue("chain")
+	if chain == "" || s.cfg.VLog.VDeployURL == "" {
+		http.NotFound(w, r)
+		return
+	}
+
+	target := strings.TrimRight(s.cfg.VLog.VDeployURL, "/") + "/api/v1/chains/" + url.PathEscape(chain)
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "bad vdeploy_url"})
+		return
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "vdeploy unreachable"})
+		return
+	}
+	defer resp.Body.Close()
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(resp.StatusCode)
+	io.Copy(w, resp.Body) //nolint:errcheck
 }
 
 func (s *Server) handleAPIStats(w http.ResponseWriter, _ *http.Request) {

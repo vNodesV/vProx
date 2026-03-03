@@ -41,6 +41,11 @@ type VLogSection struct {
 	// WatchIntervalSec is the poll interval (seconds) for new archives.
 	WatchIntervalSec int `toml:"watch_interval_sec"`
 
+	// VDeployURL is the base URL of the vdeploy API server.
+	// Example: "http://localhost:8888"
+	// Leave empty to disable the Validators panel on the dashboard.
+	VDeployURL string `toml:"vdeploy_url"`
+
 	// Intel holds IP intelligence enrichment settings.
 	Intel IntelConfig `toml:"intel"`
 

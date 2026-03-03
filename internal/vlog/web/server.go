@@ -138,6 +138,8 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 	mux.Handle("GET /api/v1/stats", s.requireSession(http.HandlerFunc(s.handleAPIStats)))
 	mux.Handle("GET /api/v1/chart", s.requireSession(http.HandlerFunc(s.handleAPIChart)))
 	mux.Handle("GET /api/v1/probe", s.requireSession(http.HandlerFunc(s.handleAPIProbe)))
+	mux.Handle("GET /api/v1/chains", s.requireSession(http.HandlerFunc(s.handleAPIChains)))
+	mux.Handle("GET /api/v1/chains/{chain}", s.requireSession(http.HandlerFunc(s.handleAPIChainStatus)))
 
 	readTimeout := time.Duration(cfg.VLog.Server.ReadTimeoutSec) * time.Second
 	writeTimeout := time.Duration(cfg.VLog.Server.WriteTimeoutSec) * time.Second

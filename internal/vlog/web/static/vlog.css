@@ -658,3 +658,45 @@ border-radius: 3px;
   animation: probe-spin .7s linear infinite;
   vertical-align: middle;
 }
+
+/* ── Validator / chain status cards ── */
+.chain-cards-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .75rem;
+  padding: .4rem 0;
+  min-height: 2.5rem;
+}
+.chain-card {
+  background: var(--vn-card-bg, #1a1a1a);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 8px;
+  padding: .6rem 1rem;
+  min-width: 160px;
+  display: flex;
+  flex-direction: column;
+  gap: .25rem;
+}
+.chain-card-name {
+  font-size: .75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--vn-text-muted, #9ca3af);
+}
+.chain-card-status {
+  font-size: .82rem;
+  display: flex;
+  align-items: center;
+  gap: .3rem;
+}
+.chain-height {
+  font-size: .75rem;
+  color: var(--vn-text-muted, #9ca3af);
+  margin-left: .25rem;
+}
+.chain-dot        { font-size: .7rem; }
+.chain-dot-ok     { color: #22c55e; }
+.chain-dot-warn   { color: #ffa726; }
+.chain-dot-err    { color: #ef4444; }
+.chain-dot-unknown{ color: #6b7280; }

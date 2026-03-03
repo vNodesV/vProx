@@ -35,6 +35,12 @@ port = 8889
 # Default: 60
 watch_interval_sec = 60
 
+# URL of the vdeploy API server (vDeploy/validators module).
+# Enables the "Validator Nodes" panel on the vLog dashboard.
+# Example: "http://localhost:8888"
+# Leave commented out (or empty) to disable the panel.
+# vdeploy_url = "http://localhost:8888"
+
 [vlog.intel]
 # Automatically enrich new IP accounts with threat intelligence.
 # Requires at least one API key set below.

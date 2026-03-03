@@ -131,6 +131,15 @@
   <div id="endpoint-panel" style="overflow:auto;max-height:300px;"></div>
 </div>
 
+<!-- VALIDATORS / CHAIN STATUS panel -->
+<div class="chart-block" style="margin-bottom:1.5rem;">
+  <div class="chart-header" style="margin-bottom:0.5rem;">
+    <strong style="font-size:.9rem;">⛓ Validator Nodes</strong>
+    <button id="btn-reload-validators" onclick="loadValidators()" style="padding:.15rem .65rem;font-size:.8rem;margin-left:.75rem;">↻ Refresh</button>
+  </div>
+  <div id="validator-panel" class="chain-cards-wrap"></div>
+</div>
+
 <section>
   <header>
     <div style="display:flex;justify-content:space-between;align-items:center;">
@@ -303,6 +312,63 @@
   window.loadChart    = loadChart;
   window.loadEndpoints = loadEndpoints;
 
+  // ── Validators / Chain Status panel ─────────────────────────────────────
+  function loadValidators() {
+    var panel = document.getElementById('validator-panel');
+    if (!panel) return;
+    panel.innerHTML = '<p style="padding:.4rem;opacity:.6">Loading…</p>';
+    fetch(BASE + '/api/v1/chains')
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (!data.configured) {
+          panel.innerHTML = '<p style="padding:.4rem;opacity:.5;font-size:.8rem">vdeploy not configured — set <code>vdeploy_url</code> in vlog.toml to enable.</p>';
+          return;
+        }
+        var chains = data.chains;
+        if (!chains || chains.length === 0) {
+          panel.innerHTML = '<p style="padding:.4rem;opacity:.5;font-size:.8rem">No chains configured in vdeploy.</p>';
+          return;
+        }
+        // Render skeleton cards, then hydrate each with status.
+        panel.innerHTML = chains.map(function(c) {
+          return '<div class="chain-card" id="chain-card-' + escH(c) + '">' +
+            '<div class="chain-card-name">' + escH(c) + '</div>' +
+            '<div class="chain-card-status" id="chain-status-' + escH(c) + '">' +
+            '<span class="chain-dot chain-dot-unknown">●</span> Loading…</div>' +
+            '</div>';
+        }).join('');
+        // Hydrate each card.
+        chains.forEach(function(c) { fetchChainStatus(c); });
+      })
+      .catch(function() {
+        panel.innerHTML = '<p style="padding:.4rem;color:#ef4444;font-size:.8rem">Failed to reach vdeploy API.</p>';
+      });
+  }
+
+  function fetchChainStatus(chain) {
+    var el = document.getElementById('chain-status-' + chain);
+    if (!el) return;
+    fetch(BASE + '/api/v1/chains/' + encodeURIComponent(chain))
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        var node = d.node;
+        if (!node) {
+          el.innerHTML = '<span class="chain-dot chain-dot-warn">●</span> Node unreachable';
+          return;
+        }
+        var dotCls = node.synced ? 'chain-dot-ok' : 'chain-dot-warn';
+        var label  = node.synced ? 'Synced' : 'Syncing';
+        el.innerHTML =
+          '<span class="chain-dot ' + dotCls + '">●</span> ' + label +
+          ' <span class="chain-height">#' + Number(node.height).toLocaleString() + '</span>';
+      })
+      .catch(function() {
+        el.innerHTML = '<span class="chain-dot chain-dot-err">●</span> Error';
+      });
+  }
+
+  window.loadValidators = loadValidators;
+
   // Lookup table: short node name → human label for tooltip.
   var nodeLabel = {
     'ca1':'ca1 — Vancouver, CA',
@@ -368,6 +434,7 @@
   loadChart('left');
   loadChart('right');
   loadEndpoints();
+  loadValidators();
 })();
 </script>
 {{end}}
