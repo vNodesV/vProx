@@ -122,90 +122,47 @@
   {{end}}
 </article>
 
-<!-- ENDPOINT STATUS BLOCK (full width) -->
-<div class="chart-block" style="margin-bottom:1.5rem;">
-  <div class="chart-header" style="margin-bottom:0.5rem;">
-    <strong style="font-size:.9rem;">Endpoint Status</strong>
-    <button id="btn-reload-endpoints" onclick="loadEndpoints()" style="padding:.15rem .65rem;font-size:.8rem;margin-left:.75rem;">↻ Refresh</button>
-  </div>
-  <div id="endpoint-panel" style="overflow:auto;max-height:300px;"></div>
-</div>
-
-<!-- VALIDATORS / CHAIN STATUS panel -->
-<div class="chart-row" style="margin-bottom:1.5rem">
-
-  <!-- LEFT: Deploy Wizard -->
-  <div class="chart-block">
-    <div class="chart-header">
-      <strong style="font-size:.9rem;">🚀 Deploy</strong>
-      <button id="wiz-reset-btn" onclick="resetWizard()" style="padding:.15rem .65rem;font-size:.8rem;margin-left:.75rem;" disabled>↺ Reset</button>
-    </div>
-    <div id="wizard-panel" style="padding:.5rem 0">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem .75rem;align-items:end">
-        <div>
-          <label style="font-size:.75rem;opacity:.7;display:block;margin-bottom:.2rem">Chain</label>
-          <select id="wiz-chain" onchange="wizChainChange()" style="width:100%;font-size:.82rem">
-            <option value="">— chain —</option>
-          </select>
-        </div>
-        <div>
-          <label style="font-size:.75rem;opacity:.7;display:block;margin-bottom:.2rem">Service</label>
-          <select id="wiz-component" onchange="wizComponentChange()" disabled style="width:100%;font-size:.82rem">
-            <option value="">— service —</option>
-          </select>
-        </div>
-        <div>
-          <label style="font-size:.75rem;opacity:.7;display:block;margin-bottom:.2rem">Datacenter</label>
-          <select id="wiz-dc" onchange="wizDCChange()" disabled style="width:100%;font-size:.82rem">
-            <option value="">— datacenter —</option>
-          </select>
-        </div>
-        <div>
-          <label style="font-size:.75rem;opacity:.7;display:block;margin-bottom:.2rem">VM</label>
-          <select id="wiz-vm" onchange="wizVMChange()" disabled style="width:100%;font-size:.82rem">
-            <option value="">— vm —</option>
-          </select>
-        </div>
-      </div>
-      <div style="margin-top:.65rem;display:flex;align-items:center;gap:.75rem">
-        <label style="font-size:.8rem;display:flex;align-items:center;gap:.35rem;cursor:pointer">
-          <input type="checkbox" id="wiz-dry-run"> Dry Run
-        </label>
-        <button id="wiz-deploy-btn" disabled onclick="wizDeploy()" style="padding:.25rem .9rem;font-size:.82rem">Deploy</button>
-      </div>
-      <div id="wizard-result" style="margin-top:.5rem;font-size:.78rem;min-height:1.2rem"></div>
+<!-- CHAIN STATUS (full width) -->
+<article style="padding:1rem;margin-bottom:1.5rem">
+  <div style="display:flex;align-items:center;margin-bottom:.65rem">
+    <strong style="font-size:.9rem">Chain Status</strong>
+    <div style="margin-left:auto;display:flex;gap:.5rem;align-items:center">
+      <button id="chain-ping-btn" onclick="doPing()"
+        style="background:none;border:1px solid rgba(0,255,0,0.35);color:#00ff00;padding:.25rem .7rem;border-radius:4px;cursor:pointer;font-size:.8rem;font-family:Inter,sans-serif;transition:all 0.2s"
+        onmouseover="this.style.background='rgba(0,255,0,0.10)';this.style.borderColor='#00ff00'"
+        onmouseout="this.style.background='none';this.style.borderColor='rgba(0,255,0,0.35)'">Ping</button>
+      <button id="chain-refresh-btn" onclick="doRefresh()"
+        style="background:none;border:1px solid rgba(0,255,0,0.35);color:#00ff00;padding:.25rem .7rem;border-radius:4px;cursor:pointer;font-size:.8rem;font-family:Inter,sans-serif;transition:all 0.2s"
+        onmouseover="this.style.background='rgba(0,255,0,0.10)';this.style.borderColor='#00ff00'"
+        onmouseout="this.style.background='none';this.style.borderColor='rgba(0,255,0,0.35)'">Refresh</button>
     </div>
   </div>
-
-  <!-- RIGHT: Chain Status Table -->
-  <div class="chart-block">
-    <div class="chart-header">
-      <strong style="font-size:.9rem;">⛓ Chain Status</strong>
-      <button id="chain-refresh-btn" onclick="pollChainStatus()" style="padding:.15rem .65rem;font-size:.8rem;margin-left:.75rem;">↻ Refresh</button>
+  <div id="chain-status-panel" style="overflow-x:auto;font-size:.78rem"></div>
+  <div id="chain-countdown-note" style="font-size:.7rem;opacity:.45;margin-top:.3rem;text-align:right">Next refresh in 65s</div>
+  <details style="margin-top:.6rem">
+    <summary style="cursor:pointer;font-size:.78rem;opacity:.65">+ Add Chain to Monitor</summary>
+    <div style="display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.4rem;align-items:center">
+      <input id="add-chain-name" placeholder="chain" style="width:7rem;font-size:.8rem">
+      <input id="add-chain-rpc"  placeholder="rpc_url :26657" style="width:13rem;font-size:.8rem">
+      <input id="add-chain-rest" placeholder="rest_url :1317 (opt)" style="width:13rem;font-size:.8rem">
+      <input id="add-chain-note" placeholder="note" style="width:8rem;font-size:.8rem">
+      <button onclick="addChain()"
+        style="background:none;border:1px solid rgba(0,255,0,0.35);color:#00ff00;padding:.2rem .6rem;border-radius:4px;cursor:pointer;font-size:.8rem;font-family:Inter,sans-serif;transition:all 0.2s"
+        onmouseover="this.style.background='rgba(0,255,0,0.10)';this.style.borderColor='#00ff00'"
+        onmouseout="this.style.background='none';this.style.borderColor='rgba(0,255,0,0.35)'">Add</button>
     </div>
-    <div id="chain-status-panel" style="overflow-x:auto;max-height:220px;font-size:.78rem"></div>
-    <details style="margin-top:.6rem">
-      <summary style="cursor:pointer;font-size:.78rem;opacity:.65">+ Add Chain to Monitor</summary>
-      <div style="display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.4rem;align-items:center">
-        <input id="add-chain-name" placeholder="chain" style="width:7rem;font-size:.8rem">
-        <input id="add-chain-rpc"  placeholder="rpc_url :26657" style="width:13rem;font-size:.8rem">
-        <input id="add-chain-rest" placeholder="rest_url :1317 (opt)" style="width:13rem;font-size:.8rem">
-        <input id="add-chain-note" placeholder="note" style="width:8rem;font-size:.8rem">
-        <button onclick="addChain()" style="padding:.2rem .7rem;font-size:.8rem">Add</button>
-      </div>
-      <div id="add-chain-result" style="font-size:.78rem;margin-top:.25rem;min-height:1rem"></div>
-    </details>
-  </div>
-
-</div>
+    <div id="add-chain-result" style="font-size:.78rem;margin-top:.25rem;min-height:1rem"></div>
+  </details>
+</article>
 
 <section>
   <header>
     <div style="display:flex;justify-content:space-between;align-items:center;">
       <h3 style="margin:0;">Archive Ingestion</h3>
-      <button hx-post="{{.BasePath}}/api/v1/ingest" hx-target="#ingest-result" hx-swap="innerHTML">
-        Refresh Archives
-      </button>
+      <button hx-post="{{.BasePath}}/api/v1/ingest" hx-target="#ingest-result" hx-swap="innerHTML"
+        style="background:none;border:1px solid rgba(0,255,0,0.35);color:#00ff00;padding:.25rem .7rem;border-radius:4px;cursor:pointer;font-size:.8rem;font-family:Inter,sans-serif;transition:all 0.2s"
+        onmouseover="this.style.background='rgba(0,255,0,0.10)';this.style.borderColor='#00ff00'"
+        onmouseout="this.style.background='none';this.style.borderColor='rgba(0,255,0,0.35)'">Refresh Archives</button>
     </div>
   </header>
   <div id="ingest-result"></div>
@@ -324,196 +281,33 @@
       .catch(function(e) { console.warn('chart error', side, e); });
   }
 
-  // Endpoint status panel (3rd block).
-  function loadEndpoints() {
-    var panel = document.getElementById('endpoint-panel');
-    panel.innerHTML = '<p style="padding:.4rem;opacity:.6">Loading…</p>';
-    fetch(BASE + '/api/v1/chart?type=endpoint_summary')
-      .then(function(r) { return r.json(); })
-      .then(function(data) {
-        if (!data || data.length === 0) {
-          panel.innerHTML = '<p style="padding:.4rem;opacity:.6">No endpoint data ingested yet.</p>';
-          return;
-        }
-        var dash = '—';
-        var cellStyle = 'text-align:center;font-size:.78rem;min-width:3.5rem;color:#6b7280';
-        var rows = data.map(function(e) {
-          var ts = e.last_seen ? e.last_seen.replace('T',' ').slice(0,16) : '—';
-          return '<tr data-host="' + escH(e.host) + '">' +
-            '<td><code style="font-size:.78rem">' + escH(e.host) + '</code></td>' +
-            '<td style="text-align:right">' + e.requests.toLocaleString() + '</td>' +
-            '<td style="text-align:right">' + e.unique_ips + '</td>' +
-            '<td style="font-size:.78rem;opacity:.7">' + ts + '</td>' +
-            '<td style="text-align:center"><button class="outline" style="padding:.15rem .55rem;font-size:.75rem" ' +
-                'onclick="probeHost(this,\'' + escH(e.host) + '\')">Probe</button></td>' +
-            '<td class="probe-local" style="' + cellStyle + '">' + dash + '</td>' +
-            '<td class="probe-ca"    style="' + cellStyle + '">' + dash + '</td>' +
-            '<td class="probe-ww"    style="' + cellStyle + '">' + dash + '</td>' +
-            '</tr>';
-        }).join('');
-        panel.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:.82rem">' +
-          '<thead><tr>' +
-          '<th style="text-align:left;padding:.2rem .4rem">Host</th>' +
-          '<th style="text-align:right;padding:.2rem .4rem">Requests</th>' +
-          '<th style="text-align:right;padding:.2rem .4rem">Unique IPs</th>' +
-          '<th style="padding:.2rem .4rem">Last Seen</th>' +
-          '<th style="text-align:center;padding:.2rem .4rem">Live</th>' +
-          '<th style="text-align:center;padding:.2rem .4rem;font-size:.9rem">Local</th>' +
-          '<th style="text-align:center;padding:.2rem .4rem;font-size:1rem" title="Canada (Vancouver)">🇨🇦</th>' +
-          '<th style="text-align:center;padding:.2rem .4rem;font-size:1rem" title="Worldwide (random node)">🌍</th>' +
-          '</tr></thead><tbody>' + rows + '</tbody></table>';
-      })
-      .catch(function() {
-        panel.innerHTML = '<p style="padding:.4rem;color:#ef4444">Failed to load endpoints.</p>';
-      });
-  }
-
-  window.loadChart    = loadChart;
-  window.loadEndpoints = loadEndpoints;
-
-  // ── Deploy Wizard ────────────────────────────────────────────────────────
-  var wizVMs = [];   // raw VMs from /api/v1/push/vms
-
-  function initWizard() {
-    fetch(BASE + '/api/v1/push/vms')
-      .then(function(r) { return r.json(); })
-      .then(function(data) {
-        wizVMs = data.vms || [];
-        var chains = [];
-        wizVMs.forEach(function(vm) {
-          (vm.chains || []).forEach(function(ch) {
-            if (chains.indexOf(ch.name) < 0) chains.push(ch.name);
-          });
-        });
-        var sel = document.getElementById('wiz-chain');
-        chains.sort().forEach(function(c) {
-          var o = document.createElement('option'); o.value = c; o.textContent = c;
-          sel.appendChild(o);
-        });
-      })
-      .catch(function() {/* push not configured — wizard stays empty */});
-  }
-
-  function wizChainChange() {
-    var chain = document.getElementById('wiz-chain').value;
-    var compSel = document.getElementById('wiz-component');
-    var dcSel   = document.getElementById('wiz-dc');
-    var vmSel   = document.getElementById('wiz-vm');
-    [compSel, dcSel, vmSel].forEach(function(s) { s.innerHTML = '<option value="">—</option>'; s.disabled = true; });
-    document.getElementById('wiz-deploy-btn').disabled = true;
-    document.getElementById('wiz-reset-btn').disabled = false;
-    document.getElementById('wizard-result').textContent = '';
-    if (!chain) return;
-    // Collect unique components from VMs that have this chain.
-    var comps = [];
-    wizVMs.forEach(function(vm) {
-      (vm.chains || []).forEach(function(ch) {
-        if (ch.name === chain) (ch.components || []).forEach(function(cp) {
-          if (comps.indexOf(cp) < 0) comps.push(cp);
-        });
-      });
-    });
-    comps.sort().forEach(function(c) {
-      var o = document.createElement('option'); o.value = c; o.textContent = c; compSel.appendChild(o);
-    });
-    compSel.disabled = false;
-  }
-
-  function wizComponentChange() {
-    var chain = document.getElementById('wiz-chain').value;
-    var comp  = document.getElementById('wiz-component').value;
-    var dcSel = document.getElementById('wiz-dc');
-    var vmSel = document.getElementById('wiz-vm');
-    [dcSel, vmSel].forEach(function(s) { s.innerHTML = '<option value="">—</option>'; s.disabled = true; });
-    document.getElementById('wiz-deploy-btn').disabled = true;
-    if (!comp) return;
-    var dcs = [];
-    wizVMs.forEach(function(vm) {
-      (vm.chains || []).forEach(function(ch) {
-        if (ch.name === chain && (ch.components || []).indexOf(comp) >= 0) {
-          if (dcs.indexOf(vm.datacenter) < 0) dcs.push(vm.datacenter);
-        }
-      });
-    });
-    dcs.sort().forEach(function(d) {
-      var o = document.createElement('option'); o.value = d; o.textContent = d; dcSel.appendChild(o);
-    });
-    dcSel.disabled = false;
-  }
-
-  function wizDCChange() {
-    var chain = document.getElementById('wiz-chain').value;
-    var comp  = document.getElementById('wiz-component').value;
-    var dc    = document.getElementById('wiz-dc').value;
-    var vmSel = document.getElementById('wiz-vm');
-    vmSel.innerHTML = '<option value="">—</option>'; vmSel.disabled = true;
-    document.getElementById('wiz-deploy-btn').disabled = true;
-    if (!dc) return;
-    wizVMs.forEach(function(vm) {
-      if (vm.datacenter !== dc) return;
-      (vm.chains || []).forEach(function(ch) {
-        if (ch.name === chain && (ch.components || []).indexOf(comp) >= 0) {
-          var o = document.createElement('option');
-          o.value = vm.name; o.textContent = vm.name + ' (' + vm.host + ')'; vmSel.appendChild(o);
-        }
-      });
-    });
-    vmSel.disabled = false;
-  }
-
-  function wizVMChange() {
-    document.getElementById('wiz-deploy-btn').disabled =
-      !document.getElementById('wiz-vm').value;
-  }
-
-  function resetWizard() {
-    ['wiz-chain','wiz-component','wiz-dc','wiz-vm'].forEach(function(id) {
-      var el = document.getElementById(id);
-      if (el) { el.value = ''; if (id !== 'wiz-chain') { el.innerHTML = '<option value="">—</option>'; el.disabled = true; } }
-    });
-    document.getElementById('wiz-deploy-btn').disabled = true;
-    document.getElementById('wiz-reset-btn').disabled = true;
-    document.getElementById('wizard-result').textContent = '';
-  }
-
-  function wizDeploy() {
-    var chain = document.getElementById('wiz-chain').value;
-    var comp  = document.getElementById('wiz-component').value;
-    var vm    = document.getElementById('wiz-vm').value;
-    var dry   = document.getElementById('wiz-dry-run').checked;
-    if (!chain || !comp || !vm) return;
-    var btn = document.getElementById('wiz-deploy-btn');
-    var res = document.getElementById('wizard-result');
-    btn.disabled = true; btn.textContent = 'Dispatching…';
-    res.textContent = '';
-    // Map component to install script name.
-    var script = comp === 'node' ? 'install' : comp === 'validator' ? 'create_key' :
-                 comp === 'provider' ? 'install' : comp === 'relayer' ? 'install' : 'install';
-    fetch(BASE + '/api/v1/push/deploy', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({vm: vm, chain: chain, component: comp, script: script, dry_run: dry})
-    })
-      .then(function(r) { return r.json(); })
-      .then(function(d) {
-        btn.disabled = false; btn.textContent = 'Deploy';
-        res.style.color = '#4caf50';
-        res.textContent = 'Deployment #' + d.deployment_id + ' dispatched — status: ' + d.status;
-      })
-      .catch(function() {
-        btn.disabled = false; btn.textContent = 'Deploy';
-        res.style.color = '#ef4444'; res.textContent = 'Dispatch failed.';
-      });
-  }
-
-  window.resetWizard = resetWizard;
-  window.wizChainChange = wizChainChange;
-  window.wizComponentChange = wizComponentChange;
-  window.wizDCChange = wizDCChange;
-  window.wizVMChange = wizVMChange;
-  window.wizDeploy = wizDeploy;
+  window.loadChart = loadChart;
 
   // ── Chain Status Table ───────────────────────────────────────────────────
+  var CHAIN_INTERVAL = 65;
+  var chainCdSec = CHAIN_INTERVAL;
+  var chainPinging = false;
+
+  function spinnerHTML() {
+    return '<span class="probe-spinner"></span>';
+  }
+
+  function liveTag(status) {
+    if (status === 'synced') {
+      return '<span style="font-size:.68rem;padding:.08rem .35rem;border-radius:3px;border:1px solid rgba(0,255,0,0.5);color:#00ff00;font-weight:600">LIVE</span>';
+    }
+    if (status === 'syncing') {
+      return '<span style="font-size:.68rem;padding:.08rem .35rem;border-radius:3px;border:1px solid rgba(255,167,38,0.5);color:#ffa726;font-weight:600">SYNC</span>';
+    }
+    return '<span style="font-size:.68rem;padding:.08rem .35rem;border-radius:3px;border:1px solid rgba(239,83,80,0.5);color:#ef5350;font-weight:600">DOWN</span>';
+  }
+
+  function updateCountdown() {
+    var note = document.getElementById('chain-countdown-note');
+    if (!note) return;
+    note.textContent = chainPinging ? 'Pinging…' : ('Next refresh in ' + chainCdSec + 's');
+  }
+
   function loadChainStatus() {
     var panel = document.getElementById('chain-status-panel');
     if (!panel) return;
@@ -521,60 +315,60 @@
       fetch(BASE + '/api/v1/push/chains').then(function(r) { return r.json(); }),
       fetch(BASE + '/api/v1/push/chains/registered').then(function(r) { return r.json(); }).catch(function() { return {registered_chains:[]}; })
     ]).then(function(results) {
-        var chains = results[0].chains;
-        var regList = (results[1].registered_chains) || [];
-        var registeredSet = {};
-        regList.forEach(function(rc) { registeredSet[rc.chain] = true; });
-        if (!chains || chains.length === 0) {
-          panel.innerHTML = '<p style="padding:.4rem;opacity:.5;font-size:.78rem">No chains configured — add a VM in vms.toml or use "Add Chain" below.</p>';
-          return;
-        }
-        chains.sort(function(a, b) { return a.chain.localeCompare(b.chain); });
-        var rows = chains.map(function(c) {
-          var dot = c.node_status === 'synced' ? 'chain-dot-ok' :
-                    c.node_status === 'syncing' ? 'chain-dot-warn' : 'chain-dot-err';
-          var height = c.height ? Number(c.height).toLocaleString() : '—';
-          var earliest = c.earliest_height ? Number(c.earliest_height).toLocaleString() : '—';
-          var props = c.active_proposals > 0 ?
-            '<span style="color:#ffa726">⚠ '+c.active_proposals+'</span>' : '—';
-          var upg = c.upgrade_pending ?
-            '<span style="color:#ef5350" title="'+escH(c.upgrade_name)+' @ '+c.upgrade_height+'">⬆ '+escH(c.upgrade_name)+'</span>' : '—';
-          var estTime = c.upgrade_est_utc ? escH(c.upgrade_est_utc.replace('T',' ').replace('Z',' UTC')) : '—';
-          var latestTime = c.latest_block_time ? escH(c.latest_block_time.replace ? c.latest_block_time.slice(0,19).replace('T',' ') : '') : '—';
-          var typeColors = {validator:'#4caf50',sp:'#42a5f5',relayer:'#ab47bc',external:'#78909c'};
-          var typeLabel = {validator:'VAL',sp:'SP',relayer:'RLY',external:'EXT'};
-          var t = c.type || 'external';
-          var badge = '<span style="font-size:.65rem;padding:.05rem .3rem;border-radius:3px;border:1px solid '+(typeColors[t]||'#78909c')+';color:'+(typeColors[t]||'#78909c')+';margin-left:.3rem">'+(typeLabel[t]||t.toUpperCase())+'</span>';
-          var rmBtn = registeredSet[c.chain] ?
-            '<button onclick="removeChain(\''+escH(c.chain)+'\')" style="padding:.1rem .4rem;font-size:.72rem;background:transparent;border:1px solid #ef5350;color:#ef5350;cursor:pointer">✕</button>' : '';
-          return '<tr><td><span class="chain-dot '+dot+'">●</span> '+escH(c.chain)+badge+'</td>' +
-            '<td style="text-align:center">'+escH(c.node_status||'—')+'</td>' +
-            '<td style="text-align:right;font-variant-numeric:tabular-nums">'+height+'</td>' +
-            '<td style="text-align:center">'+props+'</td>' +
-            '<td style="text-align:center">'+upg+'</td>' +
-            '<td style="text-align:center;white-space:nowrap">'+estTime+'</td>' +
-            '<td style="text-align:right;font-variant-numeric:tabular-nums">'+earliest+'</td>' +
-            '<td style="text-align:left;white-space:nowrap">'+latestTime+'</td>' +
-            '<td>'+rmBtn+'</td>' +
-            '</tr>';
-        }).join('');
-        panel.innerHTML =
-          '<table style="width:100%;border-collapse:collapse"><thead>' +
-          '<tr style="font-size:.72rem;opacity:.6;border-bottom:1px solid var(--vn-border)">' +
-          '<th style="text-align:left;padding:.2rem .35rem">Chain</th>' +
-          '<th style="padding:.2rem .35rem">Status</th>' +
-          '<th style="text-align:right;padding:.2rem .35rem">Height</th>' +
-          '<th style="padding:.2rem .35rem">Proposals</th>' +
-          '<th style="padding:.2rem .35rem">Upgrade</th>' +
-          '<th style="padding:.2rem .35rem">Est. UTC</th>' +
-          '<th style="text-align:right;padding:.2rem .35rem">Earliest</th>' +
-          '<th style="text-align:left;padding:.2rem .35rem">Latest Block</th>' +
-          '<th style="padding:.2rem .35rem"></th>' +
-          '</tr></thead><tbody>'+rows+'</tbody></table>';
-      })
-      .catch(function() {
-        panel.innerHTML = '<p style="padding:.4rem;color:#ef4444;font-size:.78rem">push module not configured or unreachable.</p>';
-      });
+      var chains = results[0].chains;
+      var regList = (results[1].registered_chains) || [];
+      var registeredSet = {};
+      regList.forEach(function(rc) { registeredSet[rc.chain] = true; });
+      if (!chains || chains.length === 0) {
+        panel.innerHTML = '<p style="padding:.4rem;opacity:.5;font-size:.78rem">No chains configured — add a VM in vms.toml or use "Add Chain" below.</p>';
+        return;
+      }
+      chains.sort(function(a, b) { return a.chain.localeCompare(b.chain); });
+      var rows = chains.map(function(c) {
+        var height   = c.height ? Number(c.height).toLocaleString() : '—';
+        var earliest = c.earliest_height ? Number(c.earliest_height).toLocaleString() : '—';
+        var props    = c.active_proposals > 0 ?
+          '<span style="color:#ffa726;font-weight:600">' + c.active_proposals + '</span>' : '—';
+        var upg = c.upgrade_pending ?
+          '<span style="color:#ef5350" title="' + escH(c.upgrade_name) + ' @ ' + c.upgrade_height + '">' + escH(c.upgrade_name) + '</span>' : '—';
+        var estTime    = c.upgrade_est_utc ? escH(c.upgrade_est_utc.replace('T',' ').replace('Z',' UTC')) : '—';
+        var latestTime = c.latest_block_time ? escH(c.latest_block_time.slice(0,19).replace('T',' ')) : '—';
+        var typeColors = {validator:'#4caf50',sp:'#42a5f5',relayer:'#ab47bc',external:'#78909c'};
+        var typeLabel  = {validator:'VAL',sp:'SP',relayer:'RLY',external:'EXT'};
+        var t = c.type || 'external';
+        var badge = '<span style="font-size:.65rem;padding:.05rem .3rem;border-radius:3px;border:1px solid '+(typeColors[t]||'#78909c')+';color:'+(typeColors[t]||'#78909c')+';margin-left:.3rem">'+(typeLabel[t]||t.toUpperCase())+'</span>';
+        var rmStyle = 'background:none;border:1px solid rgba(239,83,80,0.4);color:#ef5350;padding:.08rem .4rem;border-radius:3px;cursor:pointer;font-size:.72rem;transition:all 0.2s';
+        var rmBtn = registeredSet[c.chain] ?
+          '<button onclick="removeChain(\''+escH(c.chain)+'\')" style="'+rmStyle+'">remove</button>' : '';
+        return '<tr>' +
+          '<td style="white-space:nowrap;padding:.25rem .35rem">' + escH(c.chain) + badge + '</td>' +
+          '<td style="text-align:center;padding:.25rem .35rem">' + liveTag(c.node_status) + '</td>' +
+          '<td style="text-align:right;font-variant-numeric:tabular-nums;padding:.25rem .35rem">' + height + '</td>' +
+          '<td style="text-align:center;padding:.25rem .35rem">' + props + '</td>' +
+          '<td style="text-align:center;padding:.25rem .35rem">' + upg + '</td>' +
+          '<td style="text-align:center;white-space:nowrap;padding:.25rem .35rem">' + estTime + '</td>' +
+          '<td style="text-align:right;font-variant-numeric:tabular-nums;padding:.25rem .35rem">' + earliest + '</td>' +
+          '<td style="text-align:left;white-space:nowrap;padding:.25rem .35rem">' + latestTime + '</td>' +
+          '<td style="padding:.25rem .35rem">' + rmBtn + '</td>' +
+          '</tr>';
+      }).join('');
+      panel.innerHTML =
+        '<table style="width:100%;border-collapse:collapse"><thead>' +
+        '<tr style="font-size:.72rem;opacity:.6;border-bottom:1px solid var(--vn-border)">' +
+        '<th style="text-align:left;padding:.2rem .35rem">Chain</th>' +
+        '<th style="padding:.2rem .35rem">Live</th>' +
+        '<th style="text-align:right;padding:.2rem .35rem">Height</th>' +
+        '<th style="padding:.2rem .35rem">Proposals</th>' +
+        '<th style="padding:.2rem .35rem">Upgrade</th>' +
+        '<th style="padding:.2rem .35rem">Est. UTC</th>' +
+        '<th style="text-align:right;padding:.2rem .35rem">Earliest</th>' +
+        '<th style="text-align:left;padding:.2rem .35rem">Latest Block</th>' +
+        '<th style="padding:.2rem .35rem"></th>' +
+        '</tr></thead><tbody>' + rows + '</tbody></table>';
+      updateCountdown();
+    }).catch(function() {
+      panel.innerHTML = '<p style="padding:.4rem;color:#ef4444;font-size:.78rem">push module not configured or unreachable.</p>';
+    });
   }
 
   function addChain() {
@@ -610,102 +404,47 @@
       .catch(function() { alert('Failed to remove '+chain); });
   }
 
+  function doPing() {
+    var btn = document.getElementById('chain-ping-btn');
+    if (btn) { btn.disabled = true; btn.textContent = '…'; }
+    chainPinging = true; chainCdSec = CHAIN_INTERVAL; updateCountdown();
+    var panel = document.getElementById('chain-status-panel');
+    if (panel) panel.innerHTML = '<div style="padding:.75rem;opacity:.7">' + spinnerHTML() + '</div>';
+    fetch(BASE + '/api/v1/push/poll', {method: 'POST'})
+      .then(function() {
+        chainPinging = false;
+        if (btn) { btn.disabled = false; btn.textContent = 'Ping'; }
+        loadChainStatus();
+      })
+      .catch(function() {
+        chainPinging = false;
+        if (btn) { btn.disabled = false; btn.textContent = 'Ping'; }
+        loadChainStatus();
+      });
+  }
+
+  function doRefresh() {
+    chainCdSec = CHAIN_INTERVAL;
+    loadChainStatus();
+  }
+
   window.loadChainStatus = loadChainStatus;
   window.addChain        = addChain;
   window.removeChain     = removeChain;
-
-  // Lookup table: short node name → human label for tooltip.
-  var nodeLabel = {
-    'ca1':'ca1 — Vancouver, CA',
-    'de1':'de1 — Nuremberg, DE', 'de4':'de4 — Frankfurt, DE',
-    'nl1':'nl1 — Amsterdam, NL', 'nl2':'nl2 — Meppel, NL',
-    'fr2':'fr2 — Paris, FR',
-    'uk1':'uk1 — Coventry, GB',
-    'fi1':'fi1 — Helsinki, FI',
-    'jp1':'jp1 — Tokyo, JP',
-    'sg1':'sg1 — Singapore',
-    'us1':'us1 — Los Angeles, US', 'us2':'us2 — Dallas, US',
-    'us3':'us3 — Atlanta, US',    'us4':'us4 — Miami, US',
-    'br1':'br1 — São Paulo, BR',  'br2':'br2 — São Paulo, BR',
-    'in1':'in1 — Mumbai, IN',     'in2':'in2 — Delhi, IN',
-  };
-
-  function spinnerHTML() {
-    return '<span class="probe-spinner"></span>';
-  }
-
-  function setProbeCell(cell, loc, tooltipExtra) {
-    if (!loc) { cell.style.color = '#6b7280'; cell.innerHTML = '—'; cell.title = ''; return; }
-    if (loc.ok) {
-      cell.style.color = '#22c55e';
-      cell.innerHTML = loc.latency_ms ? loc.latency_ms + 'ms' : '✓';
-    } else {
-      cell.style.color = '#ef4444';
-      cell.textContent = loc.error || (loc.code ? loc.code : '✗');
-    }
-    // Tooltip: node source + probed URL (if available).
-    var tip = '';
-    if (loc.node) tip = nodeLabel[loc.node] || loc.node + '.node.check-host.net';
-    if (tooltipExtra) tip = (tip ? tip + '\n' : '') + tooltipExtra;
-    cell.title = tip;
-  }
-
-  window.probeHost = function(btn, host) {
-    btn.disabled = true; btn.textContent = '…';
-    var tr = btn.closest('tr');
-    var cLocal = tr.querySelector('.probe-local');
-    var cCA    = tr.querySelector('.probe-ca');
-    var cWW    = tr.querySelector('.probe-ww');
-    // Show spinner in each cell while loading.
-    [cLocal, cCA, cWW].forEach(function(c) {
-      if (c) { c.style.color = ''; c.innerHTML = spinnerHTML(); c.title = 'Probing…'; }
-    });
-    fetch(BASE + '/api/v1/probe?host=' + encodeURIComponent(host))
-      .then(function(r) { return r.json(); })
-      .then(function(d) {
-        btn.disabled = false; btn.textContent = 'Probe';
-        setProbeCell(cLocal, d.local, (d.url ? 'URL: ' + d.url + '\n' : '') + 'Source: vLog server (local)');
-        setProbeCell(cCA,    d.ca,    d.url ? 'URL: ' + d.url : '');
-        setProbeCell(cWW,    d.ww,    d.url ? 'URL: ' + d.url : '');
-      })
-      .catch(function() {
-        btn.disabled = false; btn.textContent = 'Probe';
-        [cLocal, cCA, cWW].forEach(function(c) {
-          if (c) { c.style.color = '#ef4444'; c.innerHTML = '✗'; c.title = 'Network error'; }
-        });
-      });
-  };
+  window.doPing          = doPing;
+  window.doRefresh       = doRefresh;
 
   loadChart('left');
   loadChart('right');
-  loadEndpoints();
-  initWizard();
-  var CHAIN_INTERVAL = 65;
-  var chainCdSec = CHAIN_INTERVAL;
-  var chainCdBtn = document.getElementById('chain-refresh-btn');
-  var chainPolling = false;
-
-  function updateChainBtn() {
-    if (!chainCdBtn) return;
-    chainCdBtn.textContent = chainPolling ? '↻ Polling…' : ('↻ Refresh ' + chainCdSec + 's');
-  }
-
-  function pollChainStatus() {
-    chainPolling = true; chainCdSec = CHAIN_INTERVAL; updateChainBtn();
-    fetch(BASE + '/api/v1/push/poll', {method: 'POST'})
-      .then(function() { chainPolling = false; chainCdSec = CHAIN_INTERVAL; loadChainStatus(); })
-      .catch(function() { chainPolling = false; loadChainStatus(); });
-  }
-  window.pollChainStatus = pollChainStatus;
+  doPing();
 
   setInterval(function() {
-    if (chainPolling) return;
+    if (chainPinging) return;
     chainCdSec--;
-    updateChainBtn();
+    updateCountdown();
     if (chainCdSec <= 0) { chainCdSec = CHAIN_INTERVAL; loadChainStatus(); }
   }, 1000);
 
-  loadChainStatus();
 })();
 </script>
 {{end}}
