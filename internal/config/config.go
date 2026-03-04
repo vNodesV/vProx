@@ -20,7 +20,8 @@ type Ports struct {
 	GRPC    int    `toml:"grpc"`
 	GRPCWeb int    `toml:"grpc_web"`
 	API     int    `toml:"api"`
-	VLogURL string `toml:"vlog_url"` // optional: notify vLog after --new-backup
+	VLogURL        string   `toml:"vlog_url"`        // optional: notify vLog after --new-backup
+	TrustedProxies []string `toml:"trusted_proxies"` // CIDRs trusted to set X-Forwarded-For (e.g. ["127.0.0.1/32"])
 }
 
 // VHostPrefix holds custom subdomain prefixes for RPC and REST vhosts.
@@ -259,6 +260,11 @@ func LoadPorts(path string) (Ports, error) {
 	if p.API != 0 {
 		if err := ValidatePortsLabel("api", p.API); err != nil {
 			return p, fmt.Errorf("ports.toml: %w", err)
+		}
+	}
+	for _, cidr := range p.TrustedProxies {
+		if _, _, err := net.ParseCIDR(cidr); err != nil {
+			return p, fmt.Errorf("ports.toml: trusted_proxies: invalid CIDR %q: %w", cidr, err)
 		}
 	}
 	return p, nil

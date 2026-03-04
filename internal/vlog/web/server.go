@@ -164,6 +164,9 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 			s.requireSession(http.HandlerFunc(s.push.HandleRegisteredChains)))
 		mux.Handle("DELETE /api/v1/push/chains/registered/{chain}",
 			s.requireSession(http.HandlerFunc(s.push.HandleRegisteredChainDelete)))
+		// POST alias for Apache environments that block DELETE method pass-through.
+		mux.Handle("POST /api/v1/push/chains/registered/{chain}",
+			s.requireSession(http.HandlerFunc(s.push.HandleRegisteredChainDelete)))
 		mux.Handle("POST /api/v1/push/poll",
 			s.requireSession(http.HandlerFunc(s.push.HandlePoll)))
 	}

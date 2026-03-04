@@ -1,0 +1,17 @@
+# ports.toml — Default port assignments and global proxy settings.
+# Copy to config/ports.toml and adjust for your deployment.
+
+rpc     = 26657
+rest    = 1317
+grpc    = 9090
+grpc_web = 9091
+api     = 1317
+
+# vLog notification URL — vProx POSTs here after --new-backup (optional).
+# vlog_url = "http://127.0.0.1:8889/api/v1/ingest"
+
+# trusted_proxies — CIDRs whose X-Forwarded-For / CF-Connecting-IP headers
+# are trusted for real-IP extraction by the rate limiter.
+# When running behind Apache or nginx on the same host, set to loopback only.
+# Leave empty (or omit) to trust all proxy headers (backward compat, warns at startup).
+trusted_proxies = ["127.0.0.1/32", "::1/128"]

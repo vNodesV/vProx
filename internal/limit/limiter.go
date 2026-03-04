@@ -67,7 +67,6 @@ type IPLimiter struct {
 	// client IP extraction
 	trustProxy     bool         // prefer CF-Connecting-IP / Forwarded / X-Forwarded-For
 	trustedProxies []*net.IPNet // SEC-H3: CIDR allowlist; XFF trusted only from these sources
-	xffWarnOnce    sync.Once    // log warning once if trustProxy=true but no trustedProxies
 	ipHeader       string       // explicit header (e.g., X-Real-IP)
 
 	// behavior
@@ -210,6 +209,12 @@ func New(defaults RateSpec, overrides map[string]RateSpec, opts ...Option) *IPLi
 	}
 	for _, opt := range opts {
 		opt(l)
+	}
+	// Eager startup check: warn once at construction if trust_proxy is on but no
+	// trusted_proxies CIDR list is configured. This is visible in the startup log
+	// before any requests arrive, which is the correct time to surface it.
+	if l.trustProxy && len(l.trustedProxies) == 0 {
+		log.Printf("[limit] WARN: trust_proxy enabled but no trusted_proxies configured — trusting all proxy headers")
 	}
 	go l.sweepLoop()
 	return l
@@ -516,12 +521,9 @@ func (l *IPLimiter) clientIP(r *http.Request) string {
 
 // isProxyTrusted returns true if the direct connection IP (RemoteAddr) is in
 // the configured trusted_proxies CIDR list. If no list is configured, falls
-// back to trusting all proxy headers (backward compat) with a one-time warning.
+// back to trusting all proxy headers (backward compat).
 func (l *IPLimiter) isProxyTrusted(r *http.Request) bool {
 	if len(l.trustedProxies) == 0 {
-		l.xffWarnOnce.Do(func() {
-			log.Printf("[limit] WARN: trust_proxy enabled but no trusted_proxies configured — trusting all proxy headers")
-		})
 		return true
 	}
 	host, _, err := net.SplitHostPort(r.RemoteAddr)

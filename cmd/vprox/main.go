@@ -1499,6 +1499,9 @@ func main() {
 		limit.WithMirrorToMainLog(),   // mirror important events into main.log
 		limit.WithDefaultActionDrop(), // use Allow() for defaults (429 on overflow)
 	}
+	if len(defaultPorts.TrustedProxies) > 0 {
+		limOpts = append(limOpts, limit.WithTrustedProxies(defaultPorts.TrustedProxies))
+	}
 	if autoEnabled {
 		limOpts = append(limOpts, limit.WithAutoQuarantine(limit.AutoRule{
 			Threshold: autoThreshold,
