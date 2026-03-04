@@ -69,17 +69,15 @@ func runChainStatus(home string, args []string) {
 	seen := map[string]bool{}
 	var entries []entry
 	for _, vm := range cfg.VMs {
-		for _, ch := range vm.Chains {
-			if *chainFilter != "" && ch.Name != *chainFilter {
-				continue
-			}
-			key := ch.Name + "|" + ch.RPCURL
-			if seen[key] {
-				continue
-			}
-			seen[key] = true
-			entries = append(entries, entry{ch.Name, ch.RPCURL, ch.RESTURL})
+		if *chainFilter != "" && vm.Name != *chainFilter {
+			continue
 		}
+		key := vm.Name + "|" + vm.RPC()
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		entries = append(entries, entry{vm.Name, vm.RPC(), vm.REST()})
 	}
 
 	if len(entries) == 0 {

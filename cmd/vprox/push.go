@@ -70,15 +70,11 @@ func pushHosts(home string) {
 		fmt.Println("No VMs registered.")
 		return
 	}
-	fmt.Printf("%-20s %-30s %-6s %-12s %s\n", "NAME", "HOST", "PORT", "DATACENTER", "CHAINS")
+	fmt.Printf("%-20s %-30s %-6s %-12s %s\n", "NAME", "HOST", "PORT", "DATACENTER", "TYPE")
 	fmt.Println(strings.Repeat("─", 88))
 	for _, vm := range cfg.VMs {
-		chains := make([]string, 0, len(vm.Chains))
-		for _, ch := range vm.Chains {
-			chains = append(chains, ch.Name)
-		}
 		fmt.Printf("%-20s %-30s %-6d %-12s %s\n",
-			vm.Name, vm.Host, vm.Port, vm.Datacenter, strings.Join(chains, ","))
+			vm.Name, vm.Host, vm.Port, vm.Datacenter, vm.Type)
 	}
 }
 
@@ -136,16 +132,15 @@ func pushDeploy(home string, args []string) {
 // pushAdd appends a new VM entry to vms.toml.
 func pushAdd(home string, args []string) {
 	fs := flag.NewFlagSet("push add", flag.ExitOnError)
-	name := fs.String("name", "", "VM name (defaults to host)")
+	name := fs.String("name", "", "chain/VM name (defaults to host)")
 	host := fs.String("host", "", "hostname or IP (required)")
 	port := fs.Int("port", 22, "SSH port")
 	user := fs.String("user", "", "SSH user (required)")
 	key := fs.String("key", "", "path to SSH private key (required)")
 	dc := fs.String("dc", "", "datacenter label")
-	chain := fs.String("chain", "", "chain name to associate")
-	rpc := fs.String("rpc", "", "chain RPC URL")
-	rest := fs.String("rest", "", "chain REST URL")
-	components := fs.String("components", "node,validator", "comma-separated components")
+	vmType := fs.String("type", "validator", "chain type: validator | sp | relayer")
+	rpc := fs.String("rpc", "", "RPC URL override (default: http://host:26657)")
+	rest := fs.String("rest", "", "REST URL override (default: http://host:1317)")
 	if err := fs.Parse(args); err != nil {
 		os.Exit(1)
 	}
@@ -180,15 +175,9 @@ func pushAdd(home string, args []string) {
 		User:       *user,
 		KeyPath:    *key,
 		Datacenter: *dc,
-	}
-	if *chain != "" {
-		comps := splitTrim(*components, ",")
-		vm.Chains = []config.VMChain{{
-			Name:       *chain,
-			RPCURL:     *rpc,
-			RESTURL:    *rest,
-			Components: comps,
-		}}
+		Type:       *vmType,
+		RPCURL:     *rpc,
+		RESTURL:    *rest,
 	}
 	cfg.VMs = append(cfg.VMs, vm)
 

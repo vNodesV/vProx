@@ -18,6 +18,7 @@ var httpClient = &http.Client{Timeout: pollTimeout}
 // ChainStatus holds all polled data for one chain.
 type ChainStatus struct {
 	Chain   string `json:"chain"`
+	Type    string `json:"type"`              // validator | sp | relayer | external
 	RPCURL  string `json:"rpc_url"`
 	RESTURL string `json:"rest_url,omitempty"`
 
@@ -106,7 +107,6 @@ func pollRPC(ctx context.Context, s *ChainStatus) error {
 	si := r.Result.SyncInfo
 	var h, eh int64
 	fmt.Sscanf(si.LatestBlockHeight, "%d", &h)
-	fmt.Sscanf(si.EarliestBlockHeight, "%d", &h)
 	fmt.Sscanf(si.EarliestBlockHeight, "%d", &eh)
 
 	s.Moniker = r.Result.NodeInfo.Moniker

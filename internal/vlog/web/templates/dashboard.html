@@ -517,11 +517,14 @@
   function loadChainStatus() {
     var panel = document.getElementById('chain-status-panel');
     if (!panel) return;
-    panel.innerHTML = '<p style="padding:.4rem;opacity:.6;font-size:.8rem">Loading…</p>';
-    fetch(BASE + '/api/v1/push/chains')
-      .then(function(r) { return r.json(); })
-      .then(function(data) {
-        var chains = data.chains;
+    Promise.all([
+      fetch(BASE + '/api/v1/push/chains').then(function(r) { return r.json(); }),
+      fetch(BASE + '/api/v1/push/chains/registered').then(function(r) { return r.json(); }).catch(function() { return {registered_chains:[]}; })
+    ]).then(function(results) {
+        var chains = results[0].chains;
+        var regList = (results[1].registered_chains) || [];
+        var registeredSet = {};
+        regList.forEach(function(rc) { registeredSet[rc.chain] = true; });
         if (!chains || chains.length === 0) {
           panel.innerHTML = '<p style="padding:.4rem;opacity:.5;font-size:.78rem">No chains configured — add a VM in vms.toml or use "Add Chain" below.</p>';
           return;
@@ -537,9 +540,13 @@
             '<span style="color:#ef5350" title="'+escH(c.upgrade_name)+' @ '+c.upgrade_height+'">⬆ '+escH(c.upgrade_name)+'</span>' : '—';
           var estTime = c.upgrade_est_utc ? escH(c.upgrade_est_utc.replace('T',' ').replace('Z',' UTC')) : '—';
           var latestTime = c.latest_block_time ? escH(c.latest_block_time.replace ? c.latest_block_time.slice(0,19).replace('T',' ') : '') : '—';
-          var rmBtn = c.rpc_url ? '' :
-            '<button onclick="removeChain(\''+escH(c.chain)+'\')" style="padding:.1rem .4rem;font-size:.72rem;background:transparent;border:1px solid #ef5350;color:#ef5350;cursor:pointer">✕</button>';
-          return '<tr><td><span class="chain-dot '+dot+'">●</span> '+escH(c.chain)+'</td>' +
+          var typeColors = {validator:'#4caf50',sp:'#42a5f5',relayer:'#ab47bc',external:'#78909c'};
+          var typeLabel = {validator:'VAL',sp:'SP',relayer:'RLY',external:'EXT'};
+          var t = c.type || 'external';
+          var badge = '<span style="font-size:.65rem;padding:.05rem .3rem;border-radius:3px;border:1px solid '+(typeColors[t]||'#78909c')+';color:'+(typeColors[t]||'#78909c')+';margin-left:.3rem">'+(typeLabel[t]||t.toUpperCase())+'</span>';
+          var rmBtn = registeredSet[c.chain] ?
+            '<button onclick="removeChain(\''+escH(c.chain)+'\')" style="padding:.1rem .4rem;font-size:.72rem;background:transparent;border:1px solid #ef5350;color:#ef5350;cursor:pointer">✕</button>' : '';
+          return '<tr><td><span class="chain-dot '+dot+'">●</span> '+escH(c.chain)+badge+'</td>' +
             '<td style="text-align:center">'+escH(c.node_status||'—')+'</td>' +
             '<td style="text-align:right;font-variant-numeric:tabular-nums">'+height+'</td>' +
             '<td style="text-align:center">'+props+'</td>' +

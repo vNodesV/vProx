@@ -79,12 +79,11 @@ func (s *Service) StartPolling(ctx context.Context, interval time.Duration) {
 // pollAll refreshes status for all chains across all VMs.
 func (s *Service) pollAll(ctx context.Context) {
 	for _, vm := range s.cfg.VMs {
-		for _, ch := range vm.Chains {
-			st := status.Poll(ctx, ch.Name, ch.RPCURL, ch.RESTURL)
-			s.mu.Lock()
-			s.statuses[ch.Name] = st
-			s.mu.Unlock()
-		}
+		st := status.Poll(ctx, vm.Name, vm.RPC(), vm.REST())
+		st.Type = vm.Type
+		s.mu.Lock()
+		s.statuses[vm.Name] = st
+		s.mu.Unlock()
 	}
 
 	// Also poll registered (external) chains.
@@ -94,7 +93,12 @@ func (s *Service) pollAll(ctx context.Context) {
 		return
 	}
 	for _, rc := range registered {
+		// Skip if a VM already covers this chain name.
+		if s.cfg.FindVM(rc.Chain) != nil {
+			continue
+		}
 		st := status.Poll(ctx, rc.Chain, rc.RPCURL, rc.RESTURL)
+		st.Type = "external"
 		s.mu.Lock()
 		s.statuses[rc.Chain] = st
 		s.mu.Unlock()
@@ -146,26 +150,20 @@ func (s *Service) BestVM(chain string) *config.VM {
 
 	for i := range s.cfg.VMs {
 		vm := &s.cfg.VMs[i]
-		for _, ch := range vm.Chains {
-			if ch.Name != chain {
-				continue
+		if vm.Name != chain {
+			continue
+		}
+		st := s.statuses[chain]
+		if best == nil {
+			best = vm
+			if st != nil {
+				bestHeight = st.Height
 			}
-			// Candidate found — check its last polled status.
-			st := s.statuses[chain]
-			if best == nil {
-				best = vm
-				if st != nil {
-					bestHeight = st.Height
-				}
-				break
-			}
-			if st != nil && st.NodeStatus == "synced" {
-				if best == nil || st.Height > bestHeight {
-					best = vm
-					bestHeight = st.Height
-				}
-			}
-			break
+			continue
+		}
+		if st != nil && st.NodeStatus == "synced" && st.Height > bestHeight {
+			best = vm
+			bestHeight = st.Height
 		}
 	}
 	return best

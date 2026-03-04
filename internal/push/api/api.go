@@ -22,15 +22,10 @@ func New(svc *push.Service) *Handlers { return &Handlers{svc: svc} }
 // ── GET /api/v1/push/vms ─────────────────────────────────────────────────────
 
 type vmView struct {
-	Name       string       `json:"name"`
-	Host       string       `json:"host"`
-	Datacenter string       `json:"datacenter"`
-	Chains     []chainBrief `json:"chains"`
-}
-
-type chainBrief struct {
-	Name       string   `json:"name"`
-	Components []string `json:"components"`
+	Name       string `json:"name"`
+	Host       string `json:"host"`
+	Datacenter string `json:"datacenter"`
+	Type       string `json:"type"`
 }
 
 // HandleVMs returns the list of registered VMs.
@@ -38,11 +33,7 @@ func (h *Handlers) HandleVMs(w http.ResponseWriter, r *http.Request) {
 	vms := h.svc.VMs()
 	out := make([]vmView, 0, len(vms))
 	for _, vm := range vms {
-		view := vmView{Name: vm.Name, Host: vm.Host, Datacenter: vm.Datacenter}
-		for _, ch := range vm.Chains {
-			view.Chains = append(view.Chains, chainBrief{Name: ch.Name, Components: ch.Components})
-		}
-		out = append(out, view)
+		out = append(out, vmView{Name: vm.Name, Host: vm.Host, Datacenter: vm.Datacenter, Type: vm.Type})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"vms": out})
 }
@@ -205,16 +196,10 @@ type vmRegisterRequest struct {
 	User       string `json:"user"`
 	KeyPath    string `json:"key_path"`
 	Datacenter string `json:"datacenter"`
-	Chains     []struct {
-		Name       string   `json:"name"`
-		RPCURL     string   `json:"rpc_url"`
-		RESTURL    string   `json:"rest_url"`
-		Components []string `json:"components"`
-	} `json:"chains"`
+	Type       string `json:"type"` // validator | sp | relayer
 }
 
 // HandleVMRegister handles POST /api/v1/push/register — VM self-registration.
-// A VM posts its own credentials and chain list so vProx can track and deploy to it.
 func (h *Handlers) HandleVMRegister(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -237,18 +222,11 @@ func (h *Handlers) HandleVMRegister(w http.ResponseWriter, r *http.Request) {
 		User:       req.User,
 		KeyPath:    req.KeyPath,
 		Datacenter: req.Datacenter,
-	}
-	for _, ch := range req.Chains {
-		vm.Chains = append(vm.Chains, config.VMChain{
-			Name:       ch.Name,
-			RPCURL:     ch.RPCURL,
-			RESTURL:    ch.RESTURL,
-			Components: ch.Components,
-		})
+		Type:       req.Type,
 	}
 
 	h.svc.RegisterVM(vm)
-	log.Printf("[push/api] VM %q registered from %s with %d chain(s)", req.Name, req.Host, len(req.Chains))
+	log.Printf("[push/api] VM %q registered from %s (type=%s)", req.Name, req.Host, req.Type)
 	writeJSON(w, http.StatusOK, map[string]string{"status": "registered", "name": req.Name})
 }
 
