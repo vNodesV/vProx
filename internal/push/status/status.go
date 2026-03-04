@@ -141,11 +141,6 @@ func pollRPC(ctx context.Context, s *ChainStatus) error {
 
 // ---- Cosmos REST: governance ----
 
-type govProposalsResponse struct {
-	Proposals []struct {
-		ID string `json:"proposal_id"`
-	} `json:"proposals"`
-}
 
 // pollGov fetches active (voting period) governance proposals.
 // Tries the v1 API first (Cosmos SDK 0.47+/0.50+ with CometBFT), falls back to v1beta1.
