@@ -184,6 +184,7 @@ func (h *Handlers) HandleRegisteredChainDelete(w http.ResponseWriter, r *http.Re
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
+	h.svc.RemoveStatus(chain)
 	writeJSON(w, http.StatusOK, map[string]string{"status": "removed", "chain": chain})
 }
 

@@ -181,8 +181,7 @@
   <div class="chart-block">
     <div class="chart-header">
       <strong style="font-size:.9rem;">⛓ Chain Status</strong>
-      <button onclick="loadChainStatus()" style="padding:.15rem .65rem;font-size:.8rem;margin-left:.75rem;">↻ Refresh</button>
-      <span id="chain-refresh-cd" style="font-size:.68rem;opacity:.45;margin-left:.5rem"></span>
+      <button id="chain-refresh-btn" onclick="loadChainStatus()" style="padding:.15rem .65rem;font-size:.8rem;margin-left:.75rem;">↻ Refresh</button>
     </div>
     <div id="chain-status-panel" style="overflow-x:auto;max-height:220px;font-size:.78rem"></div>
     <details style="margin-top:.6rem">
@@ -530,6 +529,7 @@
           panel.innerHTML = '<p style="padding:.4rem;opacity:.5;font-size:.78rem">No chains configured — add a VM in vms.toml or use "Add Chain" below.</p>';
           return;
         }
+        chains.sort(function(a, b) { return a.chain.localeCompare(b.chain); });
         var rows = chains.map(function(c) {
           var dot = c.node_status === 'synced' ? 'chain-dot-ok' :
                     c.node_status === 'syncing' ? 'chain-dot-warn' : 'chain-dot-err';
@@ -679,21 +679,20 @@
   initWizard();
   var CHAIN_INTERVAL = 65;
   var chainCdSec = CHAIN_INTERVAL;
-  var chainCdEl  = document.getElementById('chain-refresh-cd');
+  var chainCdBtn = document.getElementById('chain-refresh-btn');
 
-  function resetChainCountdown() {
-    chainCdSec = CHAIN_INTERVAL;
-    if (chainCdEl) chainCdEl.textContent = 'next in ' + chainCdSec + 's';
+  function updateChainBtn() {
+    if (chainCdBtn) chainCdBtn.textContent = '↻ Refresh ' + chainCdSec + 's';
   }
 
   var _origLoadChainStatus = loadChainStatus;
-  loadChainStatus = function() { _origLoadChainStatus(); resetChainCountdown(); };
+  loadChainStatus = function() { _origLoadChainStatus(); chainCdSec = CHAIN_INTERVAL; updateChainBtn(); };
   window.loadChainStatus = loadChainStatus;
 
   setInterval(function() {
     chainCdSec--;
     if (chainCdSec <= 0) { loadChainStatus(); }
-    else if (chainCdEl) chainCdEl.textContent = 'next in ' + chainCdSec + 's';
+    else { updateChainBtn(); }
   }, 1000);
 
   loadChainStatus();

@@ -112,6 +112,14 @@ func (s *Service) Status(chain string) *status.ChainStatus {
 	return s.statuses[chain]
 }
 
+// RemoveStatus removes a chain from the in-memory status map.
+// Call after removing a registered chain from the DB so it disappears immediately.
+func (s *Service) RemoveStatus(chain string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.statuses, chain)
+}
+
 // AllStatuses returns a snapshot of all polled chain statuses.
 func (s *Service) AllStatuses() []*status.ChainStatus {
 	s.mu.RLock()
