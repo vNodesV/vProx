@@ -145,6 +145,7 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 	mux.Handle("GET /api/v1/stats", s.requireSession(http.HandlerFunc(s.handleAPIStats)))
 	mux.Handle("GET /api/v1/chart", s.requireSession(http.HandlerFunc(s.handleAPIChart)))
 	mux.Handle("GET /api/v1/probe", s.requireSession(http.HandlerFunc(s.handleAPIProbe)))
+	mux.Handle("GET /api/v1/push/chains/traffic", s.requireSession(http.HandlerFunc(s.handleAPIChainTraffic)))
 
 	// Push module routes — only registered when push is configured.
 	if s.push != nil {

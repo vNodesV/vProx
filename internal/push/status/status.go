@@ -32,13 +32,15 @@ type ChainStatus struct {
 	NodeStatus      string    `json:"node_status"` // synced|syncing|down
 
 	// Governance
-	ActiveProposals int `json:"active_proposals"`
+	ActiveProposals   int      `json:"active_proposals"`
+	ActiveProposalIDs []string `json:"active_proposal_ids,omitempty"`
 
 	// Upgrade plan
-	UpgradePending bool   `json:"upgrade_pending"`
-	UpgradeName    string `json:"upgrade_name,omitempty"`
-	UpgradeHeight  int64  `json:"upgrade_height,omitempty"`
-	UpgradeEstUTC  string `json:"upgrade_est_utc,omitempty"`
+	UpgradePending    bool   `json:"upgrade_pending"`
+	UpgradeName       string `json:"upgrade_name,omitempty"`
+	UpgradeHeight     int64  `json:"upgrade_height,omitempty"`
+	UpgradeEstUTC     string `json:"upgrade_est_utc,omitempty"`
+	UpgradeProposalID string `json:"upgrade_proposal_id,omitempty"`
 
 	// Metadata
 	UpdatedAt time.Time `json:"updated_at"`
@@ -64,6 +66,9 @@ func Poll(ctx context.Context, chain, rpcURL, restURL string) *ChainStatus {
 	if restURL != "" {
 		pollGov(ctx, s)
 		pollUpgrade(ctx, s)
+		if s.UpgradePending {
+			pollGovPassedUpgrade(ctx, s)
+		}
 	}
 
 	return s
@@ -158,6 +163,91 @@ func pollGov(ctx context.Context, s *ChainStatus) {
 		return
 	}
 	s.ActiveProposals = len(r.Proposals)
+	ids := make([]string, 0, len(r.Proposals))
+	for _, p := range r.Proposals {
+		if p.ID != "" {
+			ids = append(ids, p.ID)
+		}
+	}
+	s.ActiveProposalIDs = ids
+}
+
+// passedPropResponse handles both v1beta1 and v1 governance proposal shapes.
+type passedPropResponse struct {
+	Proposals []struct {
+		ProposalID string `json:"proposal_id"` // v1beta1
+		ID         string `json:"id"`          // v1
+		Content    struct {
+			Type string `json:"@type"`
+			Plan struct {
+				Name string `json:"name"`
+			} `json:"plan"`
+		} `json:"content"` // v1beta1
+		Messages []struct {
+			Type string `json:"@type"`
+			Plan struct {
+				Name string `json:"name"`
+			} `json:"plan"`
+		} `json:"messages"` // v1
+	} `json:"proposals"`
+}
+
+// pollGovPassedUpgrade tries to find the governance proposal ID for the
+// current upgrade plan by searching passed proposals. Best-effort; silently
+// skips on any error or no match.
+func pollGovPassedUpgrade(ctx context.Context, s *ChainStatus) {
+	for _, endpoint := range []string{
+		s.RESTURL + "/cosmos/gov/v1beta1/proposals?proposal_status=3",
+		s.RESTURL + "/cosmos/gov/v1/proposals?proposal_status=PROPOSAL_STATUS_PASSED",
+	} {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+		if err != nil {
+			continue
+		}
+		resp, err := httpClient.Do(req)
+		if err != nil || resp.StatusCode >= 400 {
+			if resp != nil {
+				resp.Body.Close()
+			}
+			continue
+		}
+		var r passedPropResponse
+		if err := json.NewDecoder(resp.Body).Decode(&r); err != nil {
+			resp.Body.Close()
+			continue
+		}
+		resp.Body.Close()
+		for _, p := range r.Proposals {
+			// v1beta1 shape
+			if p.Content.Plan.Name == s.UpgradeName &&
+				(p.Content.Type == "/cosmos.upgrade.v1beta1.SoftwareUpgradeProposal" ||
+					p.Content.Type == "cosmos.upgrade.v1beta1.SoftwareUpgradeProposal") {
+				id := p.ProposalID
+				if id == "" {
+					id = p.ID
+				}
+				if id != "" {
+					s.UpgradeProposalID = id
+					return
+				}
+			}
+			// v1 shape
+			for _, msg := range p.Messages {
+				if msg.Plan.Name == s.UpgradeName &&
+					(msg.Type == "/cosmos.upgrade.v1beta1.MsgSoftwareUpgrade" ||
+						msg.Type == "cosmos.upgrade.v1beta1.MsgSoftwareUpgrade") {
+					id := p.ID
+					if id == "" {
+						id = p.ProposalID
+					}
+					if id != "" {
+						s.UpgradeProposalID = id
+						return
+					}
+				}
+			}
+		}
+	}
 }
 
 // ---- Cosmos REST: upgrade plan ----

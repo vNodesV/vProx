@@ -927,3 +927,38 @@ WHERE day >= date('now', ?) ORDER BY day`
 		},
 	}, nil
 }
+
+
+// HostTraffic holds per-host request counts split by protocol.
+type HostTraffic struct {
+Host string `json:"host"`
+HTTP int64  `json:"http"`
+WS   int64  `json:"ws"`
+}
+
+// CountRequestsByHost returns per-host request counts from request_events,
+// splitting WebSocket (route starts with "ws") from HTTP requests.
+func (d *DB) CountRequestsByHost() ([]HostTraffic, error) {
+const q = `
+SELECT host,
+       SUM(CASE WHEN route LIKE 'ws%' OR route = 'websocket' THEN 1 ELSE 0 END) AS ws_count,
+       SUM(CASE WHEN route LIKE 'ws%' OR route = 'websocket' THEN 0 ELSE 1 END) AS http_count
+FROM request_events
+WHERE host != ''
+GROUP BY host
+ORDER BY http_count DESC`
+rows, err := d.Query(q)
+if err != nil {
+return nil, fmt.Errorf("count requests by host: %w", err)
+}
+defer rows.Close()
+var out []HostTraffic
+for rows.Next() {
+var t HostTraffic
+if err := rows.Scan(&t.Host, &t.WS, &t.HTTP); err != nil {
+return nil, fmt.Errorf("scan host traffic: %w", err)
+}
+out = append(out, t)
+}
+return out, rows.Err()
+}

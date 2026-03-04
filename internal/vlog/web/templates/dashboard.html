@@ -302,10 +302,35 @@
     return '<span style="font-size:.68rem;padding:.08rem .35rem;border-radius:3px;border:1px solid rgba(239,83,80,0.5);color:#ef5350;font-weight:600">DOWN</span>';
   }
 
+  function syncTag(status) {
+    if (status === 'synced') return '<span style="color:#00ff00;font-size:.78rem">YES</span>';
+    if (status === 'syncing') return '<span style="color:#ffa726;font-size:.78rem">NO</span>';
+    return '<span style="opacity:.4;font-size:.78rem">—</span>';
+  }
+
   function updateCountdown() {
     var note = document.getElementById('chain-countdown-note');
     if (!note) return;
     note.textContent = chainPinging ? 'Pinging…' : ('Next refresh in ' + chainCdSec + 's');
+  }
+
+  // Build a map: host.toLowerCase() → {http, ws} for fast lookup.
+  function buildTrafficMap(traffic) {
+    var m = {};
+    if (!traffic) return m;
+    traffic.forEach(function(t) { m[t.host.toLowerCase()] = t; });
+    return m;
+  }
+
+  // Find the best-match traffic entry for a chain name.
+  // Matches: exact, "chain.domain.tld", "chain-suffix.domain.tld"
+  function matchTraffic(tmap, chainName) {
+    var cn = chainName.toLowerCase();
+    if (tmap[cn]) return tmap[cn];
+    for (var h in tmap) {
+      if (h === cn || h.indexOf(cn + '.') === 0 || h.indexOf(cn + '-') === 0) return tmap[h];
+    }
+    return null;
   }
 
   function loadChainStatus() {
@@ -313,10 +338,12 @@
     if (!panel) return;
     Promise.all([
       fetch(BASE + '/api/v1/push/chains').then(function(r) { return r.json(); }),
-      fetch(BASE + '/api/v1/push/chains/registered').then(function(r) { return r.json(); }).catch(function() { return {registered_chains:[]}; })
+      fetch(BASE + '/api/v1/push/chains/registered').then(function(r) { return r.json(); }).catch(function() { return {registered_chains:[]}; }),
+      fetch(BASE + '/api/v1/push/chains/traffic').then(function(r) { return r.json(); }).catch(function() { return {traffic:[]}; })
     ]).then(function(results) {
-      var chains = results[0].chains;
+      var chains  = results[0].chains;
       var regList = (results[1].registered_chains) || [];
+      var tmap    = buildTrafficMap((results[2].traffic) || []);
       var registeredSet = {};
       regList.forEach(function(rc) { registeredSet[rc.chain] = true; });
       if (!chains || chains.length === 0) {
@@ -327,12 +354,42 @@
       var rows = chains.map(function(c) {
         var height   = c.height ? Number(c.height).toLocaleString() : '—';
         var earliest = c.earliest_height ? Number(c.earliest_height).toLocaleString() : '—';
-        var props    = c.active_proposals > 0 ?
-          '<span style="color:#ffa726;font-weight:600">' + c.active_proposals + '</span>' : '—';
-        var upg = c.upgrade_pending ?
-          '<span style="color:#ef5350" title="' + escH(c.upgrade_name) + ' @ ' + c.upgrade_height + '">' + escH(c.upgrade_name) + '</span>' : '—';
-        var estTime    = c.upgrade_est_utc ? escH(c.upgrade_est_utc.replace('T',' ').replace('Z',' UTC')) : '—';
-        var latestTime = c.latest_block_time ? escH(c.latest_block_time.slice(0,19).replace('T',' ')) : '—';
+
+        // Voting proposals — link to ping.pub if any
+        var props;
+        if (c.active_proposals > 0) {
+          var govURL = 'https://ping.pub/' + encodeURIComponent(c.chain) + '/gov';
+          props = '<a href="' + govURL + '" target="_blank" rel="noopener" style="color:#ffa726;font-weight:600;text-decoration:none" title="' + c.active_proposals + ' active proposal(s)">' + c.active_proposals + '</a>';
+        } else {
+          props = '—';
+        }
+
+        // Upcoming upgrade — link to specific proposal if ID is known
+        var upg;
+        if (c.upgrade_pending) {
+          var upgradeURL;
+          if (c.upgrade_proposal_id) {
+            upgradeURL = 'https://ping.pub/' + encodeURIComponent(c.chain) + '/gov/' + encodeURIComponent(c.upgrade_proposal_id);
+          } else {
+            upgradeURL = 'https://ping.pub/' + encodeURIComponent(c.chain) + '/gov';
+          }
+          var label = c.upgrade_name ? escH(c.upgrade_name) + ' @ ' + Number(c.upgrade_height).toLocaleString() : Number(c.upgrade_height).toLocaleString();
+          upg = '<a href="' + upgradeURL + '" target="_blank" rel="noopener" style="color:#ef5350;text-decoration:none;font-weight:600" title="' + escH(c.upgrade_name || '') + '">' + label + '</a>';
+        } else {
+          upg = '—';
+        }
+
+        // Requests — HTTP | WS
+        var tf = matchTraffic(tmap, c.chain);
+        var reqCell;
+        if (tf) {
+          reqCell = Number(tf.http).toLocaleString() +
+            '<span style="opacity:.4;margin:0 .25rem">|</span>' +
+            '<span style="opacity:.65">' + Number(tf.ws).toLocaleString() + '</span>';
+        } else {
+          reqCell = '<span style="opacity:.3">—</span>';
+        }
+
         var typeColors = {validator:'#4caf50',sp:'#42a5f5',relayer:'#ab47bc',external:'#78909c'};
         var typeLabel  = {validator:'VAL',sp:'SP',relayer:'RLY',external:'EXT'};
         var t = c.type || 'external';
@@ -343,12 +400,12 @@
         return '<tr>' +
           '<td style="white-space:nowrap;padding:.25rem .35rem">' + escH(c.chain) + badge + '</td>' +
           '<td style="text-align:center;padding:.25rem .35rem">' + liveTag(c.node_status) + '</td>' +
+          '<td style="text-align:center;padding:.25rem .35rem">' + syncTag(c.node_status) + '</td>' +
+          '<td style="text-align:right;font-variant-numeric:tabular-nums;padding:.25rem .35rem;white-space:nowrap">' + reqCell + '</td>' +
           '<td style="text-align:right;font-variant-numeric:tabular-nums;padding:.25rem .35rem">' + height + '</td>' +
-          '<td style="text-align:center;padding:.25rem .35rem">' + props + '</td>' +
-          '<td style="text-align:center;padding:.25rem .35rem">' + upg + '</td>' +
-          '<td style="text-align:center;white-space:nowrap;padding:.25rem .35rem">' + estTime + '</td>' +
           '<td style="text-align:right;font-variant-numeric:tabular-nums;padding:.25rem .35rem">' + earliest + '</td>' +
-          '<td style="text-align:left;white-space:nowrap;padding:.25rem .35rem">' + latestTime + '</td>' +
+          '<td style="text-align:center;padding:.25rem .35rem">' + props + '</td>' +
+          '<td style="text-align:left;white-space:nowrap;padding:.25rem .35rem">' + upg + '</td>' +
           '<td style="padding:.25rem .35rem">' + rmBtn + '</td>' +
           '</tr>';
       }).join('');
@@ -356,13 +413,13 @@
         '<table style="width:100%;border-collapse:collapse"><thead>' +
         '<tr style="font-size:.72rem;opacity:.6;border-bottom:1px solid var(--vn-border)">' +
         '<th style="text-align:left;padding:.2rem .35rem">Chain</th>' +
-        '<th style="padding:.2rem .35rem">Live</th>' +
+        '<th style="padding:.2rem .35rem">Status</th>' +
+        '<th style="padding:.2rem .35rem">Synced</th>' +
+        '<th style="text-align:right;padding:.2rem .35rem">Requests (HTTP | WS)</th>' +
         '<th style="text-align:right;padding:.2rem .35rem">Height</th>' +
-        '<th style="padding:.2rem .35rem">Proposals</th>' +
-        '<th style="padding:.2rem .35rem">Upgrade</th>' +
-        '<th style="padding:.2rem .35rem">Est. UTC</th>' +
         '<th style="text-align:right;padding:.2rem .35rem">Earliest</th>' +
-        '<th style="text-align:left;padding:.2rem .35rem">Latest Block</th>' +
+        '<th style="padding:.2rem .35rem">Voting</th>' +
+        '<th style="text-align:left;padding:.2rem .35rem">Upcoming Upgrade</th>' +
         '<th style="padding:.2rem .35rem"></th>' +
         '</tr></thead><tbody>' + rows + '</tbody></table>';
       updateCountdown();

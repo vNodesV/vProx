@@ -523,6 +523,15 @@ func (s *Server) handleAPIStats(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, stats)
 }
 
+func (s *Server) handleAPIChainTraffic(w http.ResponseWriter, r *http.Request) {
+	traffic, err := s.db.CountRequestsByHost()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"traffic": traffic})
+}
+
 func (s *Server) handleAPIChart(w http.ResponseWriter, r *http.Request) {
 	chartType := r.URL.Query().Get("type")
 	daysStr := r.URL.Query().Get("days")
