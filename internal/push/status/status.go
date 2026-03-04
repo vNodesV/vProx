@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 )
@@ -146,30 +147,51 @@ type govProposalsResponse struct {
 	} `json:"proposals"`
 }
 
+// pollGov fetches active (voting period) governance proposals.
+// Tries the v1 API first (Cosmos SDK 0.47+), falls back to v1beta1.
 func pollGov(ctx context.Context, s *ChainStatus) {
-	url := s.RESTURL + "/cosmos/gov/v1beta1/proposals?proposal_status=2"
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return
+	endpoints := []struct {
+		url string
+		v1  bool
+	}{
+		{s.RESTURL + "/cosmos/gov/v1/proposals?proposal_status=PROPOSAL_STATUS_VOTING_PERIOD", true},
+		{s.RESTURL + "/cosmos/gov/v1beta1/proposals?proposal_status=2", false},
 	}
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return
-	}
-	defer resp.Body.Close()
-
-	var r govProposalsResponse
-	if err := json.NewDecoder(resp.Body).Decode(&r); err != nil {
-		return
-	}
-	s.ActiveProposals = len(r.Proposals)
-	ids := make([]string, 0, len(r.Proposals))
-	for _, p := range r.Proposals {
-		if p.ID != "" {
-			ids = append(ids, p.ID)
+	for _, ep := range endpoints {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, ep.url, nil)
+		if err != nil {
+			continue
 		}
+		resp, err := httpClient.Do(req)
+		if err != nil {
+			continue
+		}
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			continue
+		}
+		var r passedPropResponse
+		if err := json.Unmarshal(body, &r); err != nil || len(r.Proposals) == 0 && ep.v1 {
+			// v1 returned 200 with 0 proposals → could be empty chain, accept it.
+			if err != nil {
+				continue
+			}
+		}
+		s.ActiveProposals = len(r.Proposals)
+		ids := make([]string, 0, len(r.Proposals))
+		for _, p := range r.Proposals {
+			id := p.ID
+			if id == "" {
+				id = p.ProposalID
+			}
+			if id != "" {
+				ids = append(ids, id)
+			}
+		}
+		s.ActiveProposalIDs = ids
+		return // success
 	}
-	s.ActiveProposalIDs = ids
 }
 
 // passedPropResponse handles both v1beta1 and v1 governance proposal shapes.

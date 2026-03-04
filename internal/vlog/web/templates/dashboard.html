@@ -333,6 +333,57 @@
     return null;
   }
 
+  // Extract hostname from a URL (strips scheme, port, path).
+  function extractHost(url) {
+    try {
+      return new URL(url).hostname;
+    } catch (e) {
+      return url.replace(/^https?:\/\//, '').split(/[/:?#]/)[0];
+    }
+  }
+
+  // Probe badge: colored dot with label.
+  function probeDot(ok, label) {
+    var color = ok ? '#4caf50' : '#ef5350';
+    return '<span style="font-size:.65rem;color:' + color + ';margin:0 .15rem" title="' + label + '">●</span>';
+  }
+
+  // Fire probes for each chain asynchronously; update probe-{idx} cells as results arrive.
+  // Uses fuzzy-matched traffic host first (public-facing), falls back to rpc_url hostname.
+  function fireProbes(chains, tmap) {
+    chains.forEach(function(c, idx) {
+      // Prefer the public-facing host (the one vLog sees in ingested data).
+      var tf = matchTraffic(tmap, c.chain);
+      var host = tf ? tf.host : '';
+      if (!host && c.rpc_url) {
+        host = extractHost(c.rpc_url);
+      }
+      if (!host) {
+        var cell = document.getElementById('probe-' + idx);
+        if (cell) cell.innerHTML = '<span style="opacity:.3;font-size:.72rem">—</span>';
+        return;
+      }
+      fetch(BASE + '/api/v1/probe?host=' + encodeURIComponent(host))
+        .then(function(r) { return r.json(); })
+        .then(function(p) {
+          var cell = document.getElementById('probe-' + idx);
+          if (!cell) return;
+          if (p.error) {
+            cell.innerHTML = '<span style="opacity:.3;font-size:.72rem" title="' + escH(p.error) + '">N/A</span>';
+            return;
+          }
+          var local = p.local && p.local.ok !== undefined ? probeDot(p.local.ok, 'Local') : '<span style="opacity:.3" title="Local">●</span>';
+          var ca    = p.ca    && p.ca.ok    !== undefined ? probeDot(p.ca.ok,    'CDN/CA') : '<span style="opacity:.3" title="CDN">●</span>';
+          var ww    = p.ww    && p.ww.ok    !== undefined ? probeDot(p.ww.ok,    'WW') : '<span style="opacity:.3" title="WW">●</span>';
+          cell.innerHTML = '<span title="Local / CDN / WW">' + local + ca + ww + '</span>';
+        })
+        .catch(function() {
+          var cell = document.getElementById('probe-' + idx);
+          if (cell) cell.innerHTML = '<span style="opacity:.3;font-size:.72rem">err</span>';
+        });
+    });
+  }
+
   function loadChainStatus() {
     var panel = document.getElementById('chain-status-panel');
     if (!panel) return;
@@ -351,7 +402,7 @@
         return;
       }
       chains.sort(function(a, b) { return a.chain.localeCompare(b.chain); });
-      var rows = chains.map(function(c) {
+      var rows = chains.map(function(c, idx) {
         var height   = c.height ? Number(c.height).toLocaleString() : '—';
         var earliest = c.earliest_height ? Number(c.earliest_height).toLocaleString() : '—';
 
@@ -397,6 +448,7 @@
         var rmStyle = 'background:none;border:1px solid rgba(239,83,80,0.4);color:#ef5350;padding:.08rem .4rem;border-radius:3px;cursor:pointer;font-size:.72rem;transition:all 0.2s';
         var rmBtn = registeredSet[c.chain] ?
           '<button onclick="removeChain(\''+escH(c.chain)+'\')" style="'+rmStyle+'">remove</button>' : '';
+        // Probe cell — spinner until fireProbes() resolves for this chain
         return '<tr>' +
           '<td style="white-space:nowrap;padding:.25rem .35rem">' + escH(c.chain) + badge + '</td>' +
           '<td style="text-align:center;padding:.25rem .35rem">' + liveTag(c.node_status) + '</td>' +
@@ -406,6 +458,7 @@
           '<td style="text-align:right;font-variant-numeric:tabular-nums;padding:.25rem .35rem">' + earliest + '</td>' +
           '<td style="text-align:center;padding:.25rem .35rem">' + props + '</td>' +
           '<td style="text-align:left;white-space:nowrap;padding:.25rem .35rem">' + upg + '</td>' +
+          '<td id="probe-' + idx + '" style="text-align:center;padding:.25rem .35rem;white-space:nowrap">' + spinnerHTML() + '</td>' +
           '<td style="padding:.25rem .35rem">' + rmBtn + '</td>' +
           '</tr>';
       }).join('');
@@ -420,9 +473,11 @@
         '<th style="text-align:right;padding:.2rem .35rem">Earliest</th>' +
         '<th style="padding:.2rem .35rem">Voting</th>' +
         '<th style="text-align:left;padding:.2rem .35rem">Upcoming Upgrade</th>' +
+        '<th style="padding:.2rem .35rem">Probe</th>' +
         '<th style="padding:.2rem .35rem"></th>' +
         '</tr></thead><tbody>' + rows + '</tbody></table>';
       updateCountdown();
+      fireProbes(chains, tmap);
     }).catch(function() {
       panel.innerHTML = '<p style="padding:.4rem;color:#ef4444;font-size:.78rem">push module not configured or unreachable.</p>';
     });

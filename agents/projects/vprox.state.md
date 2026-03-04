@@ -1256,3 +1256,71 @@ type = "validator"
 - P2/P3 security findings: CR-2, CR-6, CR-8, SEC-H3, SEC-M4, SEC-M6, SEC-L1–L4
 - PR: `vLog/v1.2.0` → `develop` → `main`
 - Release tag: `vProxVL-v1.2.0`
+
+---
+
+## Session Dump — 2026-03-04 (open work reconciliation)
+
+### Timestamp
+2026-03-04T16:37Z
+
+### Branch: `vLog/v1.2.0` | HEAD: `911dc7d`
+
+### Reconciliation — Open Work Audit
+
+All items from the 2026-03-04 push module schema refactor session verified against codebase.
+
+#### ✅ DONE — Verified in code or git
+
+| Item | Evidence |
+|------|----------|
+| Script migration `vApp/` → `vProx/scripts/chains/akash/` | 10 `.sh` files in place: node/configure, node/service, node/install, validator/create_key, validator/create_validator, relayer/configure, relayer/install, provider/deploy, provider/configure, provider/install |
+| Phase E `pe-push-cmd` | `cmd/vprox/push.go` — full `push hosts\|vms\|deploy\|add\|remove\|update` |
+| Phase E `pe-mod-pkg` + `pe-mod-cmd` | `internal/modules/modules.go` + `cmd/vprox/mod.go` — `mod list\|add\|update\|remove\|restart` |
+| Phase E `pe-chain-pkg` + `pe-chain-cmd` | `internal/chain/upgrade/` + `cmd/vprox/chain.go` — `chain status\|upgrade --prop` |
+| Dashboard auto-refresh 65s | `3d33938` — `setInterval(loadChainStatus, 65000)` restored |
+| Dashboard type badges VAL/SP/RLY/EXT | `115b467` — badge on chain status table rows |
+| **CR-2** Backup nil-deref | `os.Stat` errors returned + `copyFile` skips on TOCTOU at L127, L150 |
+| **CR-6** geo.Close() race | `dbMu.Lock()` acquired before nil assignment (comment `CR-6:` at geo.go:379) |
+| **CR-8** time.Tick leak | Stoppable `cacheTicker *time.Ticker` + `cacheStop` channel (geo.go:33-34, Close L366-376) |
+| **SEC-H3** XFF spoofing | `WithTrustedProxies([]string)` + CIDR allowlist (`trustedProxies []*net.IPNet`) on IPLimiter |
+| **SEC-M4** WS origin bypass | `makeOriginChecker(d.AllowedOrigins)` replaces hardcoded `CheckOrigin: always true` |
+| **SEC-M6** autoState leak | `autoState.Range()` eviction sweep added (limiter.go:427-440) |
+| **SEC-L1** LIKE metachar | `escapeSQLLike()` used in all three search LIKE clauses with `ESCAPE '\'` |
+| **SEC-L2** unbounded VT read | `io.LimitReader(resp.Body, 2<<20)` at virustotal.go:46 |
+| **SEC-L3** decompression bomb | `io.LimitReader(tr, 64<<20)` at ingest.go:148,159 |
+| **SEC-L4** RateLimit-Policy leak | `X-RateLimit-Policy` header removed; only `X-RateLimit-Status` remains |
+
+#### 🔴 STILL OPEN
+
+| Item | Status | Action Required |
+|------|--------|-----------------|
+| Push `911dc7d` to `origin/vLog/v1.2.0` | 1 commit behind | `git push origin vLog/v1.2.0` |
+| PR `vLog/v1.2.0` → `main` | PR #37 CLOSED without merge | Reopen #37 or open new PR from `develop` → `main` |
+| Release tag `vProxVL-v1.2.0` | Not yet created | After merge to main |
+| Production `vms.toml` flat migration | Deployment task — unverifiable from code | Manual on server: remove `[[vm.chain]]`, add `type = "validator"`, set `host =` flat |
+
+### Security Audit Status — FULLY RESOLVED
+
+All P0, P1, and P2/P3 findings from 2026-03-01 audit are now fixed.
+**No outstanding security findings remain.**
+
+| Severity | IDs Fixed | Total |
+|----------|-----------|-------|
+| CRITICAL | SEC-C1, SEC-C2, CR-1 | 3 |
+| HIGH | CR-3, CR-4, CR-5, SEC-H1, SEC-H2, SEC-H3, SEC-H4, CR-2 | 8 |
+| MEDIUM | CR-6, CR-8, SEC-M1, SEC-M2, SEC-M3, SEC-M4, SEC-M5, SEC-M6 | 8 |
+| LOW | SEC-L1, SEC-L2, SEC-L3, SEC-L4, SEC-L5 | 5 |
+
+### Phase E CLI Status — SHIPPED
+
+All three Phase E CLI command groups are implemented:
+- `vprox push hosts|vms|deploy|add|remove|update` — `cmd/vprox/push.go`
+- `vprox mod list|add|update|remove|restart` — `cmd/vprox/mod.go` + `internal/modules/`
+- `vprox chain status|upgrade --prop N` — `cmd/vprox/chain.go` + `internal/chain/upgrade/`
+
+### Next First Steps
+1. `git push origin vLog/v1.2.0`
+2. Reopen or create PR `develop` → `main`
+3. Tag `vProxVL-v1.2.0` after merge
+4. Migrate production `vms.toml` to flat format

@@ -97,6 +97,12 @@ CREATE TABLE IF NOT EXISTS blocked_ips (
 	ufw_applied INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_blocked_ips_ip ON blocked_ips(ip);
+
+CREATE TABLE IF NOT EXISTS host_traffic (
+	host       TEXT PRIMARY KEY,
+	http_count INTEGER NOT NULL DEFAULT 0,
+	ws_count   INTEGER NOT NULL DEFAULT 0
+);
 `
 
 // Migrate executes the schema DDL against db, creating all tables and

@@ -931,34 +931,45 @@ WHERE day >= date('now', ?) ORDER BY day`
 
 // HostTraffic holds per-host request counts split by protocol.
 type HostTraffic struct {
-Host string `json:"host"`
-HTTP int64  `json:"http"`
-WS   int64  `json:"ws"`
+	Host string `json:"host"`
+	HTTP int64  `json:"http"`
+	WS   int64  `json:"ws"`
 }
 
-// CountRequestsByHost returns per-host request counts from request_events,
-// splitting WebSocket (route starts with "ws") from HTTP requests.
+// UpsertHostTraffic increments the HTTP or WS counter for host in host_traffic.
+// isWS=true increments ws_count; isWS=false increments http_count.
+// Called during archive ingestion for each parsed request event.
+func (d *DB) UpsertHostTraffic(tx interface {
+	Exec(query string, args ...any) (sql.Result, error)
+}, host string, isWS bool) error {
+	if host == "" {
+		return nil
+	}
+	if isWS {
+		_, err := tx.Exec(`INSERT INTO host_traffic (host, ws_count) VALUES (?, 1)
+			ON CONFLICT(host) DO UPDATE SET ws_count = ws_count + 1`, host)
+		return err
+	}
+	_, err := tx.Exec(`INSERT INTO host_traffic (host, http_count) VALUES (?, 1)
+		ON CONFLICT(host) DO UPDATE SET http_count = http_count + 1`, host)
+	return err
+}
+
+// CountRequestsByHost returns per-host pre-aggregated request counts from host_traffic.
 func (d *DB) CountRequestsByHost() ([]HostTraffic, error) {
-const q = `
-SELECT host,
-       SUM(CASE WHEN route LIKE 'ws%' OR route = 'websocket' THEN 1 ELSE 0 END) AS ws_count,
-       SUM(CASE WHEN route LIKE 'ws%' OR route = 'websocket' THEN 0 ELSE 1 END) AS http_count
-FROM request_events
-WHERE host != ''
-GROUP BY host
-ORDER BY http_count DESC`
-rows, err := d.Query(q)
-if err != nil {
-return nil, fmt.Errorf("count requests by host: %w", err)
-}
-defer rows.Close()
-var out []HostTraffic
-for rows.Next() {
-var t HostTraffic
-if err := rows.Scan(&t.Host, &t.WS, &t.HTTP); err != nil {
-return nil, fmt.Errorf("scan host traffic: %w", err)
-}
-out = append(out, t)
-}
-return out, rows.Err()
+	const q = `SELECT host, http_count, ws_count FROM host_traffic ORDER BY http_count DESC`
+	rows, err := d.Query(q)
+	if err != nil {
+		return nil, fmt.Errorf("count requests by host: %w", err)
+	}
+	defer rows.Close()
+	var out []HostTraffic
+	for rows.Next() {
+		var t HostTraffic
+		if err := rows.Scan(&t.Host, &t.HTTP, &t.WS); err != nil {
+			return nil, fmt.Errorf("scan host traffic: %w", err)
+		}
+		out = append(out, t)
+	}
+	return out, rows.Err()
 }

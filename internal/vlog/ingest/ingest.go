@@ -186,6 +186,10 @@ func (ing *Ingester) ingestCore(path string) error {
 		); err != nil {
 			return fmt.Errorf("insert request_event in %s: %w", name, err)
 		}
+		isWS := strings.HasPrefix(strings.ToLower(e.Route), "ws")
+		if err := ing.db.UpsertHostTraffic(tx, e.Host, isWS); err != nil {
+			return fmt.Errorf("upsert host traffic in %s: %w", name, err)
+		}
 	}
 
 	for _, e := range ratelimits {
