@@ -86,6 +86,8 @@ func (s *Service) pollAll(ctx context.Context) {
 			defer wg.Done()
 			st := status.Poll(ctx, vm.Name, vm.RPC(), vm.REST())
 			st.Type = vm.Type
+			st.Datacenter = vm.Datacenter
+			st.ExplorerURL = vm.ExplorerChainURL()
 			s.mu.Lock()
 			s.statuses[vm.Name] = st
 			s.mu.Unlock()

@@ -292,20 +292,17 @@
     return '<span class="probe-spinner"></span>';
   }
 
-  function liveTag(status) {
-    if (status === 'synced') {
-      return '<span style="font-size:.68rem;padding:.08rem .35rem;border-radius:3px;border:1px solid rgba(0,255,0,0.5);color:#00ff00;font-weight:600">LIVE</span>';
+  function statusTag(st) {
+    if (st === 'synced' || st === 'syncing') {
+      return '<span style="font-size:.68rem;padding:.08rem .35rem;border-radius:3px;border:1px solid rgba(0,255,0,0.5);color:#00ff00;font-weight:600">ONLINE</span>';
     }
-    if (status === 'syncing') {
-      return '<span style="font-size:.68rem;padding:.08rem .35rem;border-radius:3px;border:1px solid rgba(255,167,38,0.5);color:#ffa726;font-weight:600">SYNC</span>';
-    }
-    return '<span style="font-size:.68rem;padding:.08rem .35rem;border-radius:3px;border:1px solid rgba(239,83,80,0.5);color:#ef5350;font-weight:600">DOWN</span>';
+    return '<span style="font-size:.68rem;padding:.08rem .35rem;border-radius:3px;border:1px solid rgba(239,83,80,0.5);color:#ef5350;font-weight:600">OFFLINE</span>';
   }
 
-  function syncTag(status) {
-    if (status === 'synced') return '<span style="color:#00ff00;font-size:.78rem">YES</span>';
-    if (status === 'syncing') return '<span style="color:#ffa726;font-size:.78rem">NO</span>';
-    return '<span style="opacity:.4;font-size:.78rem">—</span>';
+  function syncTag(st) {
+    if (st === 'synced') return '<span style="font-size:.68rem;padding:.08rem .35rem;border-radius:3px;border:1px solid rgba(0,255,0,0.5);color:#00ff00;font-weight:600">YES</span>';
+    if (st === 'syncing') return '<span style="font-size:.68rem;padding:.08rem .35rem;border-radius:3px;border:1px solid rgba(255,167,38,0.5);color:#ffa726;font-weight:600">NO</span>';
+    return '<span style="opacity:.4;font-size:.72rem">—</span>';
   }
 
   function updateCountdown() {
@@ -342,22 +339,20 @@
     }
   }
 
-  // Probe badge: colored dot with label.
-  function probeDot(ok, label) {
-    var color = ok ? '#4caf50' : '#ef5350';
-    return '<span style="font-size:.65rem;color:' + color + ';margin:0 .15rem" title="' + label + '">●</span>';
+  // Probe cell helper: show label: Xms in green, or err in red.
+  function probeMs(res, label) {
+    if (!res) return '<span style="opacity:.4;font-size:.68rem">' + escH(label) + ':—</span>';
+    if (!res.ok) return '<span style="color:#ef5350;font-size:.68rem">' + escH(label) + ':✗</span>';
+    var ms = (res.latency_ms !== undefined && res.latency_ms !== null) ? res.latency_ms + 'ms' : 'ok';
+    return '<span style="color:#4caf50;font-size:.68rem">' + escH(label) + ':' + ms + '</span>';
   }
 
   // Fire probes for each chain asynchronously; update probe-{idx} cells as results arrive.
-  // Uses fuzzy-matched traffic host first (public-facing), falls back to rpc_url hostname.
   function fireProbes(chains, tmap) {
     chains.forEach(function(c, idx) {
-      // Prefer the public-facing host (the one vLog sees in ingested data).
       var tf = matchTraffic(tmap, c.chain);
       var host = tf ? tf.host : '';
-      if (!host && c.rpc_url) {
-        host = extractHost(c.rpc_url);
-      }
+      if (!host && c.rpc_url) host = extractHost(c.rpc_url);
       if (!host) {
         var cell = document.getElementById('probe-' + idx);
         if (cell) cell.innerHTML = '<span style="opacity:.3;font-size:.72rem">—</span>';
@@ -368,14 +363,13 @@
         .then(function(p) {
           var cell = document.getElementById('probe-' + idx);
           if (!cell) return;
-          if (p.error) {
-            cell.innerHTML = '<span style="opacity:.3;font-size:.72rem" title="' + escH(p.error) + '">N/A</span>';
-            return;
-          }
-          var local = p.local && p.local.ok !== undefined ? probeDot(p.local.ok, 'Local') : '<span style="opacity:.3" title="Local">●</span>';
-          var ca    = p.ca    && p.ca.ok    !== undefined ? probeDot(p.ca.ok,    'CDN/CA') : '<span style="opacity:.3" title="CDN">●</span>';
-          var ww    = p.ww    && p.ww.ok    !== undefined ? probeDot(p.ww.ok,    'WW') : '<span style="opacity:.3" title="WW">●</span>';
-          cell.innerHTML = '<span title="Local / CDN / WW">' + local + ca + ww + '</span>';
+          if (p.error) { cell.innerHTML = '<span style="opacity:.3;font-size:.72rem" title="' + escH(p.error) + '">N/A</span>'; return; }
+          var sep = '<span style="opacity:.25;margin:0 .15rem">·</span>';
+          var caLabel = (p.ca && p.ca.node) ? p.ca.node.toUpperCase() : 'CA';
+          var wwLabel = (p.ww && p.ww.node) ? p.ww.node.toUpperCase() : 'WW';
+          cell.innerHTML = '<span style="white-space:nowrap">' +
+            probeMs(p.local, 'L') + sep + probeMs(p.ca, caLabel) + sep + probeMs(p.ww, wwLabel) +
+            '</span>';
         })
         .catch(function() {
           var cell = document.getElementById('probe-' + idx);
@@ -402,80 +396,107 @@
         return;
       }
       chains.sort(function(a, b) { return a.chain.localeCompare(b.chain); });
+      var thStyle  = 'text-align:left;padding:.18rem .35rem;font-weight:500;opacity:.65;font-size:.7rem;white-space:nowrap';
+      var tdStyle  = 'text-align:left;padding:.25rem .35rem;vertical-align:middle';
+      var tdNum    = 'text-align:left;font-variant-numeric:tabular-nums;padding:.25rem .35rem;vertical-align:middle;white-space:nowrap';
+      var catStyle = 'text-align:left;padding:.2rem .35rem;font-size:.68rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase;opacity:.45;border-bottom:1px solid var(--vn-border)';
+      var typeColors = {validator:'#4caf50',sp:'#42a5f5',relayer:'#ab47bc',external:'#78909c'};
+      var typeLabel  = {validator:'VAL',sp:'SP',relayer:'RLY',external:'EXT'};
+      var rmStyle = 'background:none;border:1px solid rgba(239,83,80,0.4);color:#ef5350;padding:.08rem .4rem;border-radius:3px;cursor:pointer;font-size:.72rem;transition:all 0.2s';
+
       var rows = chains.map(function(c, idx) {
         var height   = c.height ? Number(c.height).toLocaleString() : '—';
         var earliest = c.earliest_height ? Number(c.earliest_height).toLocaleString() : '—';
 
-        // Voting proposals — link to ping.pub if any
-        var props;
+        // Explorer base URL (e.g. "https://ping.pub/cheqd")
+        var explorerBase = c.explorer_url || '';
+
+        // Active proposal
+        var activeProp;
         if (c.active_proposals > 0) {
-          var govURL = 'https://ping.pub/' + encodeURIComponent(c.chain) + '/gov';
-          props = '<a href="' + govURL + '" target="_blank" rel="noopener" style="color:#ffa726;font-weight:600;text-decoration:none" title="' + c.active_proposals + ' active proposal(s)">' + c.active_proposals + '</a>';
+          var govURL = explorerBase ? (explorerBase + '/gov') : ('https://ping.pub/' + encodeURIComponent(c.chain) + '/gov');
+          activeProp = '<a href="' + govURL + '" target="_blank" rel="noopener" style="color:#ffa726;font-weight:600;text-decoration:none" title="' + c.active_proposals + ' active proposal(s)">YES</a>';
         } else {
-          props = '—';
+          activeProp = '<span style="opacity:.4">NO</span>';
         }
 
-        // Upcoming upgrade — link to specific proposal if ID is known
+        // Voting ends
+        var votingEnds = '<span style="opacity:.3">—</span>';
+        if (c.voting_end_time) {
+          var d = new Date(c.voting_end_time);
+          if (!isNaN(d.getTime())) votingEnds = d.toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
+        }
+
+        // Upgrade
         var upg;
         if (c.upgrade_pending) {
           var upgradeURL;
-          if (c.upgrade_proposal_id) {
-            upgradeURL = 'https://ping.pub/' + encodeURIComponent(c.chain) + '/gov/' + encodeURIComponent(c.upgrade_proposal_id);
+          if (c.upgrade_proposal_id && explorerBase) {
+            upgradeURL = explorerBase + '/gov/' + encodeURIComponent(c.upgrade_proposal_id);
+          } else if (explorerBase) {
+            upgradeURL = explorerBase + '/gov';
           } else {
             upgradeURL = 'https://ping.pub/' + encodeURIComponent(c.chain) + '/gov';
           }
-          var label = c.upgrade_name ? escH(c.upgrade_name) + ' @ ' + Number(c.upgrade_height).toLocaleString() : Number(c.upgrade_height).toLocaleString();
-          upg = '<a href="' + upgradeURL + '" target="_blank" rel="noopener" style="color:#ef5350;text-decoration:none;font-weight:600" title="' + escH(c.upgrade_name || '') + '">' + label + '</a>';
+          var upgTitle = c.upgrade_name ? escH(c.upgrade_name) + ' @ ' + Number(c.upgrade_height).toLocaleString() : '';
+          upg = '<a href="' + upgradeURL + '" target="_blank" rel="noopener" style="color:#ef5350;font-weight:600;text-decoration:none" title="' + upgTitle + '">YES</a>';
         } else {
-          upg = '—';
+          upg = '<span style="opacity:.4">NO</span>';
         }
 
-        // Requests — HTTP | WS
-        var tf = matchTraffic(tmap, c.chain);
-        var reqCell;
-        if (tf) {
-          reqCell = Number(tf.http).toLocaleString() +
-            '<span style="opacity:.4;margin:0 .25rem">|</span>' +
-            '<span style="opacity:.65">' + Number(tf.ws).toLocaleString() + '</span>';
-        } else {
-          reqCell = '<span style="opacity:.3">—</span>';
-        }
-
-        var typeColors = {validator:'#4caf50',sp:'#42a5f5',relayer:'#ab47bc',external:'#78909c'};
-        var typeLabel  = {validator:'VAL',sp:'SP',relayer:'RLY',external:'EXT'};
         var t = c.type || 'external';
-        var badge = '<span style="font-size:.65rem;padding:.05rem .3rem;border-radius:3px;border:1px solid '+(typeColors[t]||'#78909c')+';color:'+(typeColors[t]||'#78909c')+';margin-left:.3rem">'+(typeLabel[t]||t.toUpperCase())+'</span>';
-        var rmStyle = 'background:none;border:1px solid rgba(239,83,80,0.4);color:#ef5350;padding:.08rem .4rem;border-radius:3px;cursor:pointer;font-size:.72rem;transition:all 0.2s';
+        var badge = '<span style="font-size:.62rem;padding:.04rem .28rem;border-radius:3px;border:1px solid '+(typeColors[t]||'#78909c')+';color:'+(typeColors[t]||'#78909c')+';margin-left:.3rem">'+(typeLabel[t]||t.toUpperCase())+'</span>';
         var rmBtn = registeredSet[c.chain] ?
           '<button onclick="removeChain(\''+escH(c.chain)+'\')" style="'+rmStyle+'">remove</button>' : '';
-        // Probe cell — spinner until fireProbes() resolves for this chain
-        return '<tr>' +
-          '<td style="white-space:nowrap;padding:.25rem .35rem">' + escH(c.chain) + badge + '</td>' +
-          '<td style="text-align:center;padding:.25rem .35rem">' + liveTag(c.node_status) + '</td>' +
-          '<td style="text-align:center;padding:.25rem .35rem">' + syncTag(c.node_status) + '</td>' +
-          '<td style="text-align:right;font-variant-numeric:tabular-nums;padding:.25rem .35rem;white-space:nowrap">' + reqCell + '</td>' +
-          '<td style="text-align:right;font-variant-numeric:tabular-nums;padding:.25rem .35rem">' + height + '</td>' +
-          '<td style="text-align:right;font-variant-numeric:tabular-nums;padding:.25rem .35rem">' + earliest + '</td>' +
-          '<td style="text-align:center;padding:.25rem .35rem">' + props + '</td>' +
-          '<td style="text-align:left;white-space:nowrap;padding:.25rem .35rem">' + upg + '</td>' +
-          '<td id="probe-' + idx + '" style="text-align:center;padding:.25rem .35rem;white-space:nowrap">' + spinnerHTML() + '</td>' +
-          '<td style="padding:.25rem .35rem">' + rmBtn + '</td>' +
+
+        return '<tr style="border-bottom:1px solid rgba(255,255,255,.04)">' +
+          '<td style="' + tdStyle + ';white-space:nowrap">' + escH(c.chain) + badge + '</td>' +
+          '<td style="' + tdStyle + '">' + statusTag(c.node_status) + '</td>' +
+          '<td style="' + tdStyle + '">' + syncTag(c.node_status) + '</td>' +
+          '<td style="' + tdNum  + '">' + height + '</td>' +
+          '<td style="' + tdNum  + '">' + earliest + '</td>' +
+          '<td style="' + tdStyle + '">' + activeProp + '</td>' +
+          '<td style="' + tdNum  + ';font-size:.7rem">' + votingEnds + '</td>' +
+          '<td style="' + tdStyle + '">' + upg + '</td>' +
+          '<td style="' + tdStyle + ';opacity:.4;font-size:.7rem">—</td>' +
+          '<td id="probe-' + idx + '" style="' + tdStyle + ';white-space:nowrap">' + spinnerHTML() + '</td>' +
+          '<td style="' + tdStyle + ';opacity:.4;font-size:.7rem">—</td>' +
+          '<td style="' + tdStyle + ';opacity:.4;font-size:.7rem">—</td>' +
+          '<td style="' + tdStyle + ';opacity:.4;font-size:.7rem">—</td>' +
+          '<td style="' + tdStyle + '">' + rmBtn + '</td>' +
           '</tr>';
       }).join('');
+
+      // Category + column header rows
+      var catRow =
+        '<tr>' +
+        '<th colspan="5" style="' + catStyle + '">Chain Information</th>' +
+        '<th colspan="4" style="' + catStyle + ';border-left:1px solid var(--vn-border)">Governance</th>' +
+        '<th colspan="4" style="' + catStyle + ';border-left:1px solid var(--vn-border)">Performance</th>' +
+        '<th style="' + catStyle + '"></th>' +
+        '</tr>';
+      var colRow =
+        '<tr style="font-size:.72rem;border-bottom:1px solid var(--vn-border)">' +
+        '<th style="' + thStyle + '">Chain</th>' +
+        '<th style="' + thStyle + '">Status</th>' +
+        '<th style="' + thStyle + '">Synced</th>' +
+        '<th style="' + thStyle + '">Height</th>' +
+        '<th style="' + thStyle + '">Earliest</th>' +
+        '<th style="' + thStyle + ';border-left:1px solid var(--vn-border)">Active Proposal</th>' +
+        '<th style="' + thStyle + '">Voting Ends</th>' +
+        '<th style="' + thStyle + '">Upgrade</th>' +
+        '<th style="' + thStyle + '">Part. Avg</th>' +
+        '<th style="' + thStyle + ';border-left:1px solid var(--vn-border)">Pings</th>' +
+        '<th style="' + thStyle + '">Free Space</th>' +
+        '<th style="' + thStyle + '">Load AVG</th>' +
+        '<th style="' + thStyle + '">APT</th>' +
+        '<th style="' + thStyle + '"></th>' +
+        '</tr>';
+
       panel.innerHTML =
         '<table style="width:100%;border-collapse:collapse"><thead>' +
-        '<tr style="font-size:.72rem;opacity:.6;border-bottom:1px solid var(--vn-border)">' +
-        '<th style="text-align:left;padding:.2rem .35rem">Chain</th>' +
-        '<th style="padding:.2rem .35rem">Status</th>' +
-        '<th style="padding:.2rem .35rem">Synced</th>' +
-        '<th style="text-align:right;padding:.2rem .35rem">Requests (HTTP | WS)</th>' +
-        '<th style="text-align:right;padding:.2rem .35rem">Height</th>' +
-        '<th style="text-align:right;padding:.2rem .35rem">Earliest</th>' +
-        '<th style="padding:.2rem .35rem">Voting</th>' +
-        '<th style="text-align:left;padding:.2rem .35rem">Upcoming Upgrade</th>' +
-        '<th style="padding:.2rem .35rem">Probe</th>' +
-        '<th style="padding:.2rem .35rem"></th>' +
-        '</tr></thead><tbody>' + rows + '</tbody></table>';
+        catRow + colRow +
+        '</thead><tbody>' + rows + '</tbody></table>';
       updateCountdown();
       fireProbes(chains, tmap);
     }).catch(function() {

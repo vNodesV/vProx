@@ -59,3 +59,10 @@ api_aliases    = []      # e.g. ["api-alt.example.com"]
 [logging]
     file   = "your_chain.log"       # Per-chain log file (logs in data/logs/)
     format = "summary"              # summary | json | raw
+
+[explorer]
+    # Block explorer used by vLog dashboard for governance and upgrade links.
+    # chain_id is the official chain-id (e.g. "cheqd-mainnet-1"); the slug
+    # for the explorer URL is derived by trimming from the first "-" onwards.
+    explorer = "ping.pub"
+    chain_id = ""       # e.g. "cheqd-mainnet-1" → https://ping.pub/cheqd/gov

@@ -19,6 +19,8 @@ user       = "jarvis"
 key_path   = "/etc/vprox/push/id.push"
 datacenter = "QC"
 type       = "validator"
+explorer   = "ping.pub"   # block explorer base hostname
+chain_id   = "akashnet-2" # official chain-id (e.g. akashnet-2, cheqd-mainnet-1)
 # rpc_url  = "http://10.0.0.68:36657"   # only needed for non-standard ports
 # rest_url = "http://10.0.0.68:2317"
 

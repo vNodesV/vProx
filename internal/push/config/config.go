@@ -4,6 +4,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/pelletier/go-toml/v2"
 )
@@ -23,6 +24,10 @@ type VM struct {
 	Type       string `toml:"type"`     // validator | sp | relayer
 	RPCURL     string `toml:"rpc_url"`  // optional override
 	RESTURL    string `toml:"rest_url"` // optional override
+
+	// Block explorer config — used by vLog dashboard for governance links.
+	ExplorerBase string `toml:"explorer"`  // e.g. "ping.pub"
+	ChainID      string `toml:"chain_id"`  // official chain-id, e.g. "cheqd-mainnet-1"
 }
 
 // RPC returns the effective RPC URL, deriving it from Host when not set.
@@ -39,6 +44,22 @@ func (v VM) REST() string {
 		return v.RESTURL
 	}
 	return "http://" + v.Host + ":1317"
+}
+
+// ExplorerChainURL returns the base URL for this chain on the block explorer,
+// e.g. "https://ping.pub/cheqd". The chain slug is derived by trimming the
+// chain_id from the first "-" onwards (cheqd-mainnet-1 → cheqd).
+// Returns "" if chain_id is not configured.
+func (v VM) ExplorerChainURL() string {
+	if v.ChainID == "" {
+		return ""
+	}
+	base := v.ExplorerBase
+	if base == "" {
+		base = "ping.pub"
+	}
+	slug := strings.SplitN(v.ChainID, "-", 2)[0]
+	return "https://" + base + "/" + slug
 }
 
 // Config is the top-level push configuration parsed from vms.toml.

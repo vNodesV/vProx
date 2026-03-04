@@ -35,6 +35,7 @@ type ChainStatus struct {
 	// Governance
 	ActiveProposals   int      `json:"active_proposals"`
 	ActiveProposalIDs []string `json:"active_proposal_ids,omitempty"`
+	VotingEndTime     string   `json:"voting_end_time,omitempty"` // earliest UTC among active proposals
 
 	// Upgrade plan
 	UpgradePending    bool   `json:"upgrade_pending"`
@@ -44,8 +45,10 @@ type ChainStatus struct {
 	UpgradeProposalID string `json:"upgrade_proposal_id,omitempty"`
 
 	// Metadata
-	UpdatedAt time.Time `json:"updated_at"`
-	Error     string    `json:"error,omitempty"`
+	Datacenter  string    `json:"datacenter,omitempty"`
+	ExplorerURL string    `json:"explorer_url,omitempty"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	Error       string    `json:"error,omitempty"`
 }
 
 // Poll fetches full chain status from rpcURL and restURL.
@@ -176,6 +179,7 @@ func pollGov(ctx context.Context, s *ChainStatus) {
 		}
 		s.ActiveProposals = len(r.Proposals)
 		ids := make([]string, 0, len(r.Proposals))
+		var earliest time.Time
 		for _, p := range r.Proposals {
 			id := p.ID
 			if id == "" {
@@ -184,8 +188,20 @@ func pollGov(ctx context.Context, s *ChainStatus) {
 			if id != "" {
 				ids = append(ids, id)
 			}
+			if p.VotingEndTime != "" {
+				t, err2 := time.Parse(time.RFC3339Nano, p.VotingEndTime)
+				if err2 != nil {
+					t, err2 = time.Parse(time.RFC3339, p.VotingEndTime)
+				}
+				if err2 == nil && (earliest.IsZero() || t.Before(earliest)) {
+					earliest = t
+				}
+			}
 		}
 		s.ActiveProposalIDs = ids
+		if !earliest.IsZero() {
+			s.VotingEndTime = earliest.UTC().Format(time.RFC3339)
+		}
 		return // success
 	}
 }
@@ -193,9 +209,10 @@ func pollGov(ctx context.Context, s *ChainStatus) {
 // passedPropResponse handles both v1beta1 and v1 governance proposal shapes.
 type passedPropResponse struct {
 	Proposals []struct {
-		ProposalID string `json:"proposal_id"` // v1beta1
-		ID         string `json:"id"`          // v1
-		Content    struct {
+		ProposalID    string `json:"proposal_id"` // v1beta1
+		ID            string `json:"id"`          // v1
+		VotingEndTime string `json:"voting_end_time"`
+		Content       struct {
 			Type string `json:"@type"`
 			Plan struct {
 				Name string `json:"name"`
