@@ -1179,3 +1179,80 @@ jarvis5.0  (primary — implements + orchestrates)
 - P2/P3 security findings: CR-2, CR-6, CR-8, SEC-H3, SEC-M4, SEC-M6, SEC-L1–L4
 - PR: `vLog/v1.2.0` → `develop` → `main`
 - Release tag: `vProxVL-v1.2.0`
+
+
+---
+
+## Session Dump — 2026-03-04 (push module VM/chain schema refactor)
+
+### Session Summary
+- **Branch**: `vLog/v1.2.0` — HEAD `115b467`
+- **Commits this session**: `74d8eec` (JSON tags fix), `226fec5` (vlog status), `e0dc590` (nil-request panic fix), `115b467` (VM/chain schema refactor)
+
+### Work Completed
+
+#### 1. Nil-pointer panic fix (commit `e0dc590`)
+- **Root cause**: `status.pollRPC()` called `http.Client.Do(nil)` when `rpc_url` was empty string → `http.NewRequestWithContext` returned `(nil, err)` but error was ignored
+- **Fix**: guard `if req == nil { return }` in `pollRPC`; also fixed height bug: removed duplicate `fmt.Sscanf(si.EarliestBlockHeight, "%d", &h)` that clobbered latest height with earliest height
+
+#### 2. vlog status + start -d improvements (commit `226fec5`)
+- `vlog status --atop`: added systemctl service status block
+- `vlog start -d`: added success confirmation that service started
+
+#### 3. JSON tags fix (commit `74d8eec`)
+- `RegisteredChain` struct in `internal/push/state/state.go` was missing JSON tags
+- Go serialized as `{"Chain":...,"RPCURL":...}` but JS checked `rc.chain`/`rc.rpc_url`
+- Fixed: added lowercase json tags to all 5 fields
+
+#### 4. VM/chain schema refactor (commit `115b467`)
+**Core insight**: user's environment is 1 chain per VM, vmName = chainName. The `[[vm.chain]]` nesting was pure overhead — same RPC URL existed in chain.toml, vms.toml [[vm.chain]], AND registered_chains SQLite.
+
+**Model**: `VM.Name` IS the chain name. `VM.Type` = `validator | sp | relayer`. RPC/REST URLs derived from `Host` automatically (`http://host:26657`, `http://host:1317`). Override only when non-standard.
+
+**Files changed**:
+- `internal/push/config/config.go`: removed `VMChain` struct; flattened `VM` with `Type`, optional `RPCURL`/`RESTURL`; added `VM.RPC()` + `VM.REST()` derivation methods; `AllChains()` iterates VMs directly
+- `internal/push/status/status.go`: `ChainStatus.Type` added; height bug fixed
+- `internal/push/push.go`: `pollAll()` iterates VMs directly; sets `st.Type = vm.Type`; collision dedup (skip registered_chains if VM covers same name); `BestVM()` matches `vm.Name == chain`
+- `internal/push/api/api.go`: flat `vmView` (no chains array); flat `vmRegisterRequest`
+- `cmd/vprox/push.go`: TYPE column in `pushList`; `--type` flag replaces `--chain`/`--components`; `--rpc`/`--rest` are optional overrides
+- `cmd/vprox/chain.go`: updated loop from `for _, ch := range vm.Chains` to `vm.Name`/`vm.RPC()`/`vm.REST()`
+- `config/push/vms.sample.toml`: updated to flat format (no `[[vm.chain]]`)
+- `internal/vlog/web/templates/dashboard.html`: type badge on chain rows — VAL (green) / SP (blue) / RLY (purple) / EXT (grey)
+
+**Breaking change**: vms.toml format changed. Production migration needed:
+```toml
+# OLD:
+[[vm]]
+name = "akash-jarvis"
+  [[vm.chain]]
+  name = "akash"
+  rpc_url = "http://10.0.0.68:26657"
+
+# NEW:
+[[vm]]
+name = "akash"         # IS the chain name
+host = "10.0.0.68"
+type = "validator"
+# rpc_url derived automatically as http://host:26657
+```
+
+**registered_chains**: now strictly for chains user monitors but doesn't operate (external). Collision protection: `pollAll()` skips registered_chains entry if `cfg.FindVM(rc.Chain) != nil`.
+
+### Chain Type Semantics
+| Type | Label | Color | Meaning |
+|------|-------|-------|---------|
+| `validator` | VAL | 🟢 green | Signs blocks |
+| `sp` | SP | 🔵 blue | Service provider / public API/RPC node |
+| `relayer` | RLY | 🟣 purple | IBC relayer |
+| external | EXT | ⚫ grey | registered_chains — chain you monitor but don't run |
+
+### Open Work
+- **Production migration**: user must update `vms.toml` on server to flat format (remove `[[vm.chain]]`, add `type = "validator"`)
+- Dashboard type badge: `[VAL]`/`[SP]`/`[RLY]`/`[EXT]` now live — verify renders correctly
+- Dashboard auto-refresh: `setInterval(loadChainStatus, 65000)` — verify present (was in rewrite)
+- Push to remote: `git push origin vLog/v1.2.0` — not yet done this session (`115b467` is local only)
+- Script migration: `vApp/modules/vDeploy/validators/chains/akash/` → `vProx/scripts/chains/akash/`
+- Phase E CLI: `pe-push-cmd` → `pe-mod-pkg+cmd` → `pe-chain-pkg+cmd`
+- P2/P3 security findings: CR-2, CR-6, CR-8, SEC-H3, SEC-M4, SEC-M6, SEC-L1–L4
+- PR: `vLog/v1.2.0` → `develop` → `main`
+- Release tag: `vProxVL-v1.2.0`
