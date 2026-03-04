@@ -182,6 +182,7 @@
     <div class="chart-header">
       <strong style="font-size:.9rem;">⛓ Chain Status</strong>
       <button onclick="loadChainStatus()" style="padding:.15rem .65rem;font-size:.8rem;margin-left:.75rem;">↻ Refresh</button>
+      <span id="chain-refresh-cd" style="font-size:.68rem;opacity:.45;margin-left:.5rem"></span>
     </div>
     <div id="chain-status-panel" style="overflow-x:auto;max-height:220px;font-size:.78rem"></div>
     <details style="margin-top:.6rem">
@@ -676,8 +677,26 @@
   loadChart('right');
   loadEndpoints();
   initWizard();
+  var CHAIN_INTERVAL = 65;
+  var chainCdSec = CHAIN_INTERVAL;
+  var chainCdEl  = document.getElementById('chain-refresh-cd');
+
+  function resetChainCountdown() {
+    chainCdSec = CHAIN_INTERVAL;
+    if (chainCdEl) chainCdEl.textContent = 'next in ' + chainCdSec + 's';
+  }
+
+  var _origLoadChainStatus = loadChainStatus;
+  loadChainStatus = function() { _origLoadChainStatus(); resetChainCountdown(); };
+  window.loadChainStatus = loadChainStatus;
+
+  setInterval(function() {
+    chainCdSec--;
+    if (chainCdSec <= 0) { loadChainStatus(); }
+    else if (chainCdEl) chainCdEl.textContent = 'next in ' + chainCdSec + 's';
+  }, 1000);
+
   loadChainStatus();
-  setInterval(loadChainStatus, 65000);
 })();
 </script>
 {{end}}
