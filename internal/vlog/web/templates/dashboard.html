@@ -677,6 +677,7 @@
   loadEndpoints();
   initWizard();
   loadChainStatus();
+  setInterval(loadChainStatus, 65000);
 })();
 </script>
 {{end}}
