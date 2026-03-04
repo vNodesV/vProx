@@ -148,13 +148,14 @@ type govProposalsResponse struct {
 }
 
 // pollGov fetches active (voting period) governance proposals.
-// Tries the v1 API first (Cosmos SDK 0.47+), falls back to v1beta1.
+// Tries the v1 API first (Cosmos SDK 0.47+/0.50+ with CometBFT), falls back to v1beta1.
+// Uses proposal_status=2 (numeric) for broadest gateway compatibility.
 func pollGov(ctx context.Context, s *ChainStatus) {
 	endpoints := []struct {
 		url string
 		v1  bool
 	}{
-		{s.RESTURL + "/cosmos/gov/v1/proposals?proposal_status=PROPOSAL_STATUS_VOTING_PERIOD", true},
+		{s.RESTURL + "/cosmos/gov/v1/proposals?proposal_status=2", true},
 		{s.RESTURL + "/cosmos/gov/v1beta1/proposals?proposal_status=2", false},
 	}
 	for _, ep := range endpoints {
@@ -220,7 +221,7 @@ type passedPropResponse struct {
 func pollGovPassedUpgrade(ctx context.Context, s *ChainStatus) {
 	for _, endpoint := range []string{
 		s.RESTURL + "/cosmos/gov/v1beta1/proposals?proposal_status=3",
-		s.RESTURL + "/cosmos/gov/v1/proposals?proposal_status=PROPOSAL_STATUS_PASSED",
+		s.RESTURL + "/cosmos/gov/v1/proposals?proposal_status=3",
 	} {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 		if err != nil {
