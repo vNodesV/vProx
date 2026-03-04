@@ -1337,10 +1337,13 @@ func main() {
 		}); err != nil {
 			log.Fatalf("Backup failed: %v", err)
 		}
-		// Notify vLog (non-fatal). Prefer ports.toml vlog_url, fall back to env.
+		// Notify vLog (non-fatal). Prefer ports.toml vlog_url (chains/ then config/), fall back to env.
 		vlogURL := os.Getenv("VLOG_URL")
-		if p, err := config.LoadPorts(filepath.Join(configDir, "ports.toml")); err == nil && p.VLogURL != "" {
-			vlogURL = p.VLogURL
+		for _, p := range []string{filepath.Join(chainsConfigDir, "ports.toml"), filepath.Join(configDir, "ports.toml")} {
+			if pp, err := config.LoadPorts(p); err == nil && pp.VLogURL != "" {
+				vlogURL = pp.VLogURL
+				break
+			}
 		}
 		notifyVLog(vlogURL)
 		return
@@ -1352,10 +1355,14 @@ func main() {
 	stopCounterTicker := counter.StartTicker(accessCountsPath)
 
 	// Load configs (TOML only)
+	// Canonical: config/chains/ports.toml; backward compat: config/ports.toml
 	var loadErr error
-	portsPath := filepath.Join(configDir, "ports.toml")
+	portsPath := filepath.Join(chainsConfigDir, "ports.toml")
 	if _, err := os.Stat(portsPath); err != nil {
-		log.Fatalf("ports config missing: %s", portsPath)
+		portsPath = filepath.Join(configDir, "ports.toml")
+		if _, err2 := os.Stat(portsPath); err2 != nil {
+			log.Fatalf("ports config missing: expected %s or %s", filepath.Join(chainsConfigDir, "ports.toml"), portsPath)
+		}
 	}
 	defaultPorts, loadErr = config.LoadPorts(portsPath)
 	if loadErr != nil {
@@ -1363,11 +1370,10 @@ func main() {
 	}
 
 	// Load chain configs — scan order:
-	//   1. $configDir/chains/ (new structured layout, primary)
-	//   2. $chainsDir (~/.vProx/chains/, legacy primary)
-	//   3. $configDir (flat layout, backward compat — filtered by isChainTOML)
+	//   1. $configDir/chains/ (canonical)
+	//   2. $chainsDir (~/.vProx/chains/, legacy)
 	foundChains := false
-	for _, scanDir := range []string{chainsConfigDir, chainsDir, configDir} {
+	for _, scanDir := range []string{chainsConfigDir, chainsDir} {
 		if !config.HasChainConfigs(scanDir) {
 			continue
 		}
@@ -1382,14 +1388,14 @@ func main() {
 		applog.Print("INFO", "config", "chains_loaded", applog.F("dir", scanDir))
 	}
 	if !foundChains {
-		log.Fatalf("no chain configs found in %s, %s, or %s", chainsConfigDir, chainsDir, configDir)
+		log.Fatalf("no chain configs found in %s or %s", chainsConfigDir, chainsDir)
 	}
 
 	// Handle --validate flag: print config summary and exit
 	if *validateFlag {
 		log.Println("")
 		log.Println("CONFIG VALIDATION SUCCESSFUL #############################")
-		log.Printf("[VALIDATE] Loaded %d chains from %s, %s, %s", len(chains), chainsConfigDir, chainsDir, configDir)
+		log.Printf("[VALIDATE] Loaded %d chains from %s, %s", len(chains), chainsConfigDir, chainsDir)
 		for host := range chains {
 			log.Printf("  • %s", host)
 		}
