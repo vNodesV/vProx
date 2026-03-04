@@ -29,11 +29,11 @@ type Deployment struct {
 
 // RegisteredChain is an externally-monitored chain (not managed by push scripts).
 type RegisteredChain struct {
-	Chain   string
-	RPCURL  string
-	RESTURL string
-	Note    string
-	AddedAt time.Time
+	Chain   string    `json:"chain"`
+	RPCURL  string    `json:"rpc_url"`
+	RESTURL string    `json:"rest_url"`
+	Note    string    `json:"note"`
+	AddedAt time.Time `json:"added_at"`
 }
 
 // Open creates or opens the push SQLite database at path.
