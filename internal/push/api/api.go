@@ -3,9 +3,11 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/vNodesV/vProx/internal/push"
 	"github.com/vNodesV/vProx/internal/push/config"
@@ -232,6 +234,15 @@ func (h *Handlers) HandleVMRegister(w http.ResponseWriter, r *http.Request) {
 }
 
 // ── helper ────────────────────────────────────────────────────────────────────
+
+// HandlePoll triggers an immediate concurrent poll of all chains, waits up to
+// 10 s for results, then returns the fresh status map.
+func (h *Handlers) HandlePoll(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+	h.svc.Poll(ctx)
+	writeJSON(w, http.StatusOK, map[string]any{"chains": h.svc.AllStatuses()})
+}
 
 func writeJSON(w http.ResponseWriter, code int, v any) {
 	w.Header().Set("Content-Type", "application/json")

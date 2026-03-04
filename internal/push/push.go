@@ -76,34 +76,49 @@ func (s *Service) StartPolling(ctx context.Context, interval time.Duration) {
 	}
 }
 
-// pollAll refreshes status for all chains across all VMs.
+// pollAll refreshes status for all chains concurrently.
 func (s *Service) pollAll(ctx context.Context) {
+	var wg sync.WaitGroup
 	for _, vm := range s.cfg.VMs {
-		st := status.Poll(ctx, vm.Name, vm.RPC(), vm.REST())
-		st.Type = vm.Type
-		s.mu.Lock()
-		s.statuses[vm.Name] = st
-		s.mu.Unlock()
+		vm := vm
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			st := status.Poll(ctx, vm.Name, vm.RPC(), vm.REST())
+			st.Type = vm.Type
+			s.mu.Lock()
+			s.statuses[vm.Name] = st
+			s.mu.Unlock()
+		}()
 	}
 
 	// Also poll registered (external) chains.
 	registered, err := s.db.ListRegisteredChains()
 	if err != nil {
 		log.Printf("[push] list registered chains: %v", err)
-		return
-	}
-	for _, rc := range registered {
-		// Skip if a VM already covers this chain name.
-		if s.cfg.FindVM(rc.Chain) != nil {
-			continue
+	} else {
+		for _, rc := range registered {
+			// Skip if a VM already covers this chain name.
+			if s.cfg.FindVM(rc.Chain) != nil {
+				continue
+			}
+			rc := rc
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				st := status.Poll(ctx, rc.Chain, rc.RPCURL, rc.RESTURL)
+				st.Type = "external"
+				s.mu.Lock()
+				s.statuses[rc.Chain] = st
+				s.mu.Unlock()
+			}()
 		}
-		st := status.Poll(ctx, rc.Chain, rc.RPCURL, rc.RESTURL)
-		st.Type = "external"
-		s.mu.Lock()
-		s.statuses[rc.Chain] = st
-		s.mu.Unlock()
 	}
+	wg.Wait()
 }
+
+// Poll triggers an immediate concurrent poll of all chains and blocks until complete.
+func (s *Service) Poll(ctx context.Context) { s.pollAll(ctx) }
 
 // Status returns the last polled status for chain, or nil if never polled.
 func (s *Service) Status(chain string) *status.ChainStatus {

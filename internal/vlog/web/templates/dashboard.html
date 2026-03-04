@@ -181,7 +181,7 @@
   <div class="chart-block">
     <div class="chart-header">
       <strong style="font-size:.9rem;">⛓ Chain Status</strong>
-      <button id="chain-refresh-btn" onclick="loadChainStatus()" style="padding:.15rem .65rem;font-size:.8rem;margin-left:.75rem;">↻ Refresh</button>
+      <button id="chain-refresh-btn" onclick="pollChainStatus()" style="padding:.15rem .65rem;font-size:.8rem;margin-left:.75rem;">↻ Refresh</button>
     </div>
     <div id="chain-status-panel" style="overflow-x:auto;max-height:220px;font-size:.78rem"></div>
     <details style="margin-top:.6rem">
@@ -603,7 +603,10 @@
   function removeChain(chain) {
     if (!confirm('Remove "'+chain+'" from monitoring?')) return;
     fetch(BASE + '/api/v1/push/chains/registered/' + encodeURIComponent(chain), {method:'DELETE'})
-      .then(function() { loadChainStatus(); })
+      .then(function(r) {
+        if (!r.ok) { alert('Remove failed (HTTP '+r.status+'). Check server logs.'); return; }
+        loadChainStatus();
+      })
       .catch(function() { alert('Failed to remove '+chain); });
   }
 
@@ -680,19 +683,26 @@
   var CHAIN_INTERVAL = 65;
   var chainCdSec = CHAIN_INTERVAL;
   var chainCdBtn = document.getElementById('chain-refresh-btn');
+  var chainPolling = false;
 
   function updateChainBtn() {
-    if (chainCdBtn) chainCdBtn.textContent = '↻ Refresh ' + chainCdSec + 's';
+    if (!chainCdBtn) return;
+    chainCdBtn.textContent = chainPolling ? '↻ Polling…' : ('↻ Refresh ' + chainCdSec + 's');
   }
 
-  var _origLoadChainStatus = loadChainStatus;
-  loadChainStatus = function() { _origLoadChainStatus(); chainCdSec = CHAIN_INTERVAL; updateChainBtn(); };
-  window.loadChainStatus = loadChainStatus;
+  function pollChainStatus() {
+    chainPolling = true; chainCdSec = CHAIN_INTERVAL; updateChainBtn();
+    fetch(BASE + '/api/v1/push/poll', {method: 'POST'})
+      .then(function() { chainPolling = false; chainCdSec = CHAIN_INTERVAL; loadChainStatus(); })
+      .catch(function() { chainPolling = false; loadChainStatus(); });
+  }
+  window.pollChainStatus = pollChainStatus;
 
   setInterval(function() {
+    if (chainPolling) return;
     chainCdSec--;
-    if (chainCdSec <= 0) { loadChainStatus(); }
-    else { updateChainBtn(); }
+    updateChainBtn();
+    if (chainCdSec <= 0) { chainCdSec = CHAIN_INTERVAL; loadChainStatus(); }
   }, 1000);
 
   loadChainStatus();
