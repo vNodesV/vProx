@@ -235,6 +235,15 @@ add-%: validate-go dirs
 	    GOROOT="$(EFFECTIVE_GOROOT)" go build -o "$(GOPATH_BIN)/$(VLOG_NAME)" "$(VLOG_SRC)"; \
 	    echo "✓ $(VLOG_NAME) → $(GOPATH_BIN)/$(VLOG_NAME)"; \
 	    $(MAKE) config-vlog; \
+	    $(MAKE) config-push; \
+	    if [[ -f "config/chains/chain.sample.toml" ]]; then \
+	      cp "config/chains/chain.sample.toml" "$(CFG_DIR)/chains/chain.sample.toml"; \
+	      echo "✓ Refreshed chain.sample.toml → $(CFG_DIR)/chains/"; \
+	    fi; \
+	    if [[ -f "config/push/vms.sample.toml" ]]; then \
+	      cp "config/push/vms.sample.toml" "$(CFG_DIR)/push/vms.sample.toml"; \
+	      echo "✓ Refreshed vms.sample.toml → $(CFG_DIR)/push/"; \
+	    fi; \
 	    $(MAKE) service-vlog; \
 	    ;; \
 	  vProx|vprox) \
