@@ -185,6 +185,13 @@ config-push:
 		echo "✓ $(CFG_DIR)/push/vms.toml already exists"; \
 	fi
 
+## Overwrite ALL push sample files in CFG_DIR — safe to run anytime; never touches live vms.toml
+samples-push:
+	@mkdir -p "$(CFG_DIR)/push"
+	@cp "config/push/vms.sample.toml" "$(CFG_DIR)/push/vms.sample.toml"; \
+	  echo "✓ Refreshed vms.sample.toml → $(CFG_DIR)/push/vms.sample.toml"
+	@echo "Done. Edit $(CFG_DIR)/push/vms.toml to configure your VMs."
+
 ## Install modules registry stub
 
 config-modules:
