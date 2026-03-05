@@ -32,51 +32,61 @@
   </div>
 </div>
 
-<div class="chart-row">
-  <!-- LEFT BLOCK -->
-  <div class="chart-block">
-    <div class="chart-header">
-      <select id="chart-left-type" onchange="loadChart('left')">
-        <option value="ips_over_time">IPs over time</option>
-        <option value="top_countries">Top countries</option>
-        <option value="status_breakdown">Status breakdown</option>
-        <option value="threat_distribution">Threat distribution</option>
-      </select>
-      <select id="chart-left-days" onchange="loadChart('left')" class="chart-days-select">
-        <option value="7">7 days</option>
-        <option value="30" selected>30 days</option>
-        <option value="90">90 days</option>
-      </select>
+<article class="v-block">
+  <details open>
+    <summary onclick="if(event.target.closest('select')){event.preventDefault()}">
+      <span class="v-block-title">Traffic Analytics</span>
+    </summary>
+    <div class="v-block-body" style="padding:.65rem">
+      <div class="chart-row">
+        <!-- LEFT BLOCK -->
+        <div class="chart-block">
+          <div class="chart-header">
+            <select id="chart-left-type" onchange="loadChart('left')">
+              <option value="ips_over_time">IPs over time</option>
+              <option value="top_countries">Top countries</option>
+              <option value="status_breakdown">Status breakdown</option>
+              <option value="threat_distribution">Threat distribution</option>
+            </select>
+            <select id="chart-left-days" onchange="loadChart('left')" class="chart-days-select">
+              <option value="7">7 days</option>
+              <option value="30" selected>30 days</option>
+              <option value="90">90 days</option>
+            </select>
+          </div>
+          <div class="chart-canvas-wrap" id="chart-left-canvas-wrap">
+            <canvas id="chart-left"></canvas>
+          </div>
+        </div>
+        <!-- RIGHT BLOCK -->
+        <div class="chart-block">
+          <div class="chart-header">
+            <select id="chart-right-type" onchange="loadChart('right')">
+              <option value="requests_over_time">Requests over time</option>
+              <option value="ratelimits_over_time">Rate limits over time</option>
+              <option value="top_ips_by_requests">Top IPs by requests</option>
+              <option value="requests_by_country">Requests by country</option>
+            </select>
+            <select id="chart-right-days" onchange="loadChart('right')" class="chart-days-select">
+              <option value="7">7 days</option>
+              <option value="30" selected>30 days</option>
+              <option value="90">90 days</option>
+            </select>
+          </div>
+          <div class="chart-canvas-wrap">
+            <canvas id="chart-right"></canvas>
+          </div>
+        </div>
+      </div>
     </div>
-    <div class="chart-canvas-wrap" id="chart-left-canvas-wrap">
-      <canvas id="chart-left"></canvas>
-    </div>
-  </div>
-
-  <!-- RIGHT BLOCK -->
-  <div class="chart-block">
-    <div class="chart-header">
-      <select id="chart-right-type" onchange="loadChart('right')">
-        <option value="requests_over_time">Requests over time</option>
-        <option value="ratelimits_over_time">Rate limits over time</option>
-        <option value="top_ips_by_requests">Top IPs by requests</option>
-        <option value="requests_by_country">Requests by country</option>
-      </select>
-      <select id="chart-right-days" onchange="loadChart('right')" class="chart-days-select">
-        <option value="7">7 days</option>
-        <option value="30" selected>30 days</option>
-        <option value="90">90 days</option>
-      </select>
-    </div>
-    <div class="chart-canvas-wrap">
-      <canvas id="chart-right"></canvas>
-    </div>
-  </div>
-</div>
+  </details>
+</article>
 
 <!-- TOP THREAT ACCOUNTS -->
-<article style="padding:1rem;margin-bottom:1.5rem">
-  <h2>Top Threat Accounts</h2>
+<article class="v-block">
+  <details open>
+    <summary><span class="v-block-title">Top Threat Accounts</span></summary>
+    <div class="v-block-body">
   {{if .TopThreatAccounts}}
   <div style="overflow-x:auto">
   <table id="threat-tbl" role="grid">
@@ -120,53 +130,63 @@
   {{else}}
   <p>No threat accounts found.</p>
   {{end}}
-</article>
-
-<!-- CHAIN STATUS (full width) -->
-<article style="padding:1rem;margin-bottom:1.5rem">
-  <div style="display:flex;align-items:center;margin-bottom:.65rem">
-    <strong style="font-size:.9rem">Chain Status</strong>
-    <div style="margin-left:auto;display:flex;gap:.5rem;align-items:center">
-      <button id="chain-ping-btn" onclick="doPing()"
-        style="background:none;border:1px solid rgba(0,255,0,0.35);color:#00ff00;padding:.25rem .7rem;border-radius:4px;cursor:pointer;font-size:.8rem;font-family:Inter,sans-serif;transition:all 0.2s"
-        onmouseover="this.style.background='rgba(0,255,0,0.10)';this.style.borderColor='#00ff00'"
-        onmouseout="this.style.background='none';this.style.borderColor='rgba(0,255,0,0.35)'">Ping</button>
-      <button id="chain-refresh-btn" onclick="doRefresh()"
-        style="background:none;border:1px solid rgba(0,255,0,0.35);color:#00ff00;padding:.25rem .7rem;border-radius:4px;cursor:pointer;font-size:.8rem;font-family:Inter,sans-serif;transition:all 0.2s"
-        onmouseover="this.style.background='rgba(0,255,0,0.10)';this.style.borderColor='#00ff00'"
-        onmouseout="this.style.background='none';this.style.borderColor='rgba(0,255,0,0.35)'">Refresh</button>
     </div>
-  </div>
-  <div id="chain-status-panel" style="overflow-x:auto;font-size:.78rem"></div>
-  <div id="chain-countdown-note" style="font-size:.7rem;opacity:.45;margin-top:.3rem;text-align:right">Next refresh in 65s</div>
-  <details style="margin-top:.6rem">
-    <summary style="cursor:pointer;font-size:.78rem;opacity:.65">+ Add Chain to Monitor</summary>
-    <div style="display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.4rem;align-items:center">
-      <input id="add-chain-name" placeholder="chain" style="width:7rem;font-size:.8rem">
-      <input id="add-chain-rpc"  placeholder="rpc_url :26657" style="width:13rem;font-size:.8rem">
-      <input id="add-chain-rest" placeholder="rest_url :1317 (opt)" style="width:13rem;font-size:.8rem">
-      <input id="add-chain-note" placeholder="note" style="width:8rem;font-size:.8rem">
-      <button onclick="addChain()"
-        style="background:none;border:1px solid rgba(0,255,0,0.35);color:#00ff00;padding:.2rem .6rem;border-radius:4px;cursor:pointer;font-size:.8rem;font-family:Inter,sans-serif;transition:all 0.2s"
-        onmouseover="this.style.background='rgba(0,255,0,0.10)';this.style.borderColor='#00ff00'"
-        onmouseout="this.style.background='none';this.style.borderColor='rgba(0,255,0,0.35)'">Add</button>
-    </div>
-    <div id="add-chain-result" style="font-size:.78rem;margin-top:.25rem;min-height:1rem"></div>
   </details>
 </article>
 
-<section>
-  <header>
-    <div style="display:flex;justify-content:space-between;align-items:center;">
-      <h3 style="margin:0;">Archive Ingestion</h3>
-      <button hx-post="{{.BasePath}}/api/v1/ingest" hx-target="#ingest-result" hx-swap="innerHTML"
-        style="background:none;border:1px solid rgba(0,255,0,0.35);color:#00ff00;padding:.25rem .7rem;border-radius:4px;cursor:pointer;font-size:.8rem;font-family:Inter,sans-serif;transition:all 0.2s"
-        onmouseover="this.style.background='rgba(0,255,0,0.10)';this.style.borderColor='#00ff00'"
-        onmouseout="this.style.background='none';this.style.borderColor='rgba(0,255,0,0.35)'">Refresh Archives</button>
+<!-- CHAIN STATUS (full width) -->
+<article class="v-block">
+  <details open>
+    <summary onclick="if(event.target.closest('button')){event.preventDefault()}">
+      <span class="v-block-title">Chain Status</span>
+      <div class="v-block-actions">
+        <button id="chain-ping-btn" onclick="doPing()"
+          style="background:none;border:1px solid rgba(0,255,0,0.35);color:#00ff00;padding:.25rem .7rem;border-radius:4px;cursor:pointer;font-size:.8rem;font-family:Inter,sans-serif;transition:all 0.2s"
+          onmouseover="this.style.background='rgba(0,255,0,0.10)';this.style.borderColor='#00ff00'"
+          onmouseout="this.style.background='none';this.style.borderColor='rgba(0,255,0,0.35)'">Ping</button>
+        <button id="chain-refresh-btn" onclick="doRefresh()"
+          style="background:none;border:1px solid rgba(0,255,0,0.35);color:#00ff00;padding:.25rem .7rem;border-radius:4px;cursor:pointer;font-size:.8rem;font-family:Inter,sans-serif;transition:all 0.2s"
+          onmouseover="this.style.background='rgba(0,255,0,0.10)';this.style.borderColor='#00ff00'"
+          onmouseout="this.style.background='none';this.style.borderColor='rgba(0,255,0,0.35)'">Refresh</button>
+      </div>
+    </summary>
+    <div class="v-block-body">
+      <div id="chain-status-panel" style="overflow-x:auto;font-size:.78rem"></div>
+      <div id="chain-countdown-note" style="font-size:.7rem;opacity:.45;margin-top:.3rem;text-align:right">Next refresh in 65s</div>
+      <details style="margin-top:.6rem">
+        <summary style="cursor:pointer;font-size:.78rem;opacity:.65">+ Add Chain to Monitor</summary>
+        <div style="display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.4rem;align-items:center">
+          <input id="add-chain-name" placeholder="chain" style="width:7rem;font-size:.8rem">
+          <input id="add-chain-rpc"  placeholder="rpc_url :26657" style="width:13rem;font-size:.8rem">
+          <input id="add-chain-rest" placeholder="rest_url :1317 (opt)" style="width:13rem;font-size:.8rem">
+          <input id="add-chain-note" placeholder="note" style="width:8rem;font-size:.8rem">
+          <button onclick="addChain()"
+            style="background:none;border:1px solid rgba(0,255,0,0.35);color:#00ff00;padding:.2rem .6rem;border-radius:4px;cursor:pointer;font-size:.8rem;font-family:Inter,sans-serif;transition:all 0.2s"
+            onmouseover="this.style.background='rgba(0,255,0,0.10)';this.style.borderColor='#00ff00'"
+            onmouseout="this.style.background='none';this.style.borderColor='rgba(0,255,0,0.35)'">Add</button>
+        </div>
+        <div id="add-chain-result" style="font-size:.78rem;margin-top:.25rem;min-height:1rem"></div>
+      </details>
     </div>
-  </header>
-  <div id="ingest-result"></div>
-</section>
+  </details>
+</article>
+
+<article class="v-block">
+  <details open>
+    <summary onclick="if(event.target.closest('button')){event.preventDefault()}">
+      <span class="v-block-title">Archive Ingestion</span>
+      <div class="v-block-actions">
+        <button hx-post="{{.BasePath}}/api/v1/ingest" hx-target="#ingest-result" hx-swap="innerHTML"
+          style="background:none;border:1px solid rgba(0,255,0,0.35);color:#00ff00;padding:.25rem .7rem;border-radius:4px;cursor:pointer;font-size:.8rem;font-family:Inter,sans-serif;transition:all 0.2s"
+          onmouseover="this.style.background='rgba(0,255,0,0.10)';this.style.borderColor='#00ff00'"
+          onmouseout="this.style.background='none';this.style.borderColor='rgba(0,255,0,0.35)'">Refresh Archives</button>
+      </div>
+    </summary>
+    <div class="v-block-body">
+      <div id="ingest-result"></div>
+    </div>
+  </details>
+</article>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <script>
@@ -288,8 +308,11 @@
   var chainCdSec = CHAIN_INTERVAL;
   var chainPinging = false;
 
-  function spinnerHTML() {
-    return '<span class="probe-spinner"></span>';
+  // Probe cell placeholder — shown until probe completes.
+  function probeInitCell() {
+    var sep = '<span style="opacity:.2;margin:0 .1rem">·</span>';
+    var dash = '<span style="opacity:.35;font-size:.68rem">—</span>';
+    return '<span style="white-space:nowrap">' + dash + sep + dash + sep + dash + '</span>';
   }
 
   function statusTag(st) {
@@ -363,7 +386,7 @@
         .then(function(p) {
           var cell = document.getElementById('probe-' + idx);
           if (!cell) return;
-          if (p.error) { cell.innerHTML = '<span style="opacity:.3;font-size:.72rem" title="' + escH(p.error) + '">N/A</span>'; return; }
+          if (p.error) { cell.innerHTML = '<span style="opacity:.3;font-size:.72rem" title="' + escH(p.error) + '">—</span>'; return; }
           var sep = '<span style="opacity:.25;margin:0 .15rem">·</span>';
           var caLabel = (p.ca && p.ca.node) ? p.ca.node.toUpperCase() : 'CA';
           var wwLabel = (p.ww && p.ww.node) ? p.ww.node.toUpperCase() : 'WW';
@@ -373,7 +396,7 @@
         })
         .catch(function() {
           var cell = document.getElementById('probe-' + idx);
-          if (cell) cell.innerHTML = '<span style="opacity:.3;font-size:.72rem">err</span>';
+          if (cell) cell.innerHTML = '<span style="opacity:.3;font-size:.72rem">—</span>';
         });
     });
   }
@@ -459,7 +482,7 @@
           '<td style="' + tdNum  + ';font-size:.7rem">' + votingEnds + '</td>' +
           '<td style="' + tdStyle + '">' + upg + '</td>' +
           '<td style="' + tdStyle + ';opacity:.4;font-size:.7rem">—</td>' +
-          '<td id="probe-' + idx + '" style="' + tdStyle + ';white-space:nowrap">' + spinnerHTML() + '</td>' +
+          '<td id="probe-' + idx + '" style="' + tdStyle + ';white-space:nowrap">' + probeInitCell() + '</td>' +
           '<td style="' + tdStyle + ';opacity:.4;font-size:.7rem">—</td>' +
           '<td style="' + tdStyle + ';opacity:.4;font-size:.7rem">—</td>' +
           '<td style="' + tdStyle + ';opacity:.4;font-size:.7rem">—</td>' +
@@ -539,10 +562,9 @@
 
   function doPing() {
     var btn = document.getElementById('chain-ping-btn');
+    if (chainPinging) return;
     if (btn) { btn.disabled = true; btn.textContent = '…'; }
     chainPinging = true; chainCdSec = CHAIN_INTERVAL; updateCountdown();
-    var panel = document.getElementById('chain-status-panel');
-    if (panel) panel.innerHTML = '<div style="padding:.75rem;opacity:.7">' + spinnerHTML() + '</div>';
     fetch(BASE + '/api/v1/push/poll', {method: 'POST'})
       .then(function() {
         chainPinging = false;
@@ -557,8 +579,21 @@
   }
 
   function doRefresh() {
-    chainCdSec = CHAIN_INTERVAL;
-    loadChainStatus();
+    var btn = document.getElementById('chain-refresh-btn');
+    if (chainPinging) return;
+    if (btn) { btn.disabled = true; btn.textContent = '…'; }
+    chainPinging = true; chainCdSec = CHAIN_INTERVAL; updateCountdown();
+    fetch(BASE + '/api/v1/push/poll', {method: 'POST'})
+      .then(function() {
+        chainPinging = false;
+        if (btn) { btn.disabled = false; btn.textContent = 'Refresh'; }
+        loadChainStatus();
+      })
+      .catch(function() {
+        chainPinging = false;
+        if (btn) { btn.disabled = false; btn.textContent = 'Refresh'; }
+        loadChainStatus();
+      });
   }
 
   window.loadChainStatus = loadChainStatus;

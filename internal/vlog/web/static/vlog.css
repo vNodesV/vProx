@@ -718,3 +718,51 @@ border-radius: 3px;
 #wizard-panel input[type=checkbox] { accent-color: var(--vn-green); }
 #wiz-deploy-btn:not(:disabled) { background: var(--vn-green); color: #000; font-weight: 600; border: none; border-radius: 4px; cursor: pointer; }
 #wiz-deploy-btn:disabled { opacity: .35; cursor: not-allowed; }
+
+/* ── Collapsible blocks ── */
+.v-block {
+  margin-bottom: 1.5rem;
+  padding: 0 !important;
+}
+.v-block > details > summary {
+  display: flex;
+  align-items: center;
+  padding: .52rem .85rem;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  -webkit-user-select: none;
+  font-family: var(--font-mono);
+  font-size: .71rem;
+  font-weight: 600;
+  color: rgba(0,255,0,.58);
+  letter-spacing: .11em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--vn-green-border);
+  border-radius: 7px 7px 0 0;
+  transition: color .15s, background .15s;
+  /* chevron via ::before */
+}
+.v-block > details > summary:hover {
+  background: rgba(0,255,0,.035);
+  color: rgba(0,255,0,.9);
+}
+.v-block > details:not([open]) > summary {
+  border-bottom: none;
+  border-radius: 7px;
+}
+.v-block > details > summary::before {
+  content: '▼';
+  font-size: .52rem;
+  margin-right: .5rem;
+  opacity: .4;
+  flex-shrink: 0;
+}
+.v-block > details:not([open]) > summary::before {
+  content: '▶';
+}
+summary::-webkit-details-marker { display: none; }
+summary { list-style: none; }
+.v-block-title { flex: 1; }
+.v-block-actions { margin-left: auto; display: flex; gap: .5rem; align-items: center; }
+.v-block-body { padding: .85rem; }
