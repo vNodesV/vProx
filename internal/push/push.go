@@ -154,6 +154,9 @@ func (s *Service) AllStatuses() []*status.ChainStatus {
 // VMs returns the loaded VM registry.
 func (s *Service) VMs() []config.VM { return s.cfg.VMs }
 
+// Config exposes the full push configuration.
+func (s *Service) Config() *config.Config { return s.cfg }
+
 // DB exposes the state database for use by API handlers.
 func (s *Service) DB() *state.DB { return s.db }
 

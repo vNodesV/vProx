@@ -135,6 +135,8 @@
 </article>
 
 <!-- CHAIN STATUS (full width) -->
+<div class="v-blocks-row">
+
 <article class="v-block">
   <details open>
     <summary onclick="if(event.target.closest('button')){event.preventDefault()}">
@@ -148,6 +150,7 @@
           style="background:none;border:1px solid rgba(0,255,0,0.35);color:#00ff00;padding:.25rem .7rem;border-radius:4px;cursor:pointer;font-size:.8rem;font-family:Inter,sans-serif;transition:all 0.2s"
           onmouseover="this.style.background='rgba(0,255,0,0.10)';this.style.borderColor='#00ff00'"
           onmouseout="this.style.background='none';this.style.borderColor='rgba(0,255,0,0.35)'">Refresh</button>
+        <button id="chain-expand-btn" class="v-expand-btn" onclick="toggleChainExpand()" title="Show more columns">›</button>
       </div>
     </summary>
     <div class="v-block-body">
@@ -170,6 +173,26 @@
     </div>
   </details>
 </article>
+
+<article class="v-block">
+  <details open>
+    <summary onclick="if(event.target.closest('button')){event.preventDefault()}">
+      <span class="v-block-title">Servers / VM</span>
+      <div class="v-block-actions">
+        <button id="vm-expand-btn" class="v-expand-btn" onclick="toggleVMExpand()" title="Show more columns">‹</button>
+        <button id="vm-refresh-btn" onclick="doVMRefresh()"
+          style="background:none;border:1px solid rgba(0,255,0,0.35);color:#00ff00;padding:.25rem .7rem;border-radius:4px;cursor:pointer;font-size:.8rem;font-family:Inter,sans-serif;transition:all 0.2s"
+          onmouseover="this.style.background='rgba(0,255,0,0.10)';this.style.borderColor='#00ff00'"
+          onmouseout="this.style.background='none';this.style.borderColor='rgba(0,255,0,0.35)'">Refresh</button>
+      </div>
+    </summary>
+    <div class="v-block-body">
+      <div id="vm-status-panel" style="overflow-x:auto;font-size:.78rem"></div>
+    </div>
+  </details>
+</article>
+
+</div><!-- /.v-blocks-row -->
 
 <article class="v-block" style="max-width:50%">
   <details open>
@@ -232,6 +255,7 @@
   function escH(s) {
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   }
+  window.escH = escH; // shared by VM status and archive scripts
 
   // Render ChartSeries (multi-line) on dual y-axes.
   // series[0] → left y-axis, series[1] → right y-axis.
@@ -331,241 +355,214 @@
   var CHAIN_INTERVAL = 65;
   var chainCdSec = CHAIN_INTERVAL;
   var chainPinging = false;
+  var chainExpanded = false;
+  var chainCachedData = null; // {chains, registeredSet, tmap}
 
-  // Probe cell placeholder — shown until probe completes.
-  function probeInitCell() {
-    return '<span style="opacity:.3;font-size:.68rem">—</span>';
-  }
+  function probeInitCell() { return '<span style="opacity:.3;font-size:.68rem">—</span>'; }
 
   function statusTag(st) {
-    if (st === 'synced' || st === 'syncing') {
-      return '<span style="font-size:.68rem;padding:.08rem .35rem;border-radius:3px;border:1px solid rgba(0,255,0,0.5);color:#00ff00;font-weight:600">ONLINE</span>';
-    }
-    return '<span style="font-size:.68rem;padding:.08rem .35rem;border-radius:3px;border:1px solid rgba(239,83,80,0.5);color:#ef5350;font-weight:600">OFFLINE</span>';
+    if (st === 'synced' || st === 'syncing')
+      return '<span style="font-size:.68rem;padding:.06rem .32rem;border-radius:3px;border:1px solid rgba(0,255,0,0.5);color:#00ff00;font-weight:600">ONLINE</span>';
+    return '<span style="font-size:.68rem;padding:.06rem .32rem;border-radius:3px;border:1px solid rgba(239,83,80,0.5);color:#ef5350;font-weight:600">OFFLINE</span>';
   }
-
   function syncTag(st) {
-    if (st === 'synced') return '<span style="font-size:.68rem;padding:.08rem .35rem;border-radius:3px;border:1px solid rgba(0,255,0,0.5);color:#00ff00;font-weight:600">YES</span>';
-    if (st === 'syncing') return '<span style="font-size:.68rem;padding:.08rem .35rem;border-radius:3px;border:1px solid rgba(255,167,38,0.5);color:#ffa726;font-weight:600">NO</span>';
+    if (st === 'synced')  return '<span style="font-size:.68rem;padding:.06rem .32rem;border-radius:3px;border:1px solid rgba(0,255,0,0.5);color:#00ff00;font-weight:600">YES</span>';
+    if (st === 'syncing') return '<span style="font-size:.68rem;padding:.06rem .32rem;border-radius:3px;border:1px solid rgba(255,167,38,0.5);color:#ffa726;font-weight:600">NO</span>';
     return '<span style="opacity:.4;font-size:.72rem">—</span>';
   }
-
+  function servicesPills(type) {
+    var types = (type || '').toLowerCase().split(',').map(function(t){ return t.trim(); });
+    return [
+      {key:'validator', label:'VAL'},
+      {key:'sp',        label:'API'},
+      {key:'relayer',   label:'RLY'},
+      {key:'node',      label:'NODE'}
+    ].map(function(d) {
+      return '<span class="svc-pill' + (types.indexOf(d.key) >= 0 ? ' svc-on' : '') + '">' + d.label + '</span>';
+    }).join('');
+  }
   function updateCountdown() {
     var note = document.getElementById('chain-countdown-note');
     if (!note) return;
     note.textContent = chainPinging ? 'Pinging…' : ('Next refresh in ' + chainCdSec + 's');
   }
-
-  // Build a map: host.toLowerCase() → {http, ws} for fast lookup.
   function buildTrafficMap(traffic) {
     var m = {};
-    if (!traffic) return m;
-    traffic.forEach(function(t) { m[t.host.toLowerCase()] = t; });
+    (traffic || []).forEach(function(t) { m[t.host.toLowerCase()] = t; });
     return m;
   }
-
-  // Find the best-match traffic entry for a chain name.
-  // Matches: exact, "chain.domain.tld", "chain-suffix.domain.tld"
   function matchTraffic(tmap, chainName) {
     var cn = chainName.toLowerCase();
     if (tmap[cn]) return tmap[cn];
     for (var h in tmap) {
-      if (h === cn || h.indexOf(cn + '.') === 0 || h.indexOf(cn + '-') === 0) return tmap[h];
+      if (h.indexOf(cn + '.') === 0 || h.indexOf(cn + '-') === 0) return tmap[h];
     }
     return null;
   }
-
-  // Extract hostname from a URL (strips scheme, port, path).
   function extractHost(url) {
-    try {
-      return new URL(url).hostname;
-    } catch (e) {
-      return url.replace(/^https?:\/\//, '').split(/[/:?#]/)[0];
-    }
+    try { return new URL(url).hostname; }
+    catch(e) { return url.replace(/^https?:\/\//,'').split(/[/:?#]/)[0]; }
   }
-
-  // Probe cell helper: show label: Xms in green, or err in red.
   function probeMs(res, label) {
     if (!res) return '<span style="opacity:.4;font-size:.68rem">' + escH(label) + ':—</span>';
     if (!res.ok) return '<span style="color:#ef5350;font-size:.68rem">' + escH(label) + ':✗</span>';
     var ms = (res.latency_ms !== undefined && res.latency_ms !== null) ? res.latency_ms + 'ms' : 'ok';
     return '<span style="color:#4caf50;font-size:.68rem">' + escH(label) + ':' + ms + '</span>';
   }
-
-  // Fire probes for each chain asynchronously; update probe-local/ca/ww-{idx} cells as results arrive.
   function fireProbes(chains, tmap) {
     chains.forEach(function(c, idx) {
-      var tf = matchTraffic(tmap, c.chain);
+      var tf   = matchTraffic(tmap, c.chain);
       var host = tf ? tf.host : '';
       if (!host && c.rpc_url) host = extractHost(c.rpc_url);
-      if (!host) {
-        var dash = '<span style="opacity:.3;font-size:.72rem">—</span>';
-        ['probe-local-','probe-ca-','probe-ww-'].forEach(function(pfx) {
-          var el = document.getElementById(pfx + idx); if (el) el.innerHTML = dash;
-        });
-        return;
-      }
+      if (!host) return;
       var probeURL = BASE + '/api/v1/probe?host=' + encodeURIComponent(host);
-      if (c.ping_country) probeURL += '&country=' + encodeURIComponent(c.ping_country);
+      if (c.ping_country)  probeURL += '&country='  + encodeURIComponent(c.ping_country);
       if (c.ping_provider) probeURL += '&provider=' + encodeURIComponent(c.ping_provider);
       fetch(probeURL)
-        .then(function(r) { return r.json(); })
-        .then(function(p) {
-          var errDash = '<span style="opacity:.3;font-size:.72rem">—</span>';
-          if (p.error) {
-            ['probe-local-','probe-ca-','probe-ww-'].forEach(function(pfx) {
-              var el = document.getElementById(pfx + idx);
-              if (el) el.innerHTML = '<span style="opacity:.3;font-size:.72rem" title="' + escH(p.error) + '">—</span>';
-            });
-            return;
-          }
+        .then(function(r){ return r.json(); })
+        .then(function(p){
+          if (p.error) return;
           var caLabel = c.ping_country || ((p.ca && p.ca.node) ? p.ca.node.split('.')[0].toUpperCase() : 'DC');
           var wwLabel = (p.ww && p.ww.node) ? p.ww.node.split('.')[0].toUpperCase() : 'WW';
           var elL  = document.getElementById('probe-local-' + idx);
-          var elCA = document.getElementById('probe-ca-'   + idx);
-          var elWW = document.getElementById('probe-ww-'   + idx);
+          var elCA = document.getElementById('probe-ca-'    + idx);
+          var elWW = document.getElementById('probe-ww-'    + idx);
           if (elL)  elL.innerHTML  = probeMs(p.local, 'L');
           if (elCA) elCA.innerHTML = probeMs(p.ca,    caLabel);
           if (elWW) elWW.innerHTML = probeMs(p.ww,    wwLabel);
         })
-        .catch(function() {
-          var dash = '<span style="opacity:.3;font-size:.72rem">—</span>';
-          ['probe-local-','probe-ca-','probe-ww-'].forEach(function(pfx) {
-            var el = document.getElementById(pfx + idx); if (el) el.innerHTML = dash;
-          });
-        });
+        .catch(function(){});
     });
+  }
+
+  function renderChainTable(data) {
+    var panel = document.getElementById('chain-status-panel');
+    if (!panel) return;
+    var chains       = data.chains;
+    var registeredSet = data.registeredSet;
+    var tmap         = data.tmap;
+    var ex           = chainExpanded; // snapshot
+
+    if (!chains || chains.length === 0) {
+      panel.innerHTML = '<p style="padding:.4rem;opacity:.5;font-size:.78rem">No chains configured.</p>';
+      return;
+    }
+
+    var thStyle  = 'text-align:left;padding:.18rem .35rem;font-weight:500;opacity:.65;font-size:.7rem;white-space:nowrap';
+    var tdStyle  = 'text-align:left;padding:.22rem .35rem;vertical-align:middle';
+    var tdNum    = 'text-align:left;font-variant-numeric:tabular-nums;padding:.22rem .35rem;vertical-align:middle;white-space:nowrap';
+    var catStyle = 'text-align:left;padding:.2rem .35rem;font-size:.68rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase;opacity:.45;border-bottom:1px solid var(--vn-border)';
+    var rmStyle  = 'background:none;border:1px solid rgba(239,83,80,0.4);color:#ef5350;padding:.06rem .38rem;border-radius:3px;cursor:pointer;font-size:.7rem;transition:all 0.2s';
+
+    var rows = chains.map(function(c, idx) {
+      var height   = c.height          ? Number(c.height).toLocaleString()          : '—';
+      var earliest = c.earliest_height ? Number(c.earliest_height).toLocaleString() : '—';
+      var explorerBase = c.explorer_url || '';
+      var activeProp;
+      if (c.active_proposals > 0) {
+        var govURL = explorerBase ? (explorerBase + '/gov') : ('https://ping.pub/' + encodeURIComponent(c.chain) + '/gov');
+        activeProp = '<a href="' + govURL + '" target="_blank" rel="noopener" style="color:#ffa726;font-weight:600;text-decoration:none" title="' + c.active_proposals + ' active">' + c.active_proposals + '</a>';
+      } else {
+        activeProp = '<span style="opacity:.4">NO</span>';
+      }
+      var votingEnds = '<span style="opacity:.3">—</span>';
+      if (c.voting_end_time) {
+        var d = new Date(c.voting_end_time);
+        if (!isNaN(d)) votingEnds = d.toISOString().replace('T',' ').slice(0,16) + ' UTC';
+      }
+      var upg;
+      if (c.upgrade_pending) {
+        var upgURL = (c.upgrade_proposal_id && explorerBase)
+          ? explorerBase + '/gov/' + encodeURIComponent(c.upgrade_proposal_id)
+          : (explorerBase ? explorerBase + '/gov' : 'https://ping.pub/' + encodeURIComponent(c.chain) + '/gov');
+        var upgTitle = c.upgrade_name ? escH(c.upgrade_name) + ' @ ' + Number(c.upgrade_height).toLocaleString() : '';
+        upg = '<a href="' + upgURL + '" target="_blank" rel="noopener" style="color:#ef5350;font-weight:600;text-decoration:none" title="' + upgTitle + '">YES</a>';
+      } else {
+        upg = '<span style="opacity:.4">NO</span>';
+      }
+      var rmBtn = registeredSet[c.chain]
+        ? '<button onclick="removeChain(\'' + escH(c.chain) + '\')" style="' + rmStyle + '">remove</button>'
+        : '';
+
+      var row = '<tr style="border-bottom:1px solid rgba(255,255,255,.04)">' +
+        '<td style="' + tdStyle + ';white-space:nowrap">' + escH(c.chain) + '</td>' +
+        '<td style="' + tdStyle + '">' + servicesPills(c.type) + '</td>' +
+        '<td style="' + tdStyle + '">' + statusTag(c.node_status) + '</td>' +
+        '<td style="' + tdStyle + '">' + syncTag(c.node_status) + '</td>' +
+        '<td style="' + tdNum  + '">' + height + '</td>';
+      if (ex) row +=
+        '<td style="' + tdNum  + '">' + earliest + '</td>';
+      row +=
+        '<td style="' + tdStyle + ';border-left:1px solid var(--vn-border)">' + activeProp + '</td>';
+      if (ex) row +=
+        '<td style="' + tdNum  + ';font-size:.7rem">' + votingEnds + '</td>';
+      row +=
+        '<td style="' + tdStyle + '">' + upg + '</td>';
+      if (ex) row +=
+        '<td style="' + tdStyle + ';opacity:.4;font-size:.7rem">—</td>'; // Part.Avg
+      row +=
+        '<td style="' + tdStyle + '">' + rmBtn + '</td>' +
+        '</tr>';
+      return row;
+    }).join('');
+
+    // Category row
+    var chainInfoCols = ex ? 6 : 5;
+    var govCols       = ex ? 3 : 2;
+    var catRow =
+      '<tr>' +
+      '<th colspan="' + chainInfoCols + '" style="' + catStyle + '">Chain Information</th>' +
+      '<th colspan="' + govCols + '" style="' + catStyle + ';border-left:1px solid var(--vn-border)">Governance</th>' +
+      '<th style="' + catStyle + '"></th>' +
+      '</tr>';
+    var colRow =
+      '<tr style="font-size:.72rem;border-bottom:1px solid var(--vn-border)">' +
+      '<th style="' + thStyle + '">Chain</th>' +
+      '<th style="' + thStyle + '">Services</th>' +
+      '<th style="' + thStyle + '">Status</th>' +
+      '<th style="' + thStyle + '">Synced</th>' +
+      '<th style="' + thStyle + '">Height</th>';
+    if (ex) colRow += '<th style="' + thStyle + '">Earliest</th>';
+    colRow +=
+      '<th style="' + thStyle + ';border-left:1px solid var(--vn-border)">Active Prop</th>';
+    if (ex) colRow += '<th style="' + thStyle + '">Voting Ends</th>';
+    colRow += '<th style="' + thStyle + '">Upgrade</th>';
+    if (ex) colRow += '<th style="' + thStyle + '">Part.Avg</th>';
+    colRow += '<th style="' + thStyle + '"></th></tr>';
+
+    panel.innerHTML = '<table style="width:100%;border-collapse:collapse"><thead>' +
+      catRow + colRow + '</thead><tbody>' + rows + '</tbody></table>';
+    updateCountdown();
+    // Re-fire probes only on full load, not on expand toggle (cells not present in expanded view)
+    fireProbes(chains, tmap);
   }
 
   function loadChainStatus() {
     var panel = document.getElementById('chain-status-panel');
     if (!panel) return;
     Promise.all([
-      fetch(BASE + '/api/v1/push/chains').then(function(r) { return r.json(); }),
-      fetch(BASE + '/api/v1/push/chains/registered').then(function(r) { return r.json(); }).catch(function() { return {registered_chains:[]}; }),
-      fetch(BASE + '/api/v1/push/chains/traffic').then(function(r) { return r.json(); }).catch(function() { return {traffic:[]}; })
+      fetch(BASE + '/api/v1/push/chains').then(function(r){ return r.json(); }),
+      fetch(BASE + '/api/v1/push/chains/registered').then(function(r){ return r.json(); }).catch(function(){ return {registered_chains:[]}; }),
+      fetch(BASE + '/api/v1/push/chains/traffic').then(function(r){ return r.json(); }).catch(function(){ return {traffic:[]}; })
     ]).then(function(results) {
-      var chains  = results[0].chains;
-      var regList = (results[1].registered_chains) || [];
-      var tmap    = buildTrafficMap((results[2].traffic) || []);
-      var registeredSet = {};
-      regList.forEach(function(rc) { registeredSet[rc.chain] = true; });
-      if (!chains || chains.length === 0) {
-        panel.innerHTML = '<p style="padding:.4rem;opacity:.5;font-size:.78rem">No chains configured — add a VM in vms.toml or use "Add Chain" below.</p>';
-        return;
-      }
-      chains.sort(function(a, b) { return a.chain.localeCompare(b.chain); });
-      var thStyle  = 'text-align:left;padding:.18rem .35rem;font-weight:500;opacity:.65;font-size:.7rem;white-space:nowrap';
-      var tdStyle  = 'text-align:left;padding:.25rem .35rem;vertical-align:middle';
-      var tdNum    = 'text-align:left;font-variant-numeric:tabular-nums;padding:.25rem .35rem;vertical-align:middle;white-space:nowrap';
-      var catStyle = 'text-align:left;padding:.2rem .35rem;font-size:.68rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase;opacity:.45;border-bottom:1px solid var(--vn-border)';
-      var typeColors = {validator:'#4caf50',sp:'#42a5f5',relayer:'#ab47bc',external:'#78909c'};
-      var typeLabel  = {validator:'VAL',sp:'SP',relayer:'RLY',external:'EXT'};
-      var rmStyle = 'background:none;border:1px solid rgba(239,83,80,0.4);color:#ef5350;padding:.08rem .4rem;border-radius:3px;cursor:pointer;font-size:.72rem;transition:all 0.2s';
-
-      var rows = chains.map(function(c, idx) {
-        var height   = c.height ? Number(c.height).toLocaleString() : '—';
-        var earliest = c.earliest_height ? Number(c.earliest_height).toLocaleString() : '—';
-
-        // Explorer base URL (e.g. "https://ping.pub/cheqd")
-        var explorerBase = c.explorer_url || '';
-
-        // Active proposal
-        var activeProp;
-        if (c.active_proposals > 0) {
-          var govURL = explorerBase ? (explorerBase + '/gov') : ('https://ping.pub/' + encodeURIComponent(c.chain) + '/gov');
-          activeProp = '<a href="' + govURL + '" target="_blank" rel="noopener" style="color:#ffa726;font-weight:600;text-decoration:none" title="' + c.active_proposals + ' active proposal(s)">YES</a>';
-        } else {
-          activeProp = '<span style="opacity:.4">NO</span>';
-        }
-
-        // Voting ends
-        var votingEnds = '<span style="opacity:.3">—</span>';
-        if (c.voting_end_time) {
-          var d = new Date(c.voting_end_time);
-          if (!isNaN(d.getTime())) votingEnds = d.toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
-        }
-
-        // Upgrade
-        var upg;
-        if (c.upgrade_pending) {
-          var upgradeURL;
-          if (c.upgrade_proposal_id && explorerBase) {
-            upgradeURL = explorerBase + '/gov/' + encodeURIComponent(c.upgrade_proposal_id);
-          } else if (explorerBase) {
-            upgradeURL = explorerBase + '/gov';
-          } else {
-            upgradeURL = 'https://ping.pub/' + encodeURIComponent(c.chain) + '/gov';
-          }
-          var upgTitle = c.upgrade_name ? escH(c.upgrade_name) + ' @ ' + Number(c.upgrade_height).toLocaleString() : '';
-          upg = '<a href="' + upgradeURL + '" target="_blank" rel="noopener" style="color:#ef5350;font-weight:600;text-decoration:none" title="' + upgTitle + '">YES</a>';
-        } else {
-          upg = '<span style="opacity:.4">NO</span>';
-        }
-
-        var t = c.type || 'external';
-        var badge = '<span style="font-size:.62rem;padding:.04rem .28rem;border-radius:3px;border:1px solid '+(typeColors[t]||'#78909c')+';color:'+(typeColors[t]||'#78909c')+';margin-left:.3rem">'+(typeLabel[t]||t.toUpperCase())+'</span>';
-        var rmBtn = registeredSet[c.chain] ?
-          '<button onclick="removeChain(\''+escH(c.chain)+'\')" style="'+rmStyle+'">remove</button>' : '';
-
-        return '<tr style="border-bottom:1px solid rgba(255,255,255,.04)">' +
-          '<td style="' + tdStyle + ';white-space:nowrap">' + escH(c.chain) + badge + '</td>' +
-          '<td style="' + tdStyle + '">' + statusTag(c.node_status) + '</td>' +
-          '<td style="' + tdStyle + '">' + syncTag(c.node_status) + '</td>' +
-          '<td style="' + tdNum  + '">' + height + '</td>' +
-          '<td style="' + tdNum  + '">' + earliest + '</td>' +
-          '<td style="' + tdStyle + '">' + activeProp + '</td>' +
-          '<td style="' + tdNum  + ';font-size:.7rem">' + votingEnds + '</td>' +
-          '<td style="' + tdStyle + '">' + upg + '</td>' +
-          '<td style="' + tdStyle + ';opacity:.4;font-size:.7rem">—</td>' +
-          '<td id="probe-local-' + idx + '" style="' + tdStyle + ';white-space:nowrap;border-left:1px solid var(--vn-border)">' + probeInitCell() + '</td>' +
-          '<td id="probe-ca-'    + idx + '" style="' + tdStyle + ';white-space:nowrap">' + probeInitCell() + '</td>' +
-          '<td id="probe-ww-'    + idx + '" style="' + tdStyle + ';white-space:nowrap">' + probeInitCell() + '</td>' +
-          '<td style="' + tdStyle + ';opacity:.4;font-size:.7rem">—</td>' +
-          '<td style="' + tdStyle + ';opacity:.4;font-size:.7rem">—</td>' +
-          '<td style="' + tdStyle + ';opacity:.4;font-size:.7rem">—</td>' +
-          '<td style="' + tdStyle + '">' + rmBtn + '</td>' +
-          '</tr>';
-      }).join('');
-
-      // Category + column header rows
-      var catRow =
-        '<tr>' +
-        '<th colspan="5" style="' + catStyle + '">Chain Information</th>' +
-        '<th colspan="4" style="' + catStyle + ';border-left:1px solid var(--vn-border)">Governance</th>' +
-        '<th colspan="3" style="' + catStyle + ';border-left:1px solid var(--vn-border)">Ping</th>' +
-        '<th colspan="3" style="' + catStyle + ';border-left:1px solid var(--vn-border)">Server</th>' +
-        '<th style="' + catStyle + '"></th>' +
-        '</tr>';
-      var colRow =
-        '<tr style="font-size:.72rem;border-bottom:1px solid var(--vn-border)">' +
-        '<th style="' + thStyle + '">Chain</th>' +
-        '<th style="' + thStyle + '">Status</th>' +
-        '<th style="' + thStyle + '">Synced</th>' +
-        '<th style="' + thStyle + '">Height</th>' +
-        '<th style="' + thStyle + '">Earliest</th>' +
-        '<th style="' + thStyle + ';border-left:1px solid var(--vn-border)">Active Proposal</th>' +
-        '<th style="' + thStyle + '">Voting Ends</th>' +
-        '<th style="' + thStyle + '">Upgrade</th>' +
-        '<th style="' + thStyle + '">Part. Avg</th>' +
-        '<th style="' + thStyle + ';border-left:1px solid var(--vn-border)">L</th>' +
-        '<th style="' + thStyle + '">DC</th>' +
-        '<th style="' + thStyle + '">WW</th>' +
-        '<th style="' + thStyle + ';border-left:1px solid var(--vn-border)">Free Space</th>' +
-        '<th style="' + thStyle + '">Load AVG</th>' +
-        '<th style="' + thStyle + '">APT</th>' +
-        '<th style="' + thStyle + '"></th>' +
-        '</tr>';
-
-      panel.innerHTML =
-        '<table style="width:100%;border-collapse:collapse"><thead>' +
-        catRow + colRow +
-        '</thead><tbody>' + rows + '</tbody></table>';
-      updateCountdown();
-      fireProbes(chains, tmap);
+      var chains   = results[0].chains || [];
+      var regList  = (results[1].registered_chains) || [];
+      var tmap     = buildTrafficMap((results[2].traffic) || []);
+      var regSet   = {};
+      regList.forEach(function(rc){ regSet[rc.chain] = true; });
+      chains.sort(function(a,b){ return a.chain.localeCompare(b.chain); });
+      chainCachedData = {chains: chains, registeredSet: regSet, tmap: tmap};
+      renderChainTable(chainCachedData);
     }).catch(function() {
-      panel.innerHTML = '<p style="padding:.4rem;color:#ef4444;font-size:.78rem">push module not configured or unreachable.</p>';
+      if (panel) panel.innerHTML = '<p style="padding:.4rem;color:#ef4444;font-size:.78rem">push module not configured or unreachable.</p>';
     });
+  }
+
+  function toggleChainExpand() {
+    chainExpanded = !chainExpanded;
+    var btn = document.getElementById('chain-expand-btn');
+    if (btn) btn.textContent = chainExpanded ? '‹' : '›';
+    if (chainCachedData) renderChainTable(chainCachedData);
   }
 
   function addChain() {
@@ -576,72 +573,55 @@
     var res   = document.getElementById('add-chain-result');
     if (!chain || !rpc) { res.style.color='#ef4444'; res.textContent='chain and rpc_url required.'; return; }
     fetch(BASE + '/api/v1/push/chains/registered', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({chain: chain, rpc_url: rpc, rest_url: rest, note: note})
-    })
-      .then(function(r) { return r.json(); })
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({chain:chain, rpc_url:rpc, rest_url:rest, note:note})
+    }).then(function(r){ return r.json(); })
       .then(function() {
-        res.style.color = '#4caf50'; res.textContent = chain + ' added.';
-        ['add-chain-name','add-chain-rpc','add-chain-rest','add-chain-note'].forEach(function(id) {
-          var el = document.getElementById(id); if (el) el.value = '';
+        res.style.color='#4caf50'; res.textContent=chain+' added.';
+        ['add-chain-name','add-chain-rpc','add-chain-rest','add-chain-note'].forEach(function(id){
+          var el=document.getElementById(id); if(el) el.value='';
         });
         loadChainStatus();
       })
-      .catch(function() { res.style.color='#ef4444'; res.textContent='Failed to add chain.'; });
+      .catch(function(){ res.style.color='#ef4444'; res.textContent='Failed to add chain.'; });
   }
 
   function removeChain(chain) {
     if (!confirm('Remove "'+chain+'" from monitoring?')) return;
     fetch(BASE + '/api/v1/push/chains/registered/' + encodeURIComponent(chain), {method:'POST'})
-      .then(function(r) {
-        if (!r.ok) { alert('Remove failed (HTTP '+r.status+'). Check server logs.'); return; }
+      .then(function(r){
+        if (!r.ok) { alert('Remove failed (HTTP '+r.status+').'); return; }
         loadChainStatus();
       })
-      .catch(function() { alert('Failed to remove '+chain); });
+      .catch(function(){ alert('Failed to remove '+chain); });
   }
 
   function doPing() {
     var btn = document.getElementById('chain-ping-btn');
     if (chainPinging) return;
-    if (btn) { btn.disabled = true; btn.textContent = '…'; }
-    chainPinging = true; chainCdSec = CHAIN_INTERVAL; updateCountdown();
-    fetch(BASE + '/api/v1/push/poll', {method: 'POST'})
-      .then(function() {
-        chainPinging = false;
-        if (btn) { btn.disabled = false; btn.textContent = 'Ping'; }
-        loadChainStatus();
-      })
-      .catch(function() {
-        chainPinging = false;
-        if (btn) { btn.disabled = false; btn.textContent = 'Ping'; }
-        loadChainStatus();
-      });
+    if (btn) { btn.disabled=true; btn.textContent='…'; }
+    chainPinging=true; chainCdSec=CHAIN_INTERVAL; updateCountdown();
+    fetch(BASE + '/api/v1/push/poll', {method:'POST'})
+      .then(function(){ chainPinging=false; if(btn){btn.disabled=false;btn.textContent='Ping';} loadChainStatus(); })
+      .catch(function(){ chainPinging=false; if(btn){btn.disabled=false;btn.textContent='Ping';} loadChainStatus(); });
   }
 
   function doRefresh() {
     var btn = document.getElementById('chain-refresh-btn');
     if (chainPinging) return;
-    if (btn) { btn.disabled = true; btn.textContent = '…'; }
-    chainPinging = true; chainCdSec = CHAIN_INTERVAL; updateCountdown();
-    fetch(BASE + '/api/v1/push/poll', {method: 'POST'})
-      .then(function() {
-        chainPinging = false;
-        if (btn) { btn.disabled = false; btn.textContent = 'Refresh'; }
-        loadChainStatus();
-      })
-      .catch(function() {
-        chainPinging = false;
-        if (btn) { btn.disabled = false; btn.textContent = 'Refresh'; }
-        loadChainStatus();
-      });
+    if (btn) { btn.disabled=true; btn.textContent='…'; }
+    chainPinging=true; chainCdSec=CHAIN_INTERVAL; updateCountdown();
+    fetch(BASE + '/api/v1/push/poll', {method:'POST'})
+      .then(function(){ chainPinging=false; if(btn){btn.disabled=false;btn.textContent='Refresh';} loadChainStatus(); })
+      .catch(function(){ chainPinging=false; if(btn){btn.disabled=false;btn.textContent='Refresh';} loadChainStatus(); });
   }
 
-  window.loadChainStatus = loadChainStatus;
-  window.addChain        = addChain;
-  window.removeChain     = removeChain;
-  window.doPing          = doPing;
-  window.doRefresh       = doRefresh;
+  window.loadChainStatus  = loadChainStatus;
+  window.toggleChainExpand = toggleChainExpand;
+  window.addChain         = addChain;
+  window.removeChain      = removeChain;
+  window.doPing           = doPing;
+  window.doRefresh        = doRefresh;
 
   loadChart('left');
   loadChart('right');
@@ -653,6 +633,150 @@
     updateCountdown();
     if (chainCdSec <= 0) { chainCdSec = CHAIN_INTERVAL; loadChainStatus(); }
   }, 1000);
+
+})();
+</script>
+
+<script>
+// ── Server / VM Status Block ─────────────────────────────────────────────────
+(function() {
+  var BASE = '{{.BasePath}}';
+  var vmExpanded  = false;
+  var vmCachedVMs = null;
+
+  function pct(v) {
+    if (v === undefined || v === null || v === 0) return '<span style="opacity:.35">—</span>';
+    var n = +v;
+    var color = n > 90 ? '#ef5350' : n > 70 ? '#ffa726' : '#4caf50';
+    return '<span style="color:' + color + '">' + n.toFixed(0) + '%</span>';
+  }
+  function loadAvgSpan(s) {
+    if (!s) return '<span style="opacity:.35">—</span>';
+    var parts = s.trim().split(/\s+/);
+    return '<span style="font-variant-numeric:tabular-nums;font-size:.72rem">' + parts.join(' ') + '</span>';
+  }
+  function aptCell(vm, idx) {
+    if (!vm.online) return '<span style="opacity:.35">—</span>';
+    if (!vm.apt_count) return '<span style="opacity:.35">0</span>';
+    return '<a href="#" onclick="toggleAptRow(' + idx + ');return false" style="color:#ffa726;font-weight:600;text-decoration:none" title="' + vm.apt_count + ' pending upgrades">' + vm.apt_count + '</a>';
+  }
+  function vmStatusTag(online) {
+    if (online) return '<span style="font-size:.68rem;padding:.06rem .32rem;border-radius:3px;border:1px solid rgba(0,255,0,0.5);color:#00ff00;font-weight:600">ONLINE</span>';
+    return '<span style="font-size:.68rem;padding:.06rem .32rem;border-radius:3px;border:1px solid rgba(239,83,80,0.5);color:#ef5350;font-weight:600">OFFLINE</span>';
+  }
+
+  function renderVMTable(vms) {
+    var panel = document.getElementById('vm-status-panel');
+    if (!panel) return;
+
+    if (!vms || vms.length === 0) {
+      panel.innerHTML = '<p style="padding:.4rem;opacity:.5;font-size:.78rem">No VMs configured — add entries to vms.toml.</p>';
+      return;
+    }
+
+    var ex      = vmExpanded;
+    var thStyle = 'text-align:left;padding:.18rem .35rem;font-weight:500;opacity:.65;font-size:.7rem;white-space:nowrap';
+    var tdStyle = 'text-align:left;padding:.22rem .35rem;vertical-align:middle';
+    var tdNum   = 'text-align:left;font-variant-numeric:tabular-nums;padding:.22rem .35rem;vertical-align:middle;white-space:nowrap';
+    var catSt   = 'text-align:left;padding:.2rem .35rem;font-size:.68rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase;opacity:.45;border-bottom:1px solid var(--vn-border)';
+
+    var rows = vms.map(function(vm, idx) {
+      var errTitle = vm.error ? ' title="' + escH(vm.error) + '"' : '';
+      var row = '<tr id="vm-row-' + idx + '" style="border-bottom:1px solid rgba(255,255,255,.04)"' + errTitle + '>' +
+        '<td style="' + tdStyle + ';white-space:nowrap">' + escH(vm.name) +
+          (vm.host_ref ? '<span style="font-size:.58rem;opacity:.4;margin-left:.3rem">' + escH(vm.host_ref) + '</span>' : '') + '</td>' +
+        '<td style="' + tdStyle + '">' + vmStatusTag(vm.online) + '</td>' +
+        '<td style="' + tdNum  + ';font-size:.72rem">' + escH(vm.lan_ip || '—') + '</td>';
+      if (ex) row += '<td style="' + tdNum + ';font-size:.72rem">' + escH(vm.public_ip || '—') + '</td>';
+      row +=
+        '<td style="' + tdNum + '">' + pct(vm.cpu_pct) + '</td>';
+      if (ex) {
+        row += '<td style="' + tdNum + '">' + pct(vm.mem_pct) + '</td>';
+        row += '<td style="' + tdNum + '">' + pct(vm.storage_pct) + '</td>';
+      }
+      row +=
+        '<td style="' + tdStyle + '">' + loadAvgSpan(vm.load_avg) + '</td>' +
+        '<td style="' + tdNum  + '">' + aptCell(vm, idx) + '</td>';
+      if (ex) {
+        var ping = '<span style="opacity:.35;font-size:.7rem">—</span>';
+        if (vm.ping_country) ping = '<span style="font-size:.68rem;opacity:.55">' + escH(vm.ping_country) + '</span>';
+        row += '<td style="' + tdStyle + '">' + ping + '</td>';
+      }
+      row += '</tr>';
+      // Hidden APT detail row
+      row += '<tr id="vm-apt-' + idx + '" style="display:none;background:rgba(255,167,38,0.04)">' +
+        '<td colspan="' + (ex ? 9 : 6) + '" style="padding:.35rem .7rem;font-size:.72rem;color:#ffa726">' +
+        'Pending apt upgrades: ' + (vm.apt_count || 0) +
+        ' <button onclick="event.stopPropagation();toggleAptRow(' + idx + ')" style="background:none;border:none;color:rgba(255,255,255,.35);cursor:pointer;font-size:.72rem;margin-left:.5rem">✕</button>' +
+        '</td></tr>';
+      return row;
+    }).join('');
+
+    var totalCols  = ex ? 9 : 6;
+    var catRow = '<tr><th colspan="' + totalCols + '" style="' + catSt + '">Servers / VM</th></tr>';
+    var colRow = '<tr style="font-size:.72rem;border-bottom:1px solid var(--vn-border)">' +
+      '<th style="' + thStyle + '">Name</th>' +
+      '<th style="' + thStyle + '">Status</th>' +
+      '<th style="' + thStyle + '">LAN IP</th>';
+    if (ex) colRow += '<th style="' + thStyle + '">Public IP</th>';
+    colRow += '<th style="' + thStyle + '">CPU</th>';
+    if (ex) {
+      colRow += '<th style="' + thStyle + '">Mem</th>';
+      colRow += '<th style="' + thStyle + '">Disk</th>';
+    }
+    colRow +=
+      '<th style="' + thStyle + '">Load Avg</th>' +
+      '<th style="' + thStyle + '">APT</th>';
+    if (ex) colRow += '<th style="' + thStyle + '">Ping Country</th>';
+    colRow += '</tr>';
+
+    panel.innerHTML = '<table style="width:100%;border-collapse:collapse"><thead>' +
+      catRow + colRow + '</thead><tbody>' + rows + '</tbody></table>';
+  }
+
+  window.toggleAptRow = function(idx) {
+    var row = document.getElementById('vm-apt-' + idx);
+    if (row) row.style.display = row.style.display === 'none' ? '' : 'none';
+  };
+
+  window.toggleVMExpand = function() {
+    vmExpanded = !vmExpanded;
+    var btn = document.getElementById('vm-expand-btn');
+    if (btn) btn.textContent = vmExpanded ? '›' : '‹';
+    if (vmCachedVMs) renderVMTable(vmCachedVMs);
+  };
+
+  function loadVMStatus() {
+    fetch(BASE + '/api/v1/push/vms/status')
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        vmCachedVMs = d.vms || [];
+        renderVMTable(vmCachedVMs);
+      })
+      .catch(function() {
+        var panel = document.getElementById('vm-status-panel');
+        if (panel) panel.innerHTML = '<p style="padding:.4rem;color:#ef4444;font-size:.78rem">push module not configured or unreachable.</p>';
+      });
+  }
+
+  window.doVMRefresh = function() {
+    var btn = document.getElementById('vm-refresh-btn');
+    if (btn) { btn.disabled = true; btn.textContent = '…'; }
+    fetch(BASE + '/api/v1/push/vms/status')
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        vmCachedVMs = d.vms || [];
+        renderVMTable(vmCachedVMs);
+        if (btn) { btn.disabled = false; btn.textContent = 'Refresh'; }
+      })
+      .catch(function() { if (btn) { btn.disabled = false; btn.textContent = 'Refresh'; } });
+  };
+
+  // Staggered start: 30s after chain poll to avoid SSH burst at same time.
+  setTimeout(function() {
+    loadVMStatus();
+    setInterval(loadVMStatus, 60000);
+  }, 30000);
 
 })();
 </script>

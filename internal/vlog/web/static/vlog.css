@@ -766,3 +766,41 @@ summary { list-style: none; }
 .v-block-title { flex: 1; }
 .v-block-actions { margin-left: auto; display: flex; gap: .5rem; align-items: center; }
 .v-block-body { padding: .85rem; }
+
+/* ── Side-by-side block row ── */
+.v-blocks-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  align-items: start;
+  margin-bottom: 1.5rem;
+}
+.v-blocks-row .v-block { margin-bottom: 0; }
+
+/* ── Service type pills ── */
+.svc-pill {
+  font-size: .59rem;
+  padding: .03rem .22rem;
+  border-radius: 3px;
+  border: 1px solid rgba(255,255,255,.12);
+  color: rgba(255,255,255,.22);
+  display: inline-block;
+  line-height: 1.5;
+  margin: 0 1px;
+}
+.svc-pill.svc-on { border-color: rgba(76,175,80,.65); color: #4caf50; }
+
+/* ── Expand/collapse extra columns ── */
+.v-expand-btn {
+  background: none;
+  border: 1px solid rgba(0,255,0,.25);
+  color: rgba(0,255,0,.55);
+  padding: .1rem .38rem;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: .72rem;
+  font-family: var(--font-mono);
+  transition: all .15s;
+  line-height: 1;
+}
+.v-expand-btn:hover { border-color: rgba(0,255,0,.7); color: #00ff00; }

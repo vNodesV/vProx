@@ -11,6 +11,7 @@ import (
 
 	"github.com/vNodesV/vProx/internal/push"
 	"github.com/vNodesV/vProx/internal/push/config"
+	"github.com/vNodesV/vProx/internal/push/status"
 )
 
 // Handlers holds a reference to the push Service.
@@ -20,6 +21,14 @@ type Handlers struct {
 
 // New returns an Handlers backed by svc.
 func New(svc *push.Service) *Handlers { return &Handlers{svc: svc} }
+
+// ── GET /api/v1/push/vms/status ──────────────────────────────────────────────
+
+// HandleVMStatus polls all VMs concurrently via SSH and returns live metrics.
+func (h *Handlers) HandleVMStatus(w http.ResponseWriter, r *http.Request) {
+	results := status.PollAllVMs(h.svc.Config())
+	writeJSON(w, http.StatusOK, map[string]any{"vms": results})
+}
 
 // ── GET /api/v1/push/vms ─────────────────────────────────────────────────────
 

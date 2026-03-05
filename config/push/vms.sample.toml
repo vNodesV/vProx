@@ -1,26 +1,60 @@
 # vms.toml — push VM registry
 #
-# One [[vm]] block per chain VM. vm.name IS the chain name.
-# type = validator | sp | relayer
+# ── TOPOLOGY ────────────────────────────────────────────────────────────────────
 #
-# rpc_url / rest_url are optional — defaults to http://host:26657 and http://host:1317.
-# Only set them if using non-standard ports.
+# Option A: Physical host + VMs (recommended for home labs / bare-metal setups)
+#   1. Define your physical server with [[host]]
+#   2. Define each VM on that server with [[vm]] + host_ref = "<host.name>"
 #
-# Generate the push key:
-#   ssh-keygen -t ed25519 -C "vprox-push" -f /etc/vprox/push/id.push
-# Authorize it on target VMs:
-#   ssh-copy-id -i /etc/vprox/push/id.push.pub user@host
+# Option B: Standalone VPS (cloud instances with no hypervisor relationship)
+#   Skip [[host]] entirely. Add [[vm]] blocks without host_ref.
+#   Set lan_ip = public_ip (or the primary IP address of the VPS).
+#
+# You can mix both options in the same file.
+#
+# ── TYPES ────────────────────────────────────────────────────────────────────────
+# type = validator | sp | relayer | node  (use comma-separated for multi-role)
+# These map to the service badges on the vLog Server Status dashboard.
+#
+# ── SSH KEY ───────────────────────────────────────────────────────────────────────
+# Generate the push key (run once):
+#   ssh-keygen -t ed25519 -C "vprox-push" -f $HOME/.vprox/secret/id.push
+# Authorize it on each target VM:
+#   ssh-copy-id -i $HOME/.vprox/secret/id.push.pub <user>@<host>
+# The same key is reused across all VMs.
+#
+# ── RPC / REST ────────────────────────────────────────────────────────────────────
+# rpc_url / rest_url default to http://host:26657 and http://host:1317.
+# Only set them if your node uses non-standard ports.
 
+
+# ═══════════════════════════════════════════════════════════════════════
+# OPTION A — Physical host with VMs
+# ═══════════════════════════════════════════════════════════════════════
+
+# Define your physical server / hypervisor.
+# The vLog Server Status dashboard shows this as a parent row
+# grouping the VMs assigned to it via host_ref.
+[[host]]
+name       = "homelab-qc"         # unique name — VMs reference this via host_ref
+public_ip  = "1.2.3.4"           # internet-facing IP of the physical machine
+lan_ip     = "10.0.0.1"          # LAN / management IP
+datacenter = "QC"                 # location label shown on the dashboard
+
+# VM on the physical host above.
 [[vm]]
 name       = "akash"
-host       = "10.0.0.68"
+host_ref   = "homelab-qc"         # ← links this VM to the [[host]] above
+host       = "10.0.0.68"          # SSH target — the VM's IP or hostname
+lan_ip     = "10.0.0.68"          # VM LAN IP shown in Server Status (defaults to host if blank)
+public_ip  = ""                   # leave blank → inherits from parent [[host]].public_ip
 port       = 22
 user       = "jarvis"
-key_path   = "/etc/vprox/push/id.push"
+key_path   = "$HOME/.vprox/secret/id.push"
 datacenter = "QC"
-type       = "validator"
-explorer   = "ping.pub"   # block explorer base hostname
-chain_id   = "akashnet-2" # official chain-id (e.g. akashnet-2, cheqd-mainnet-1)
+type       = "validator"          # validator | sp | relayer | node (comma-separated for multi-role)
+explorer   = "ping.pub"           # block explorer base hostname
+chain_id   = "akashnet-2"         # official chain-id (e.g. akashnet-2, cheqd-mainnet-1)
 # rpc_url  = "http://10.0.0.68:36657"   # only needed for non-standard ports
 # rest_url = "http://10.0.0.68:2317"
 
@@ -34,20 +68,48 @@ country  = "CA"
 # Leave empty to pick randomly from the country's available nodes.
 provider = ""
 
+
+# ═══════════════════════════════════════════════════════════════════════
+# OPTION B — Standalone VPS (no physical host / hypervisor)
+# ═══════════════════════════════════════════════════════════════════════
+
+# No [[host]] block needed. Set lan_ip = public_ip (or the primary VPS IP).
 # [[vm]]
 # name       = "elys"
 # host       = "198.51.100.10"
+# lan_ip     = "198.51.100.10"    # same as host for a VPS
+# public_ip  = "198.51.100.10"    # internet-facing IP
 # port       = 22
 # user       = "validator"
-# key_path   = "/etc/vprox/push/id.push"
+# key_path   = "$HOME/.vprox/secret/id.push"
 # datacenter = "RBX"
 # type       = "validator"
+# explorer   = "ping.pub"
+# chain_id   = "elys-1"
+#
+# [vm.ping]
+# country  = "FR"
+# provider = ""
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# OPTION A/B MIX — Multi-role VM example
+# ═══════════════════════════════════════════════════════════════════════
 
 # [[vm]]
 # name       = "akash-sp"
-# host       = "198.51.100.20"
+# host_ref   = "homelab-qc"
+# host       = "10.0.0.69"
+# lan_ip     = "10.0.0.69"
+# public_ip  = ""
 # port       = 22
-# user       = "validator"
-# key_path   = "/etc/vprox/push/id.push"
-# datacenter = "RBX"
-# type       = "sp"
+# user       = "jarvis"
+# key_path   = "$HOME/.vprox/secret/id.push"
+# datacenter = "QC"
+# type       = "sp,relayer"       # comma-separated: both API/RPC and RELAYER badges will be active
+# explorer   = "ping.pub"
+# chain_id   = "akashnet-2"
+#
+# [vm.ping]
+# country  = "CA"
+# provider = ""
