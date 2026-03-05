@@ -38,9 +38,11 @@
 # grouping the VMs assigned to it via host_ref.
 [[host]]
 name       = "homelab-qc"         # unique name — VMs reference this via host_ref
-public_ip  = "1.2.3.4"           # internet-facing IP of the physical machine
-lan_ip     = "10.0.0.1"          # LAN / management IP
+lan_ip     = "10.0.0.1"           # LAN / management IP
 datacenter = "QC"                 # location label shown on the dashboard
+# public_ip = "1.2.3.4"          # optional display-only field. For bare-metal behind
+                                  # vProx/Apache, omit it — vProx is the public entry point.
+                                  # Only set if this physical host is directly internet-facing.
 
 # VM on the physical host above.
 [[vm]]
@@ -48,7 +50,9 @@ name       = "akash"
 host_ref   = "homelab-qc"         # ← links this VM to the [[host]] above
 host       = "10.0.0.68"          # SSH target — the VM's IP or hostname
 lan_ip     = "10.0.0.68"          # VM LAN IP shown in Server Status (defaults to host if blank)
-public_ip  = ""                   # leave blank → inherits from parent [[host]].public_ip
+# public_ip = ""                  # display-only. Leave blank for VMs behind vProx.
+                                  # Only set for standalone internet-facing VPS (Option B).
+                                  # Inherits [[host]].public_ip when blank + host_ref is set.
 port       = 22
 user       = "jarvis"
 key_path   = "$HOME/.vprox/secret/id.push"
