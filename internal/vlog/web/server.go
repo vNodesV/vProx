@@ -135,6 +135,8 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 
 	// API routes — session-protected.
 	mux.Handle("POST /api/v1/ingest", s.requireSession(http.HandlerFunc(s.handleAPIIngest)))
+	mux.Handle("GET /api/v1/ingest/stats", s.requireSession(http.HandlerFunc(s.handleAPIArchiveStats)))
+	mux.Handle("POST /api/v1/ingest/backup", s.requireSession(http.HandlerFunc(s.handleAPIBackupAndIngest)))
 	mux.Handle("GET /api/v1/accounts", s.requireSession(http.HandlerFunc(s.handleAPIAccountList)))
 	mux.Handle("GET /api/v1/accounts/{ip}", s.requireSession(http.HandlerFunc(s.handleAPIAccountDetail)))
 	mux.Handle("POST /api/v1/enrich/{ip}", s.requireSession(http.HandlerFunc(s.handleAPIEnrich)))
@@ -151,6 +153,8 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 	if s.push != nil {
 		mux.Handle("GET /api/v1/push/vms",
 			s.requireSession(http.HandlerFunc(s.push.HandleVMs)))
+		mux.Handle("GET /api/v1/push/vms/status",
+			s.requireSession(http.HandlerFunc(s.push.HandleVMStatus)))
 		mux.Handle("GET /api/v1/push/chains",
 			s.requireSession(http.HandlerFunc(s.push.HandleChains)))
 		mux.Handle("GET /api/v1/push/chains/{chain}",

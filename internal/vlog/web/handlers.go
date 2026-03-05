@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
@@ -253,7 +254,60 @@ func (s *Server) handleAPIIngest(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]int{"processed": processed})
+	sum, _ := s.db.ArchiveSummary()
+	writeJSON(w, http.StatusOK, map[string]any{"processed": processed, "summary": sum})
+}
+
+// handleAPIArchiveStats returns aggregate archive ingestion stats.
+func (s *Server) handleAPIArchiveStats(w http.ResponseWriter, _ *http.Request) {
+	sum, err := s.db.ArchiveSummary()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+		return
+	}
+	writeJSON(w, http.StatusOK, sum)
+}
+
+// handleAPIBackupAndIngest runs `vprox --new-backup` then ingests the result.
+func (s *Server) handleAPIBackupAndIngest(w http.ResponseWriter, r *http.Request) {
+	bin := s.cfg.VLog.VProxBin
+	if bin == "" {
+		var err error
+		bin, err = exec.LookPath("vprox")
+		if err != nil {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{
+				"error": "vprox binary not found in PATH; set vprox_bin in vlog.toml",
+			})
+			return
+		}
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 120*time.Second)
+	defer cancel()
+
+	out, err := exec.CommandContext(ctx, bin, "--new-backup").CombinedOutput() //nolint:gosec
+	if err != nil {
+		log.Printf("[web] vprox --new-backup failed: %v — output: %s", err, out)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error":  fmt.Sprintf("backup failed: %v", err),
+			"output": string(out),
+		})
+		return
+	}
+
+	processed, err := s.ingester.IngestAll()
+	if err != nil {
+		log.Printf("[web] ingest after backup failed: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "ingest failed after backup"})
+		return
+	}
+
+	sum, _ := s.db.ArchiveSummary()
+	writeJSON(w, http.StatusOK, map[string]any{
+		"processed": processed,
+		"summary":   sum,
+		"output":    string(out),
+	})
 }
 
 func (s *Server) handleAPIAccountList(w http.ResponseWriter, r *http.Request) {

@@ -38,6 +38,11 @@ type VLogSection struct {
 	// Default: $VPROX_HOME/data/logs/archives
 	ArchivesDir string `toml:"archives_dir"`
 
+	// VProxBin is the path to the vprox executable used to trigger on-demand
+	// backups via the dashboard "Backup & Import" button.
+	// Default: "vprox" (resolved from $PATH at runtime).
+	VProxBin string `toml:"vprox_bin"`
+
 	// WatchIntervalSec is the poll interval (seconds) for new archives.
 	WatchIntervalSec int `toml:"watch_interval_sec"`
 
