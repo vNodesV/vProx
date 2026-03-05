@@ -1376,3 +1376,34 @@ All three Phase E CLI command groups are implemented:
 - PR `vLog/v1.2.0` → `develop` → `main`
 - Release tag `vProxVL-v1.2.0`
 - Production vms.toml: migrate existing VMs to flat format + add `[vm.ping]` sections
+
+---
+
+## Session Save 2026-03-05 — Agentupgrade rev15 complete
+
+**Branch:** `vLog/v1.2.0` HEAD `8c4f363` (pushed to `origin/vLog/v1.2.0`)
+
+### agentupgrade rev15 — COMPLETE
+
+All PATCH targets applied and committed in `8c4f363`:
+
+| File | Changes |
+|------|---------|
+| `.github/agents/jarvis5.0.agent.md` | VM registry: VMPing{Country,Provider} + PingCountry/PingProvider in ChainStatus; dashboard entry: collapsible blocks + full-width 16-col Chain Status + Ping/DC/WW groups (endpoint status panel removed); probe entry: countryNodes map + sanitizeProbeNode SSRF guard + country/provider params; security audit: ALL 24 FINDINGS RESOLVED; Phase E CLI: marked SHIPPED; not-applicable catalogue: azure-pricing, mentoring-juniors, noob-mode added |
+| `agents/base.agent.md` | 2 new patterns: (1) configurable DC probe — countryNodes map + sanitizeProbeNode() SSRF whitelist for provider param; (2) collapsible block — `<details>`/`<summary>` onclick guard pattern |
+| `agents/jarvis5.0_state.md` | rev15 upgrade history row |
+| `agents/projects/vprox.state.md` | 2026-03-05 session dump (Chain Status overhaul, DC ping column) |
+
+### Open Work (Backlog — `vLog/v1.2.0`)
+
+| ID | Task | Notes |
+|----|------|-------|
+| `host-traffic-table` | Add `host_traffic` pre-aggregated table to vLog SQLite | Enables efficient per-chain request count display without full log scan |
+| `gov-v1-fix` | Fix governance API: `/cosmos/gov/v1/proposals` with `/v1beta1` fallback | Currently v1beta1 only; older chains use v1beta1, newer use v1 |
+
+### Release Checklist
+- [ ] `host-traffic-table` + `gov-v1-fix` (optional before release)
+- [ ] PR `vLog/v1.2.0` → `develop`
+- [ ] PR `develop` → `main`
+- [ ] Tag `vProxVL-v1.2.0`
+- [ ] Production: flat vms.toml migration + `[vm.ping]` sections per VM
