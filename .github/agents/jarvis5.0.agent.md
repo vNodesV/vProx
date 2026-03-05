@@ -61,7 +61,7 @@ performance claim is benchmarked, every recommendation is trade-off-aware.
 - **Purpose**: centralized control plane — vProx SSHes to validator VMs to execute bash scripts
 - **Architecture**: vApp cut; scripts migrated to `vProx/scripts/chains/{chain}/{component}/{script}.sh`
 - **Packages**: `config/` (vms.toml loader), `ssh/` (dispatcher, `x/crypto/ssh`), `runner/` (remote bash via SSH), `state/` (SQLite: deployments + registered_chains), `status/` (Cosmos RPC poller: height, gov, upgrade plan), `api/` (HTTP handlers)
-- **VM registry**: `config/push/vms.toml` — per-VM: name, host, port, user, key_path, datacenter, [[chain]] list
+- **VM registry**: `config/push/vms.toml` — per-VM: name, host, port, user, key_path, datacenter, type, chain_id, explorer; `[vm.ping]` subtable: `VMPing{Country string, Provider string}` → datacenter probe country for vLog Chain Status; wired as `ChainStatus.PingCountry`/`.PingProvider`
 - **SSH key**: dedicated push→VM key (separate from `id.file`); sudoers NOPASSWD on VMs for script execution
 - **Script path**: `~/vProx/scripts/chains/{chain}/{component}/{script}.sh` (VMs clone vProx)
 - **API routes**: `GET /api/v1/push/vms`, `GET /api/v1/push/chains`, `POST /api/v1/push/deploy`, `GET /api/v1/push/deployments`, `POST /api/v1/push/chains/registered`, `DELETE /api/v1/push/chains/registered/{chain}`
@@ -74,8 +74,8 @@ performance claim is benchmarked, every recommendation is trade-off-aware.
 - **Web UI**: `html/template` + `go:embed` + htmx — dashboard, accounts, query builder, threat panel
 - **Auth system** (shipped `70a46db`): login page (`login.html`, standalone, no `base.html` dep); session tokens via `crypto/rand` 32-byte hex; HMAC-SHA256; `map[string]time.Time` 24h TTL; bcrypt (`golang.org/x/crypto/bcrypt`, `Cost=12`); `HttpOnly`/`SameSite=Strict` cookie; `requireSession` middleware wraps all page+API routes; auth bypass if `password_hash == ""` (backward compat); config: `[vlog.auth]` in `vlog.toml`
 - **Theme** (shipped `cc7735a`): Matrix [V] dark theme — CSS design token system (`--vn-*`), Pico v2 dark mode override, glass morphism cards (`backdrop-filter:blur(8px)`, translucent bg, green border glow), viewport-fill background (`background-size:100% 100% fixed`, `content_bg.png`), `body::before` overlay, sticky footer (flex-column + `main{flex:1}`)
-- **Dashboard**: dual-line Chart.js request charts (left/right 50/50), standalone endpoint status panel with 3 static probe columns (Local | 🇨🇦 | 🌍); CSS spinner during probe; hover tooltips via `title` attribute
-- **Endpoint probe**: `handleAPIProbe` — local probe (SSRF-guarded, candidate URL discovery) + concurrent CA+WW probes via check-host.net HTTP-check API (submit+poll, 12s deadline, 2s interval); result shape `{host,url,local,ca,ww}` with `locResult{ok,code,latency_ms,error,node}`; node list verified from `/nodes/hosts` (ca1, fr2, de1/de4, nl1, uk1, fi1, jp1, sg1, us1/us2, br1, in1)
+- **Dashboard**: dual-line Chart.js request charts (left/right 50/50); **collapsible blocks** (`<details>`/`<summary>` + `.v-block` CSS, onclick guard prevents toggle when clicking action buttons); full-width **Chain Status** table (16 cols: Chain Info×5 + Governance×4 + Ping×3 + Server×3 + Actions×1); 65s auto-refresh; Deploy/Endpoint Status panels removed
+- **Endpoint probe**: `handleAPIProbe` — local probe (SSRF-guarded, candidate URL discovery) + concurrent DC+WW probes via check-host.net HTTP-check API (submit+poll, 12s deadline, 2s interval); accepts `?country=CA&provider=ca1` params; `countryNodes` map (CA/US/FR/DE/NL/GB/UK/FI/JP/SG/BR/IN → nodes); `sanitizeProbeNode()` SSRF whitelist for provider param; result shape `{host,url,local,ca,ww}` with `locResult{ok,code,latency_ms,error,node}`; Chain Status "DC" column passes `ping_country` per-chain
 - **Accounts page**: server-side search (IP/country/rowid), per-page selector (25/50/100/200/All), sortable columns with URL-based sort persistence (back-nav safe), Investigate button (`.btn-investigate-done` green when intel exists), Org column (ip-api.com), Status column (ALLOWED/BLOCKED)
 - **Ingestion**: scans `$VPROX_HOME/data/logs/archives/*.tar.gz` (oldest-first, dedup via `ingested_archives` table); FS watcher for new archives; vProx backup push hook (`POST /api/v1/ingest`)
 - **IP Intelligence**: VirusTotal v3 + AbuseIPDB v2 + Shodan APIs; parallel queries (3 goroutines → buffered channels); composite threat score (0-100); flag + score + per-source breakdown; cache in `intel_cache` table
@@ -97,7 +97,7 @@ All CRITICAL/HIGH findings from the 2026-03-01 audit applied in `70a46db` + `a1e
 - ✅ CR-3: `notifyVLog` called synchronously (not in goroutine)
 - ✅ CR-4/CR-5: `sync.Mutex` on WS `WriteControl` + SSE `ResponseWriter`
 
-**P2/P3 Remaining (not blocking release):** CR-2, CR-6, CR-8, SEC-H3, SEC-M4, SEC-M6, SEC-L1–L4. Full list in `agents/projects/vprox.state.md`.
+**ALL 24 FINDINGS RESOLVED** (2026-03-04 reconciliation): CR-2 (os.Stat guard), CR-6 (geo.Close dbMu), CR-8 (time.Tick stoppable ticker), SEC-H3 (trusted proxy CIDR), SEC-M4 (WS origin checker), SEC-M6 (autoState eviction), SEC-L1–L4. Full audit table in `agents/projects/vprox.state.md`.
 
 ### Cosmos SDK node context (upstream knowledge + proxy intelligence)
 - **Cosmos SDK v0.50.14** — proxied upstream; full module system + upgrade/gov/evidence REST knowledge
@@ -124,7 +124,7 @@ All CRITICAL/HIGH findings from the 2026-03-01 audit applied in `70a46db` + `a1e
 | **Governance cost** | `/cosmos/gov/v1/proposals/{id}/votes` | Paginate; can return unbounded results → timeout |
 | **Config sanitization** | Error messages leak `MaxSubscriptionClients`, mempool limits | Return generic "service unavailable" at proxy; never forward node error details |
 
-### Phase E CLI commands (planned, `vLog/v1.2.0` branch)
+### Phase E CLI commands (shipped, `vLog/v1.2.0` branch)
 - **`vProx mod [list|add|update|remove] --name mod@version`**: `internal/modules/` package + `config/modules.toml` state; `mod add vLog@v1.2.0` → git fetch + build + install binary + systemd service
 - **`vProx push [hosts|vms|add|update|remove]`**: CLI layer over `internal/push/`; `push add --chain akash --type validator --host qc-vm-01 --mainnet`; `push update [--host]` → SSH apt upgrade
 - **`vProx chain [status|upgrade --prop N]`**: `internal/chain/upgrade/` package; fetches proposal via REST → name/halt-height/binary URL; manages binary swap at halt; tracks in push SQLite
@@ -726,7 +726,7 @@ Skill source: `https://github.com/github/awesome-copilot/blob/main/docs/README.s
   ── Skills catalogued but not applicable to vProx stack (log for future projects) ──
   appinsights-instrumentation, apple-appstore-reviewer, arch-linux-triage, aspire,
   aspnet-minimal-api-openapi, az-cost-optimize, azure-deployment-preflight,
-  azure-devops-cli, azure-resource-health-diagnose, azure-resource-visualizer,
+  azure-devops-cli, azure-pricing, azure-resource-health-diagnose, azure-resource-visualizer,
   azure-role-selector, azure-static-web-apps, bigquery-pipeline-audit,
   centos-linux-triage, chrome-devtools, containerize-aspnet-framework,
   containerize-aspnetcore, copilot-cli-quickstart, copilot-usage-metrics,
@@ -745,6 +745,7 @@ Skill source: `https://github.com/github/awesome-copilot/blob/main/docs/README.s
   kotlin-mcp-server-generator, kotlin-springboot, legacy-circuit-mockups,
   mcp-configure, mcp-copilot-studio-server-generator, mcp-create-adaptive-cards,
   mcp-create-declarative-agent, mcp-deploy-manage-agents, meeting-minutes,
+  mentoring-juniors,
   msstore-cli, nano-banana-pro-openrouter, next-intl-add-language, nuget-manager,
   openapi-to-application-code, pdftk-server, penpot-uiux-design,
   php-mcp-server-generator, playwright-automation-fill-in-form,
@@ -758,7 +759,7 @@ Skill source: `https://github.com/github/awesome-copilot/blob/main/docs/README.s
   transloadit-media-processing, typescript-mcp-server-generator,
   typespec-api-operations, typespec-create-agent, typespec-create-api-plugin,
   update-avm-modules-in-bicep, vscode-ext-commands, vscode-ext-localization,
-  winapp-cli, workiq-copilot,
+  winapp-cli, workiq-copilot, noob-mode,
   ── vProx-adjacent (activate if scope expands) ──
   go-mcp-server-generator (MCP server feature), mcp-cli (MCP tool integration),
   copilot-sdk (agent embedding), webapp-testing (vLog UI), web-design-reviewer (vLog UI),

@@ -1324,3 +1324,55 @@ All three Phase E CLI command groups are implemented:
 2. Reopen or create PR `develop` → `main`
 3. Tag `vProxVL-v1.2.0` after merge
 4. Migrate production `vms.toml` to flat format
+
+---
+
+## Session Dump 2026-03-05 — Chain Status Table + Datacenter Ping Column (vLog/v1.2.0)
+
+**Branch:** `vLog/v1.2.0` HEAD `2e31316`
+
+### Work Done
+
+**Chain Status Dashboard Overhaul (multi-session work):**
+- Removed standalone endpoint status panel
+- Replaced with full-width Chain Status block: 16-column table (Chain Info×5 | Governance×4 | Ping×3 | Server×3 | Actions×1)
+- All dashboard panels made collapsible via `<details>`/`<summary>` + `.v-block` CSS; onclick guard prevents toggle when clicking action buttons inside summary
+- Column alignment: all data left-aligned
+- Category header row spans: "Chain Information(5)", "Governance(4)", "Ping(3)", "Server(3)", "Actions(1)"
+- Sub-headers: Chain|Status|Synced|Height|Earliest | Active Proposal|Voting Ends|Upgrade|Participation Avg | L|DC|WW | Free Space|Load AVG|APT
+- "LIVE" badge removed; Status=online/offline + Synced=yes/no from button row
+- If not synced: height shows "node_height (N behind)" format
+- Active Proposal links to `https://{explorer}/{chainExplo}/gov` where chainExplo = chain-id trimmed at first `-`
+
+**Configurable Datacenter Ping Column:**
+- `[vm.ping]` subtable added to `[[vm]]` blocks in vms.toml (`config/push/vms.sample.toml`)
+- New struct: `VMPing{Country, Provider string}` in `internal/push/config/config.go`
+- `VM.Ping VMPing` field; wired `ChainStatus.PingCountry`/`.PingProvider` in `internal/push/push.go`
+- `countryNodes map[string][]string` in `internal/vlog/web/handlers.go` maps CA/US/FR/DE/NL/GB/UK/FI/JP/SG/BR/IN → check-host.net nodes
+- `sanitizeProbeNode()` SSRF whitelist for `provider` param
+- `handleAPIProbe` accepts `?country=CA&provider=ca1`; priority: provider → country → fallback CA
+- Frontend `fireProbes()` passes per-chain country/provider from chain status JSON
+- Column header: "DC" (generic — each chain can have different datacenter country)
+
+**Lint + Build Fixes (committed earlier):**
+- `initialise` → `initialize` in cmd/vlog/main.go
+- `serialises` → `serializes` in cmd/vprox/push.go
+- `splitTrim` removed (unused) from cmd/vprox/push.go
+- `govProposalsResponse` removed (unused) from internal/push/status/status.go
+- `fmt.Sscanf` error returns now checked
+- File formatting (gofmt/goimports) applied to chain.go, push.go, config.go, queries.go
+- `os.WriteFile` permissions: 0600 in push.go and modules.go
+- CSS identifier error at dashboard.html:103 fixed
+
+**vm sample keys updated:**
+- `key_path` → `$HOME/.vprox/secret/id.push` (user home, no sudo, shared key convention)
+- `user` → `$(whoami)` in vms.sample.toml comments
+
+### Commits Since Last Dump
+- `fd94144` — lint fixes (batch from diagnostics review)
+- `2e31316` — datacenter ping: VMPing struct, countryNodes map, sanitizeProbeNode, country/provider probe params
+
+### Outstanding Items
+- PR `vLog/v1.2.0` → `develop` → `main`
+- Release tag `vProxVL-v1.2.0`
+- Production vms.toml: migrate existing VMs to flat format + add `[vm.ping]` sections
