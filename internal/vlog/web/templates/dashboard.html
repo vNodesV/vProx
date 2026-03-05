@@ -140,7 +140,7 @@
 </article>
 
 <!-- CHAIN STATUS (full width) -->
-<div class="v-blocks-row">
+<div class="v-blocks-row" id="chain-server-row">
 
 <article id="block-chain" class="v-block">
   <details open>
@@ -155,6 +155,10 @@
           style="background:none;border:1px solid rgba(0,255,0,0.35);color:#00ff00;padding:.25rem .7rem;border-radius:4px;cursor:pointer;font-size:.8rem;font-family:Inter,sans-serif;transition:all 0.2s"
           onmouseover="this.style.background='rgba(0,255,0,0.10)';this.style.borderColor='#00ff00'"
           onmouseout="this.style.background='none';this.style.borderColor='rgba(0,255,0,0.35)'">Refresh</button>
+        <button id="chain-hcol-btn" onclick="toggleHcol('left')"
+          style="background:none;border:1px solid rgba(0,255,0,0.20);color:rgba(0,255,0,0.5);padding:.25rem .55rem;border-radius:4px;cursor:pointer;font-size:.9rem;font-family:Inter,sans-serif;line-height:1;transition:all 0.2s"
+          onmouseover="this.style.color='#00ff00';this.style.borderColor='rgba(0,255,0,0.6)'"
+          onmouseout="this.style.color='rgba(0,255,0,0.5)';this.style.borderColor='rgba(0,255,0,0.20)'">›</button>
       </div>
     </summary>
     <div class="v-block-body">
@@ -183,6 +187,14 @@
     <summary onclick="if(event.target.closest('button')){event.preventDefault()}">
       <span class="v-block-title">Servers / VM</span>
       <div class="v-block-actions">
+        <button id="server-hcol-btn" onclick="toggleHcol('right')"
+          style="background:none;border:1px solid rgba(0,255,0,0.20);color:rgba(0,255,0,0.5);padding:.25rem .55rem;border-radius:4px;cursor:pointer;font-size:.9rem;font-family:Inter,sans-serif;line-height:1;transition:all 0.2s"
+          onmouseover="this.style.color='#00ff00';this.style.borderColor='rgba(0,255,0,0.6)'"
+          onmouseout="this.style.color='rgba(0,255,0,0.5)';this.style.borderColor='rgba(0,255,0,0.20)'">‹</button>
+        <button id="vm-ping-btn" onclick="doVMPing()"
+          style="background:none;border:1px solid rgba(0,255,0,0.35);color:#00ff00;padding:.25rem .7rem;border-radius:4px;cursor:pointer;font-size:.8rem;font-family:Inter,sans-serif;transition:all 0.2s"
+          onmouseover="this.style.background='rgba(0,255,0,0.10)';this.style.borderColor='#00ff00'"
+          onmouseout="this.style.background='none';this.style.borderColor='rgba(0,255,0,0.35)'">Ping</button>
         <button id="vm-refresh-btn" onclick="doVMRefresh()"
           style="background:none;border:1px solid rgba(0,255,0,0.35);color:#00ff00;padding:.25rem .7rem;border-radius:4px;cursor:pointer;font-size:.8rem;font-family:Inter,sans-serif;transition:all 0.2s"
           onmouseover="this.style.background='rgba(0,255,0,0.10)';this.style.borderColor='#00ff00'"
@@ -772,6 +784,19 @@
       .catch(function() { if (btn) { btn.disabled = false; btn.textContent = 'Refresh'; } });
   };
 
+  window.doVMPing = function() {
+    var btn = document.getElementById('vm-ping-btn');
+    if (btn) { btn.disabled = true; btn.textContent = '…'; }
+    fetch(BASE + '/api/v1/push/vms/status')
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        vmCachedVMs = d.vms || [];
+        renderVMTable(vmCachedVMs);
+        if (btn) { btn.disabled = false; btn.textContent = 'Ping'; }
+      })
+      .catch(function() { if (btn) { btn.disabled = false; btn.textContent = 'Ping'; } });
+  };
+
   // Staggered start: 30s after chain poll to avoid SSH burst at same time.
   setTimeout(function() {
     loadVMStatus();
@@ -862,6 +887,49 @@
   };
 
   loadArcStats();
+})();
+</script>
+
+<script>
+(function() {
+  var row      = document.getElementById('chain-server-row');
+  var chainBlk = document.getElementById('block-chain');
+  var srvBlk   = document.getElementById('block-server');
+  var chainBtn = document.getElementById('chain-hcol-btn');
+  var srvBtn   = document.getElementById('server-hcol-btn');
+
+  function reset() {
+    row.classList.remove('hcol-left', 'hcol-right');
+    chainBlk.classList.remove('is-strip');
+    srvBlk.classList.remove('is-strip');
+    if (chainBtn) chainBtn.textContent = '›';
+    if (srvBtn)   srvBtn.textContent   = '‹';
+  }
+
+  window.toggleHcol = function(side) {
+    var active = row.classList.contains('hcol-' + side);
+    reset();
+    if (!active) {
+      row.classList.add('hcol-' + side);
+      if (side === 'left') {
+        // Chain expands → server becomes strip
+        srvBlk.classList.add('is-strip');
+        if (chainBtn) chainBtn.textContent = '‹';
+      } else {
+        // Server expands → chain becomes strip
+        chainBlk.classList.add('is-strip');
+        if (srvBtn) srvBtn.textContent = '›';
+      }
+    }
+  };
+
+  // Click on pill → return to 50/50
+  chainBlk.addEventListener('click', function() {
+    if (chainBlk.classList.contains('is-strip')) reset();
+  });
+  srvBlk.addEventListener('click', function() {
+    if (srvBlk.classList.contains('is-strip')) reset();
+  });
 })();
 </script>
 {{end}}

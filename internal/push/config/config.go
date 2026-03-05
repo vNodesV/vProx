@@ -4,7 +4,6 @@ package config
 import (
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/pelletier/go-toml/v2"
 )
@@ -49,12 +48,14 @@ type VM struct {
 	RPCURL     string `toml:"rpc_url"`  // optional override
 	RESTURL    string `toml:"rest_url"` // optional override
 
-	// Block explorer config — used by vLog dashboard for governance links.
-	ExplorerBase string `toml:"explorer"`  // e.g. "ping.pub"
-	ChainID      string `toml:"chain_id"`  // official chain-id, e.g. "cheqd-mainnet-1"
-
 	// Ping config — selects check-host.net probe node for datacenter latency column.
 	Ping VMPing `toml:"ping"`
+}
+
+// Config is the top-level push configuration parsed from vms.toml.
+type Config struct {
+	Hosts []Host `toml:"host"`
+	VMs   []VM   `toml:"vm"`
 }
 
 // DisplayLanIP returns the LAN IP for display: falls back to Host when lan_ip is not set.
@@ -79,28 +80,6 @@ func (v VM) REST() string {
 		return v.RESTURL
 	}
 	return "http://" + v.Host + ":1317"
-}
-
-// ExplorerChainURL returns the base URL for this chain on the block explorer,
-// e.g. "https://ping.pub/cheqd". The chain slug is derived by trimming the
-// chain_id from the first "-" onwards (cheqd-mainnet-1 → cheqd).
-// Returns "" if chain_id is not configured.
-func (v VM) ExplorerChainURL() string {
-	if v.ChainID == "" {
-		return ""
-	}
-	base := v.ExplorerBase
-	if base == "" {
-		base = "ping.pub"
-	}
-	slug := strings.SplitN(v.ChainID, "-", 2)[0]
-	return "https://" + base + "/" + slug
-}
-
-// Config is the top-level push configuration parsed from vms.toml.
-type Config struct {
-	Hosts []Host `toml:"host"`
-	VMs   []VM   `toml:"vm"`
 }
 
 // FindHost returns the Host with the given name, or nil.

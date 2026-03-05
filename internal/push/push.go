@@ -87,7 +87,6 @@ func (s *Service) pollAll(ctx context.Context) {
 			st := status.Poll(ctx, vm.Name, vm.RPC(), vm.REST())
 			st.Type = vm.Type
 			st.Datacenter = vm.Datacenter
-			st.ExplorerURL = vm.ExplorerChainURL()
 			st.PingCountry = vm.Ping.Country
 			st.PingProvider = vm.Ping.Provider
 			s.mu.Lock()

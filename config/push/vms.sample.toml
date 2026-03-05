@@ -55,11 +55,9 @@ lan_ip     = "10.0.0.68"          # VM LAN IP shown in Server Status (defaults t
                                   # Inherits [[host]].public_ip when blank + host_ref is set.
 port       = 22
 user       = "jarvis"
-key_path   = "$HOME/.vprox/secret/id.push"
+key_path   = "$HOME/.ssh/id_push"      # PRIVATE key ($HOME expanded). Never use .pub file.
 datacenter = "QC"
 type       = "validator"          # validator | sp | relayer | node (comma-separated for multi-role)
-explorer   = "ping.pub"           # block explorer base hostname
-chain_id   = "akashnet-2"         # official chain-id (e.g. akashnet-2, cheqd-mainnet-1)
 # rpc_url  = "http://10.0.0.68:36657"   # only needed for non-standard ports
 # rest_url = "http://10.0.0.68:2317"
 
@@ -86,11 +84,9 @@ provider = ""
 # public_ip  = "198.51.100.10"    # internet-facing IP
 # port       = 22
 # user       = "validator"
-# key_path   = "$HOME/.vprox/secret/id.push"
+# key_path   = "$HOME/.ssh/id_push"      # PRIVATE key ($HOME expanded). Never use .pub file.
 # datacenter = "RBX"
 # type       = "validator"
-# explorer   = "ping.pub"
-# chain_id   = "elys-1"
 #
 # [vm.ping]
 # country  = "FR"
@@ -109,11 +105,9 @@ provider = ""
 # public_ip  = ""
 # port       = 22
 # user       = "jarvis"
-# key_path   = "$HOME/.vprox/secret/id.push"
+# key_path   = "$HOME/.ssh/id_push"      # PRIVATE key ($HOME expanded). Never use .pub file.
 # datacenter = "QC"
 # type       = "sp,relayer"       # comma-separated: both API/RPC and RELAYER badges will be active
-# explorer   = "ping.pub"
-# chain_id   = "akashnet-2"
 #
 # [vm.ping]
 # country  = "CA"

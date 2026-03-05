@@ -6,6 +6,7 @@ package ssh
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"golang.org/x/crypto/ssh"
@@ -22,6 +23,14 @@ type Client struct {
 // NOTE: HostKeyCallback is intentionally permissive for now.
 // TODO: validate against a known_hosts file before production use.
 func Dial(host string, port int, user, keyPath string) (*Client, error) {
+	// Expand $HOME / ~ so TOML values like "$HOME/.ssh/id_key" work.
+	keyPath = os.ExpandEnv(keyPath)
+	if strings.HasPrefix(keyPath, "~/") {
+		if h, err := os.UserHomeDir(); err == nil {
+			keyPath = h + keyPath[1:]
+		}
+	}
+
 	keyBytes, err := os.ReadFile(keyPath)
 	if err != nil {
 		return nil, fmt.Errorf("push/ssh: read key %s: %w", keyPath, err)
