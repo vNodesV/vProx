@@ -118,14 +118,6 @@ nav a      { font-size: 0.82rem; }
 }
 .btn-reset-layout:hover { border-color: rgba(0,255,0,.55); color: rgba(0,255,0,.75); background: var(--vn-green-dim); }
 
-/* ── Inner-row drag handles (chain / server swap) ── */
-.v-blocks-row .v-block[data-inner-drag] { cursor: grab; }
-.v-blocks-row .v-block[data-inner-drag].dragging { opacity: .3; }
-.v-blocks-row .v-block[data-inner-drag].drag-over-left,
-.v-blocks-row .v-block[data-inner-drag].drag-over-right {
-  outline: 2px solid rgba(0,255,0,.42); outline-offset: -1px; border-radius: 7px;
-}
-
 /* ── Glass cards ── */
 .stat-card, .chart-block, .intel-card, article {
   background: var(--vn-bg-card);
@@ -823,10 +815,8 @@ summary { list-style: none; }
 
 /* ── Chart 2×2 expansion ── */
 .chart-block-b { display: none; }
-.chart-row.chart-2x2 { grid-template-rows: 1fr 1fr; }
-.chart-row.chart-2x2 .chart-block-b { display: flex; flex-direction: column; }
-.chart-row.chart-2x2 .chart-block { aspect-ratio: 1; display: flex; flex-direction: column; }
-.chart-row.chart-2x2 .chart-canvas-wrap { flex: 1; height: auto; }
+.chart-row.chart-2x2 .chart-block-b { display: block; }
+/* All 4 charts: equal size, same 220px canvas height — no aspect-ratio */
 
 /* ── Drag-and-drop reordering ── */
 .v-drag-handle {
@@ -853,18 +843,19 @@ summary { list-style: none; }
 }
 .v-row-handle:hover { opacity: .75; }
 
-/* ── Collapsed vertical strip ── */
-.v-block.is-strip { overflow: hidden; cursor: pointer; display: flex; }
+/* ── Collapsed vertical strip — full height of its grid row ── */
+.v-block.is-strip { overflow: hidden; cursor: pointer; }
 .v-block.is-strip > details { display: none; }
 .v-block-strip-label {
-  display: none; width: 44px; height: 100%; min-height: 120px;
+  display: none; width: 44px; height: 100%;
   align-items: center; justify-content: center;
   writing-mode: vertical-rl; transform: rotate(180deg);
   font-family: var(--font-mono); font-size: .6rem;
   color: rgba(0,255,0,.32); letter-spacing: .13em; text-transform: uppercase;
   user-select: none; padding: .6rem 0;
   border: 1px solid var(--vn-green-border); border-radius: 7px;
-  transition: color .15s, border-color .15s; flex: 1;
+  transition: color .15s, border-color .15s;
+  box-sizing: border-box;
 }
 .v-block.is-strip .v-block-strip-label { display: flex; }
 .v-block.is-strip:hover .v-block-strip-label { color: rgba(0,255,0,.8); border-color: rgba(0,255,0,.35); }

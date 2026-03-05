@@ -180,10 +180,9 @@
 <div class="v-blocks-row" data-block-id="chain-server-row">
 <div class="v-row-handle"><span class="v-drag-handle">⠿</span> Infrastructure</div>
 
-<article id="block-chain" class="v-block" data-inner-drag="chain">
+<article id="block-chain" class="v-block">
   <details open>
     <summary onclick="if(event.target.closest('button')){event.preventDefault()}">
-      <span class="v-drag-handle" title="Drag to swap">⠿</span>
       <span class="v-block-title">Chain Status</span>
       <div class="v-block-actions">
         <button id="chain-ping-btn" onclick="doPing()"
@@ -219,10 +218,9 @@
   <div class="v-block-strip-label" onclick="collapseBlockRow()">Chain Status</div>
 </article>
 
-<article id="block-server" class="v-block" data-inner-drag="server">
+<article id="block-server" class="v-block">
   <details open>
     <summary onclick="if(event.target.closest('button')){event.preventDefault()}">
-      <span class="v-drag-handle" title="Drag to swap">⠿</span>
       <span class="v-block-title">Servers / VM</span>
       <div class="v-block-actions">
         <button id="vm-expand-btn" class="v-expand-btn" onclick="expandBlockRow('right')" title="Expand block">‹</button>
@@ -976,88 +974,7 @@
   };
 })();
 
-// ── Inner-row drag: swap Chain ↔ Server ──────────────────────────────────────
-(function() {
-  var src = null, fromHandle = false;
-  var STORE_INNER = 'vlog-inner-row-order';
-
-  function getRow() { return document.querySelector('.v-blocks-row'); }
-
-  function innerChildren() {
-    var row = getRow(); if (!row) return [];
-    return [].slice.call(row.querySelectorAll('[data-inner-drag]'));
-  }
-
-  function saveInnerOrder() {
-    try {
-      var ids = innerChildren().map(function(el) { return el.getAttribute('data-inner-drag'); });
-      localStorage.setItem(STORE_INNER, JSON.stringify(ids));
-    } catch(e) {}
-  }
-
-  function applyInnerOrder() {
-    try {
-      var saved = JSON.parse(localStorage.getItem(STORE_INNER));
-      if (!saved || saved.length < 2) return;
-      var row = getRow(); if (!row) return;
-      var map = {};
-      innerChildren().forEach(function(el) { map[el.getAttribute('data-inner-drag')] = el; });
-      // Append in saved order — grid places them left/right automatically
-      saved.forEach(function(id) { if (map[id]) row.appendChild(map[id]); });
-    } catch(e) {}
-  }
-
-  function clearInner() {
-    innerChildren().forEach(function(el) {
-      el.classList.remove('drag-over-left', 'drag-over-right');
-    });
-  }
-
-  function bindInner(el) {
-    el.setAttribute('draggable', 'true');
-    el.addEventListener('mousedown', function(e) {
-      fromHandle = !!e.target.closest('.v-drag-handle');
-    });
-    el.addEventListener('dragstart', function(e) {
-      if (!fromHandle) { e.preventDefault(); return; }
-      src = el;
-      e.dataTransfer.effectAllowed = 'move';
-      setTimeout(function() { el.classList.add('dragging'); }, 0);
-    });
-    el.addEventListener('dragend', function() {
-      el.classList.remove('dragging'); clearInner(); src = null;
-    });
-    el.addEventListener('dragover', function(e) {
-      if (!src || src === el) return;
-      e.preventDefault(); e.stopPropagation();
-      clearInner();
-      var mid = el.getBoundingClientRect().left + el.offsetWidth / 2;
-      el.classList.add(e.clientX < mid ? 'drag-over-left' : 'drag-over-right');
-    });
-    el.addEventListener('dragleave', function() { clearInner(); });
-    el.addEventListener('drop', function(e) {
-      if (!src || src === el) return;
-      e.preventDefault(); e.stopPropagation();
-      clearInner();
-      // Swap the two articles in the grid
-      var row = getRow();
-      var children = innerChildren();
-      if (children.length === 2) {
-        var a = children[0], b = children[1];
-        row.insertBefore(b, a); // swap
-      }
-      src = null;
-      // After swap, collapse any active expansion (positions have changed)
-      if (window.collapseBlockRow) window.collapseBlockRow();
-      saveInnerOrder();
-    });
-  }
-
-  applyInnerOrder();
-  innerChildren().forEach(bindInner);
-})();
-
-// ── Outer block drag-and-drop reordering ─────────────────────────────────────
+// ── Block drag-and-drop reordering ───────────────────────────────────────────
 (function() {
   var STORE = 'vlog-block-order';
   var DEFAULT_ORDER = ['traffic', 'threats', 'chain-server-row', 'archive'];
@@ -1104,10 +1021,7 @@
     if (!el.getAttribute('data-block-id')) return;
     el.setAttribute('draggable', 'true');
     el.addEventListener('mousedown', function(e) {
-      // Only start outer drag from the v-row-handle (row item) or top-level drag handles
-      var handle = e.target.closest('.v-row-handle .v-drag-handle, > .v-block > details > summary .v-drag-handle');
-      // Simpler: outer drag only if handle is NOT inside a [data-inner-drag] article
-      fromHandle = !!e.target.closest('.v-drag-handle') && !e.target.closest('[data-inner-drag]');
+      fromHandle = !!e.target.closest('.v-drag-handle');
     });
     el.addEventListener('dragstart', function(e) {
       if (!fromHandle) { e.preventDefault(); return; }
