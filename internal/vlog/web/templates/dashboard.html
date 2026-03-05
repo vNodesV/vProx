@@ -193,6 +193,8 @@
           style="background:none;border:1px solid rgba(0,255,0,0.35);color:#00ff00;padding:.25rem .7rem;border-radius:4px;cursor:pointer;font-size:.8rem;font-family:Inter,sans-serif;transition:all 0.2s"
           onmouseover="this.style.background='rgba(0,255,0,0.10)';this.style.borderColor='#00ff00'"
           onmouseout="this.style.background='none';this.style.borderColor='rgba(0,255,0,0.35)'">Refresh</button>
+        <button class="v-expand-btn" title="Collapse / Expand"
+          onclick="(function(b){var d=b.closest('details');d.open=!d.open;b.textContent=d.open?'∧':'∨';})(this)">∧</button>
         <button id="chain-expand-btn" class="v-expand-btn" onclick="expandBlockRow('left')" title="Expand block">›</button>
       </div>
     </summary>
@@ -224,6 +226,8 @@
       <span class="v-block-title">Servers / VM</span>
       <div class="v-block-actions">
         <button id="vm-expand-btn" class="v-expand-btn" onclick="expandBlockRow('right')" title="Expand block">‹</button>
+        <button class="v-expand-btn" title="Collapse / Expand"
+          onclick="(function(b){var d=b.closest('details');d.open=!d.open;b.textContent=d.open?'∧':'∨';})(this)">∧</button>
         <button id="vm-refresh-btn" onclick="doVMRefresh()"
           style="background:none;border:1px solid rgba(0,255,0,0.35);color:#00ff00;padding:.25rem .7rem;border-radius:4px;cursor:pointer;font-size:.8rem;font-family:Inter,sans-serif;transition:all 0.2s"
           onmouseover="this.style.background='rgba(0,255,0,0.10)';this.style.borderColor='#00ff00'"

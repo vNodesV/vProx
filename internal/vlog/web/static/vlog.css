@@ -830,8 +830,8 @@ summary { list-style: none; }
 
 /* ── v-blocks-row: transition + expand states ── */
 .v-blocks-row { transition: grid-template-columns .3s ease; }
-.v-blocks-row.row-expand-left  { grid-template-columns: 3fr 44px; }
-.v-blocks-row.row-expand-right { grid-template-columns: 44px 3fr; }
+.v-blocks-row.row-expand-left  { grid-template-columns: 3fr 1fr; }
+.v-blocks-row.row-expand-right { grid-template-columns: 1fr 3fr; }
 
 /* ── Row drag handle bar (spans both grid columns) ── */
 .v-row-handle {
@@ -844,7 +844,7 @@ summary { list-style: none; }
 .v-row-handle:hover { opacity: .75; }
 
 /* ── Collapsed vertical strip — full height of its grid row ── */
-.v-block.is-strip { overflow: hidden; cursor: pointer; }
+.v-block.is-strip { overflow: hidden; cursor: pointer; width: 44px; justify-self: center; }
 .v-block.is-strip > details { display: none; }
 .v-block-strip-label {
   display: none; width: 44px; height: 100%;
