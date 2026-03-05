@@ -164,20 +164,6 @@
     <div class="v-block-body">
       <div id="chain-status-panel" style="overflow-x:auto;font-size:.78rem"></div>
       <div id="chain-countdown-note" style="font-size:.7rem;opacity:.45;margin-top:.3rem;text-align:right">Next refresh in 65s</div>
-      <details style="margin-top:.6rem">
-        <summary style="cursor:pointer;font-size:.78rem;opacity:.65">+ Add Chain to Monitor</summary>
-        <div style="display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.4rem;align-items:center">
-          <input id="add-chain-name" placeholder="chain" style="width:7rem;font-size:.8rem">
-          <input id="add-chain-rpc"  placeholder="rpc_url :26657" style="width:13rem;font-size:.8rem">
-          <input id="add-chain-rest" placeholder="rest_url :1317 (opt)" style="width:13rem;font-size:.8rem">
-          <input id="add-chain-note" placeholder="note" style="width:8rem;font-size:.8rem">
-          <button onclick="addChain()"
-            style="background:none;border:1px solid rgba(0,255,0,0.35);color:#00ff00;padding:.2rem .6rem;border-radius:4px;cursor:pointer;font-size:.8rem;font-family:Inter,sans-serif;transition:all 0.2s"
-            onmouseover="this.style.background='rgba(0,255,0,0.10)';this.style.borderColor='#00ff00'"
-            onmouseout="this.style.background='none';this.style.borderColor='rgba(0,255,0,0.35)'">Add</button>
-        </div>
-        <div id="add-chain-result" style="font-size:.78rem;margin-top:.25rem;min-height:1rem"></div>
-      </details>
     </div>
   </details>
 </article>
@@ -575,27 +561,6 @@
   function toggleChainExpand() {
     chainExpanded = !chainExpanded;
     if (chainCachedData) renderChainTable(chainCachedData);
-  }
-
-  function addChain() {
-    var chain = document.getElementById('add-chain-name').value.trim();
-    var rpc   = document.getElementById('add-chain-rpc').value.trim();
-    var rest  = document.getElementById('add-chain-rest').value.trim();
-    var note  = document.getElementById('add-chain-note').value.trim();
-    var res   = document.getElementById('add-chain-result');
-    if (!chain || !rpc) { res.style.color='#ef4444'; res.textContent='chain and rpc_url required.'; return; }
-    fetch(BASE + '/api/v1/push/chains/registered', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({chain:chain, rpc_url:rpc, rest_url:rest, note:note})
-    }).then(function(r){ return r.json(); })
-      .then(function() {
-        res.style.color='#4caf50'; res.textContent=chain+' added.';
-        ['add-chain-name','add-chain-rpc','add-chain-rest','add-chain-note'].forEach(function(id){
-          var el=document.getElementById(id); if(el) el.value='';
-        });
-        loadChainStatus();
-      })
-      .catch(function(){ res.style.color='#ef4444'; res.textContent='Failed to add chain.'; });
   }
 
   function removeChain(chain) {

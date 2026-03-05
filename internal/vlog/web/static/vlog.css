@@ -777,24 +777,30 @@ summary { list-style: none; }
 }
 .v-blocks-row .v-block { margin-bottom: 0; }
 
-/* Horizontal collapse: 80/20 split */
-.v-blocks-row.hcol-left  { grid-template-columns: 4fr 1fr; align-items: stretch; }
-.v-blocks-row.hcol-right { grid-template-columns: 1fr 4fr; align-items: stretch; }
+/* Horizontal collapse: expanded block gets all space, other becomes narrow pill */
+.v-blocks-row.hcol-left  { grid-template-columns: 1fr 48px; }
+.v-blocks-row.hcol-right { grid-template-columns: 48px 1fr; }
 
-/* Strip pill — hides body, shows only title bar */
+/* Strip pill — narrow vertical handle */
 .v-block.is-strip details .v-block-body,
 .v-block.is-strip details .v-block-body * { display: none !important; }
-.v-block.is-strip { cursor: pointer; opacity: .85; transition: opacity .15s; }
-.v-block.is-strip:hover { opacity: 1; }
+.v-block.is-strip {
+  cursor: pointer;
+  transition: opacity .15s;
+  overflow: hidden;
+  align-self: start;  /* don't stretch to match sibling height in grid */
+}
+.v-block.is-strip:hover { opacity: .85; }
 .v-block.is-strip > details > summary {
   border-radius: 7px;
   border-bottom: none;
   justify-content: center;
   writing-mode: vertical-rl;
-  height: 100%;
-  min-height: 3rem;
-  padding: .6rem .4rem;
-  letter-spacing: .18em;
+  text-orientation: mixed;
+  padding: .8rem .3rem;
+  letter-spacing: .14em;
+  overflow: hidden;
+  white-space: nowrap;
 }
 .v-block.is-strip > details > summary .v-block-actions { display: none; }
 .v-block.is-strip > details > summary::before { display: none; }
