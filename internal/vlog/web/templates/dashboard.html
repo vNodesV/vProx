@@ -2,7 +2,7 @@
 {{define "content"}}
 <nav class="page-nav">
   <a href="{{.BasePath}}/" class="active">Dashboard</a>
-  <a href="{{.BasePath}}/accounts">Accounts</a>
+  <a href="{{.BasePath}}/accounts">Intel</a>
   <span class="nav-spacer"></span>
   <button class="btn-reset-layout" onclick="resetLayout()" title="Reset block order to default">↺ Reset Layout</button>
 </nav>
@@ -30,7 +30,7 @@
   </div>
   <div class="stat-card">
     <h3 style="color:#ef5350">{{len .TopThreatAccounts}}</h3>
-    <p>Threat Accounts</p>
+    <p>Flagged IPs</p>
   </div>
 </div>
 
@@ -124,10 +124,10 @@
   </details>
 </article>
 
-<!-- TOP THREAT ACCOUNTS -->
+<!-- FLAGGED IPs -->
 <article class="v-block" data-block-id="threats">
   <details open>
-    <summary><span class="v-drag-handle">⠿</span><span class="v-block-title">Top Threat Accounts</span></summary>
+    <summary><span class="v-drag-handle">⠿</span><span class="v-block-title">Flagged IPs</span></summary>
     <div class="v-block-body">
   {{if .TopThreatAccounts}}
   <div style="overflow-x:auto">
@@ -170,7 +170,7 @@
   </div>
   <script>initSortableTable('threat-tbl');</script>
   {{else}}
-  <p>No threat accounts found.</p>
+  <p>No flagged IPs found.</p>
   {{end}}
     </div>
   </details>
@@ -941,6 +941,7 @@
     var sBlk = document.getElementById('block-server');
     if (!row) return;
     row.classList.remove('row-expand-left', 'row-expand-right');
+    row.style.gridTemplateColumns = '';
     if (cBlk) cBlk.classList.remove('is-strip');
     if (sBlk) sBlk.classList.remove('is-strip');
     state = null;
@@ -958,6 +959,7 @@
     if (state === dir) { window.collapseBlockRow(); return; }
 
     row.classList.remove('row-expand-left', 'row-expand-right');
+    row.style.gridTemplateColumns = '';
     cBlk.classList.remove('is-strip');
     sBlk.classList.remove('is-strip');
 
@@ -974,6 +976,28 @@
     window._rowExpandState = dir;
     syncArrows();
   };
+})();
+
+// ── Independent block collapse: reflow row grid when details toggle ───────────
+(function() {
+  var row  = document.querySelector('.v-blocks-row');
+  var cDet = document.querySelector('#block-chain > details');
+  var sDet = document.querySelector('#block-server > details');
+  if (!row || !cDet || !sDet) return;
+
+  function updateGrid() {
+    // Row-expand CSS classes own the grid — don't interfere
+    if (row.classList.contains('row-expand-left') || row.classList.contains('row-expand-right')) return;
+    var cOpen = cDet.open;
+    var sOpen = sDet.open;
+    if (cOpen && sOpen)       row.style.gridTemplateColumns = '';
+    else if (cOpen && !sOpen) row.style.gridTemplateColumns = '1fr auto';
+    else if (!cOpen && sOpen) row.style.gridTemplateColumns = 'auto 1fr';
+    else                      row.style.gridTemplateColumns = '';
+  }
+
+  cDet.addEventListener('toggle', updateGrid);
+  sDet.addEventListener('toggle', updateGrid);
 })();
 
 // ── Block drag-and-drop reordering ───────────────────────────────────────────
