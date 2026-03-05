@@ -55,7 +55,7 @@ func New(vmsCfgPath, dbPath string) (*Service, error) {
 func (s *Service) Close() error { return s.db.Close() }
 
 // StartPolling launches background goroutines that refresh chain status
-// every interval. Call in a goroutine; stops when ctx is cancelled.
+// every interval. Call in a goroutine; stops when ctx is canceled.
 func (s *Service) StartPolling(ctx context.Context, interval time.Duration) {
 	if interval <= 0 {
 		interval = 60 * time.Second

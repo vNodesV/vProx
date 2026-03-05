@@ -164,7 +164,7 @@ func (m *Manager) save(r *Registry) error {
 	if err != nil {
 		return fmt.Errorf("modules: marshal: %w", err)
 	}
-	return os.WriteFile(m.cfgPath, data, 0o644)
+	return os.WriteFile(m.cfgPath, data, 0o600)
 }
 
 // splitNameVer parses "name@version" or just "name".

@@ -380,7 +380,7 @@ func cmdStart(f flags) int {
 		watcher.Start()
 	}
 
-	// Push module — initialise if vms.toml exists at the configured path.
+	// Push module — initialize if vms.toml exists at the configured path.
 	var pushSvc *push.Service
 	if _, err := os.Stat(cfg.VLog.Push.VMsPath); err == nil {
 		svc, err := push.New(cfg.VLog.Push.VMsPath, cfg.VLog.Push.DBPath)

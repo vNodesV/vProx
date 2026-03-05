@@ -115,8 +115,8 @@ func pollRPC(ctx context.Context, s *ChainStatus) error {
 
 	si := r.Result.SyncInfo
 	var h, eh int64
-	fmt.Sscanf(si.LatestBlockHeight, "%d", &h)
-	fmt.Sscanf(si.EarliestBlockHeight, "%d", &eh)
+	fmt.Sscanf(si.LatestBlockHeight, "%d", &h)   //nolint:errcheck
+	fmt.Sscanf(si.EarliestBlockHeight, "%d", &eh) //nolint:errcheck
 
 	s.Moniker = r.Result.NodeInfo.Moniker
 	s.Height = h
@@ -313,7 +313,7 @@ func pollUpgrade(ctx context.Context, s *ChainStatus) {
 	}
 
 	var upgradeHeight int64
-	fmt.Sscanf(r.Plan.Height, "%d", &upgradeHeight)
+	fmt.Sscanf(r.Plan.Height, "%d", &upgradeHeight) //nolint:errcheck
 	if upgradeHeight == 0 {
 		return
 	}

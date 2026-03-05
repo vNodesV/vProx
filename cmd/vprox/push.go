@@ -271,7 +271,7 @@ func pushUpdate(home string, args []string) {
 	}
 }
 
-// writeVMsCfg serialises cfg back to path, creating parent dirs as needed.
+// writeVMsCfg serializes cfg back to path, creating parent dirs as needed.
 func writeVMsCfg(path string, cfg *config.Config) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
@@ -280,16 +280,5 @@ func writeVMsCfg(path string, cfg *config.Config) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0o644)
-}
-
-func splitTrim(s, sep string) []string {
-	parts := strings.Split(s, sep)
-	out := parts[:0]
-	for _, p := range parts {
-		if t := strings.TrimSpace(p); t != "" {
-			out = append(out, t)
-		}
-	}
-	return out
+	return os.WriteFile(path, data, 0o600)
 }

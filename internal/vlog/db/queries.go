@@ -928,7 +928,6 @@ WHERE day >= date('now', ?) ORDER BY day`
 	}, nil
 }
 
-
 // HostTraffic holds per-host request counts split by protocol.
 type HostTraffic struct {
 	Host string `json:"host"`

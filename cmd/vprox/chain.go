@@ -9,9 +9,9 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/vNodesV/vProx/internal/chain/upgrade"
 	pushcfg "github.com/vNodesV/vProx/internal/push/config"
 	"github.com/vNodesV/vProx/internal/push/status"
-	"github.com/vNodesV/vProx/internal/chain/upgrade"
 )
 
 // runChainCmd handles: vprox chain <sub> [flags]
@@ -91,11 +91,17 @@ func runChainStatus(home string, args []string) {
 
 	ctx := context.Background()
 	results := make([]*status.ChainStatus, len(entries))
-	ch := make(chan struct{ idx int; s *status.ChainStatus }, len(entries))
+	ch := make(chan struct {
+		idx int
+		s   *status.ChainStatus
+	}, len(entries))
 	for i, e := range entries {
 		go func(idx int, e entry) {
 			s := status.Poll(ctx, e.chain, e.rpcURL, e.restURL)
-			ch <- struct{ idx int; s *status.ChainStatus }{idx, s}
+			ch <- struct {
+				idx int
+				s   *status.ChainStatus
+			}{idx, s}
 		}(i, e)
 	}
 	for range entries {

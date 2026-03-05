@@ -15,11 +15,11 @@ import (
 
 // Ports holds the default port assignments for chain services.
 type Ports struct {
-	RPC     int    `toml:"rpc"`
-	REST    int    `toml:"rest"`
-	GRPC    int    `toml:"grpc"`
-	GRPCWeb int    `toml:"grpc_web"`
-	API     int    `toml:"api"`
+	RPC            int      `toml:"rpc"`
+	REST           int      `toml:"rest"`
+	GRPC           int      `toml:"grpc"`
+	GRPCWeb        int      `toml:"grpc_web"`
+	API            int      `toml:"api"`
 	VLogURL        string   `toml:"vlog_url"`        // optional: notify vLog after --new-backup
 	TrustedProxies []string `toml:"trusted_proxies"` // CIDRs trusted to set X-Forwarded-For (e.g. ["127.0.0.1/32"])
 }
