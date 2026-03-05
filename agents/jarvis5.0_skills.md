@@ -316,7 +316,8 @@
 | go:embed (fs.FS) | 3 | Static asset embedding, production vs dev mode switching |
 | htmx | 3 | Partial fragment swaps, SSE/WS integration, hx-get/post/target/swap |
 | Server-Sent Events (SSE) | 4 | Keepalive goroutine (15s `: ping`), `context.Background()` isolation from `r.Context()`, Apache `ProxyTimeout` interaction, done-channel shutdown; `http.ResponseWriter` concurrency safety (keepalive + emit MUST be mutex-serialized); production-shipped in vLog (`handleAPIInvestigate`, `handleAPIEnrich`, `handleAPIosint`) |
-| Dashboard patterns | 2 | Status panels, config editors, log viewers, metric widgets |
+| Dashboard patterns | 3 | Status panels, metric widgets, collapsible blocks (`<details>`/`<summary>`), drag/drop layout (HTML5 DnD + localStorage persistence), reset layout button; vcol/hcol block expansion system — production in vLog v1.2.0 |
+| Dashboard vcol/hcol | 3 | vcol: `∧`/`∨` button toggles `details.open` manually (onclick guard bypass); hcol: `›`/`‹` toggles `.row-expand-left/right` (75/25% grid split); strip pill: `.is-strip` hides details, shows rotated label, `width:44px; justify-self:center`; toggle IIFE reflows grid on vcol; `collapseBlockRow()` restores 50/50 |
 | CSS frameworks (light) | 2 | Pico CSS, classless frameworks for admin UIs without build step |
 
 ---
@@ -375,6 +376,7 @@
 | Session auth UX | 4 | Login page (standalone, no base.html dep), `HttpOnly`/`SameSite` cookie, bcrypt, HMAC session — production vLog auth |
 | CSS animations | 3 | `@keyframes`, spinner rings (`probe-spinner`), transition timing |
 | Responsive layout | 3 | CSS Grid, flexbox, media queries (700px breakpoint), per-page controls |
+| Dashboard drag/drop | 3 | HTML5 DnD: `dragstart`/`dragover`/`drop` on master blocks; drag handle guard (`closest('.v-drag-handle')`); `localStorage` order persistence; reset layout button — production in vLog v1.2.0 |
 
 ---
 
@@ -438,4 +440,4 @@ Infrastructure Deploy:████████████         3/4    (SSH d
 ---
 
 *Skills are living documentation. Update this file when capabilities change or new domains are acquired.*
-*Last updated: 2026-03-03 (rev14: §2 Cosmos SDK CometBFT 3→4 + IBC 3→4 + proxy intelligence row added; §17 UI/UX Design Systems CONFIRMED present; §18 Infrastructure Deployment Management NEW; §19 capability index: Cosmos SDK 3.5→4, Log Analysis 3→4, UI/UX 4/4, Infra Deploy 3/4 added; Last-updated timestamp refreshed)*
+*Last updated: 2026-03-05 (rev16: §14 Dashboard patterns 2→3 + vcol/hcol row added; §17 drag/drop row added; base.agent.md vcol/hcol + drag/drop + sample revision schema + go:embed cache invalidation patterns added; capability index Web GUI 3→3.5; upgrade history rev16 entry)*

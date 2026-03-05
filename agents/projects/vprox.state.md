@@ -1407,3 +1407,73 @@ All PATCH targets applied and committed in `8c4f363`:
 - [ ] PR `develop` → `main`
 - [ ] Tag `vProxVL-v1.2.0`
 - [ ] Production: flat vms.toml migration + `[vm.ping]` sections per VM
+
+---
+
+## Session Save 2026-03-05 — agentupgrade rev16 + dashboard block system
+
+**Branch:** `vLog/v1.2.0` HEAD `8885611` (pushed to `origin/vLog/v1.2.0`)
+
+### Work Done (commits `9c6d41d` → `8885611`)
+
+| SHA | Description |
+|-----|-------------|
+| `9c6d41d` | feat(samples): revision schema + samples-push refreshes all 4 sample files |
+| `edaeb4c` | fix(push): config.go missing fields (DisplayLanIP, HostRef, PublicIP, FindHost) |
+| `db9038f` | feat(dashboard): Chain/Server 50/50 redesign + Services pills + Server/VM block |
+| `bf738b1` | feat(dashboard): archive ingestion half-block with stats + Backup & Import buttons |
+| `9f20d8d` | feat(dashboard): master-block drag/drop, row 3:1 expand, chart 2×2 expansion |
+| `207551c` | fix(dashboard): 7 block layout bugs — splits, drag, arrows, pill heights, chart squares, reset |
+| `ab3264f` | vlog: revert chart aspect-ratio, fix strip pill height, remove inner drag |
+| `6214b90` | vlog: rename archive buttons — Backup&Import→Refresh, Import→Manual Import |
+| `4cfcfa3` | vlog: full page reload 1.5s after successful import/backup |
+| `7515d75` | vlog: rename Accounts→Intel, Top Threat Accounts→Flagged IPs; independent block collapse |
+| `8885611` | vlog: vcol/hcol block system — 75/25 hcol, dedicated vcol ∧/∨ buttons |
+
+### Dashboard Block System (v1.2.0 final state)
+
+**Drag/Drop Layout:**
+- HTML5 DnD on outer master blocks (`traffic`, `threats`, `chain-server-row`, `archive`)
+- Drag handle: `.v-drag-handle` (⠿ icon); `dragstart` guard ensures drag only from handle
+- `localStorage.setItem('vlog-block-order', JSON.stringify([...ids]))` persists order
+- Reset Layout button restores default + clears localStorage
+- Inner per-subblock drag REMOVED — master-block movement only
+
+**vcol (vertical collapse/expand):**
+- `∧`/`∨` button in `<summary>` per row-block
+- onclick guard (`if(event.target.closest('button')){event.preventDefault()}`) blocks natural toggle
+- Button inline JS: `var d=this.closest('details');d.open=!d.open;this.textContent=d.open?'∧':'∨'`
+- Toggle listener IIFE on `<details>` reflows grid: chain vcol → `grid-template-columns: auto 1fr`; server vcol → `1fr auto`; both open → clear inline style
+
+**hcol (horizontal expand/collapse):**
+- `›`/`‹` buttons per row-block (`chain-expand-btn`, `vm-expand-btn`)
+- `expandBlockRow('left'|'right')` sets `.row-expand-left`/`.row-expand-right` class on `.v-blocks-row`
+- CSS: `.row-expand-left { grid-template-columns: 3fr 1fr }` (75/25)
+- Other block gets `.is-strip`: hides `<details>`, shows `.v-block-strip-label` (vertical pill)
+- `.v-block.is-strip { width: 44px; justify-self: center }` — stays narrow in 25% column
+- Pill click → `collapseBlockRow()` → removes expand class + `is-strip`, restores `1fr 1fr`, clears inline grid
+
+**Label Renames:**
+- Accounts → Intel (nav, page title)
+- Top Threat Accounts → Flagged IPs (block title + empty state)
+- Archive "Backup & Import" → "Refresh"; "Import" → "Manual Import"
+- Page reload 1.5s after successful import/refresh
+
+### agentupgrade rev16 Summary
+
+| File | Changes |
+|------|---------|
+| `agents/base.agent.md` | 4 new patterns: vcol/hcol block toggle, drag/drop layout, sample revision schema, go:embed cache invalidation |
+| `agents/jarvis5.0_skills.md` | §14 Dashboard patterns 2→3 + vcol/hcol row NEW; §17 drag/drop row NEW; capability index Web GUI 3→3.5; last-updated 2026-03-05 rev16 |
+| `agents/jarvis5.0_state.md` | rev16 upgrade history row |
+| `agents/projects/vprox.state.md` | This entry |
+
+### Open Work (Backlog)
+
+| ID | Task | Notes |
+|----|------|-------|
+| `host-traffic-table` | Add `host_traffic` pre-aggregated table to vLog SQLite | Efficient per-chain request count |
+| `gov-v1-fix` | Fix governance API: `/cosmos/gov/v1/proposals` with v1beta1 fallback | Newer chains use v1 |
+| PR merge | `vLog/v1.2.0` → `develop` → `main` | CI must pass |
+| Release | Tag `vProxVL-v1.2.0` | After merge |
+| Prod deploy | Flat vms.toml migration + `[vm.ping]` sections | Per VM, per datacenter |
