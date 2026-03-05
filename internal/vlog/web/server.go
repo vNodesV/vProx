@@ -144,6 +144,7 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 	mux.Handle("POST /api/v1/investigate/{ip}", s.requireSession(http.HandlerFunc(s.handleAPIInvestigate)))
 	mux.Handle("POST /api/v1/block/{ip}", s.requireSession(http.HandlerFunc(s.handleAPIBlock)))
 	mux.Handle("POST /api/v1/unblock/{ip}", s.requireSession(http.HandlerFunc(s.handleAPIUnblock)))
+	mux.Handle("POST /api/v1/ufw/sync", s.requireSession(http.HandlerFunc(s.handleAPIUFWSync)))
 	mux.Handle("GET /api/v1/stats", s.requireSession(http.HandlerFunc(s.handleAPIStats)))
 	mux.Handle("GET /api/v1/chart", s.requireSession(http.HandlerFunc(s.handleAPIChart)))
 	mux.Handle("GET /api/v1/probe", s.requireSession(http.HandlerFunc(s.handleAPIProbe)))

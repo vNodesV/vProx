@@ -5,6 +5,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"strings"
 )
 
 // IsAvailable reports whether ufw is installed at the canonical path.
@@ -46,4 +47,47 @@ func Unblock(ip string) error {
 		return fmt.Errorf("ufw delete deny %s: %w: %s", ip, err, string(out))
 	}
 	return nil
+}
+
+// ListBlocked runs "sudo ufw status numbered" and returns all IPs with a DENY rule.
+// Returns (nil, nil) when ufw is not installed. CIDR subnets are skipped; only
+// host addresses are returned so they can be matched against ip_accounts.
+func ListBlocked() ([]string, error) {
+	if !IsAvailable() {
+		return nil, nil
+	}
+	cmd := exec.Command("sudo", "/usr/sbin/ufw", "status", "numbered")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("ufw status: %w: %s", err, string(out))
+	}
+	return parseUFWDenyIPs(string(out)), nil
+}
+
+// parseUFWDenyIPs extracts host IPs from "ufw status numbered" output.
+// Lines look like: "[ 3] Anywhere DENY IN  203.0.113.5"
+func parseUFWDenyIPs(output string) []string {
+	var ips []string
+	seen := map[string]bool{}
+	for _, line := range strings.Split(output, "\n") {
+		if !strings.Contains(line, "DENY") {
+			continue
+		}
+		// Extract last whitespace-delimited token that looks like an IP (no slash → host addr)
+		fields := strings.Fields(line)
+		for i := len(fields) - 1; i >= 0; i-- {
+			f := fields[i]
+			if strings.Contains(f, "/") {
+				break // CIDR — skip
+			}
+			if ip := net.ParseIP(f); ip != nil {
+				if !seen[f] {
+					seen[f] = true
+					ips = append(ips, f)
+				}
+				break
+			}
+		}
+	}
+	return ips
 }

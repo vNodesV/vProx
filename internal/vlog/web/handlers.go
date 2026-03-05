@@ -843,7 +843,7 @@ func (s *Server) handleAPIProbe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Optional datacenter probe params.
-	countryParam  := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("country")))
+	countryParam := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("country")))
 	providerParam := strings.TrimSpace(r.URL.Query().Get("provider"))
 
 	// SSRF guard — only hosts present in ingested data.
@@ -1006,6 +1006,44 @@ func (s *Server) handleAPIUnblock(w http.ResponseWriter, r *http.Request) {
 		"ip":      ip,
 		"blocked": false,
 		"ufw":     ufwOK,
+	})
+}
+
+// ---------------------------------------------------------------------------
+// UFW sync
+// ---------------------------------------------------------------------------
+
+// handleAPIUFWSync reads current UFW DENY rules and imports any unknown IPs
+// into the blocked_ips table. Already-blocked IPs are skipped (idempotent).
+// POST /api/v1/ufw/sync
+func (s *Server) handleAPIUFWSync(w http.ResponseWriter, r *http.Request) {
+	ips, err := ufw.ListBlocked()
+	if err != nil {
+		log.Printf("[web] ufw sync: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	if ips == nil {
+		writeJSON(w, http.StatusOK, map[string]any{"imported": 0, "note": "ufw not available"})
+		return
+	}
+
+	var imported int
+	for _, ip := range ips {
+		already, err := s.db.IsBlocked(ip)
+		if err != nil || already {
+			continue
+		}
+		if err := s.db.BlockIP(ip, "ufw sync"); err != nil {
+			log.Printf("[web] ufw sync block %s: %v", ip, err)
+		} else {
+			imported++
+		}
+	}
+	log.Printf("[web] ufw sync: imported %d / %d IPs", imported, len(ips))
+	writeJSON(w, http.StatusOK, map[string]any{
+		"total":    len(ips),
+		"imported": imported,
 	})
 }
 
