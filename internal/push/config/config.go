@@ -9,6 +9,12 @@ import (
 	"github.com/pelletier/go-toml/v2"
 )
 
+// VMPing holds probe configuration for external latency checks via check-host.net.
+type VMPing struct {
+	Country  string `toml:"country"`  // ISO 3166-1 alpha-2 datacenter country, e.g. "CA", "FI"
+	Provider string `toml:"provider"` // optional: pin to a specific node, e.g. "fi1"
+}
+
 // VM describes one validator VM reachable via SSH.
 // In the standard 1:1 layout, vm.Name is the chain name.
 // Type classifies the chain role: validator | sp | relayer.
@@ -28,6 +34,9 @@ type VM struct {
 	// Block explorer config — used by vLog dashboard for governance links.
 	ExplorerBase string `toml:"explorer"`  // e.g. "ping.pub"
 	ChainID      string `toml:"chain_id"`  // official chain-id, e.g. "cheqd-mainnet-1"
+
+	// Ping config — selects check-host.net probe node for datacenter latency column.
+	Ping VMPing `toml:"ping"`
 }
 
 // RPC returns the effective RPC URL, deriving it from Host when not set.

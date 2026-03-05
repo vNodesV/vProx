@@ -632,6 +632,40 @@ var wwProbeNodes = []string{
 	"in1.node.check-host.net", // Mumbai, IN
 }
 
+// countryNodes maps ISO 3166-1 alpha-2 country codes to available check-host.net nodes.
+// Used by handleAPIProbe when ?country= is provided to select a datacenter-local probe node.
+var countryNodes = map[string][]string{
+	"CA": {"ca1.node.check-host.net"},
+	"US": {"us1.node.check-host.net", "us2.node.check-host.net"},
+	"FR": {"fr2.node.check-host.net"},
+	"DE": {"de1.node.check-host.net", "de4.node.check-host.net"},
+	"NL": {"nl1.node.check-host.net"},
+	"GB": {"uk1.node.check-host.net"},
+	"UK": {"uk1.node.check-host.net"}, // common alias for GB
+	"FI": {"fi1.node.check-host.net"},
+	"JP": {"jp1.node.check-host.net"},
+	"SG": {"sg1.node.check-host.net"},
+	"BR": {"br1.node.check-host.net"},
+	"IN": {"in1.node.check-host.net"},
+}
+
+// sanitizeProbeNode validates that the given short node id (e.g. "ca1") or
+// full hostname maps to a known check-host.net node, returning the full hostname.
+// Returns "" if the node is not in the whitelist (SSRF guard).
+func sanitizeProbeNode(node string) string {
+	if !strings.HasSuffix(node, ".node.check-host.net") {
+		node = node + ".node.check-host.net"
+	}
+	for _, nodes := range countryNodes {
+		for _, n := range nodes {
+			if n == node {
+				return node
+			}
+		}
+	}
+	return ""
+}
+
 type locResult struct {
 	Code      int    `json:"code,omitempty"`
 	LatencyMs int64  `json:"latency_ms,omitempty"`
@@ -754,6 +788,10 @@ func (s *Server) handleAPIProbe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Optional datacenter probe params.
+	countryParam  := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("country")))
+	providerParam := strings.TrimSpace(r.URL.Query().Get("provider"))
+
 	// SSRF guard — only hosts present in ingested data.
 	stats, err := s.db.EndpointSummary(500)
 	if err != nil {
@@ -792,6 +830,16 @@ func (s *Server) handleAPIProbe(w http.ResponseWriter, r *http.Request) {
 		wwR = locResult{Error: "no reachable URL"}
 	} else {
 		caNode := caProbeNodes[rand.Intn(len(caProbeNodes))] //nolint:gosec // G404: probe node selection is not security-sensitive
+		// Override CA node with datacenter-specific probe if requested.
+		if providerParam != "" {
+			if n := sanitizeProbeNode(providerParam); n != "" {
+				caNode = n
+			}
+		} else if countryParam != "" {
+			if nodes, ok := countryNodes[countryParam]; ok && len(nodes) > 0 {
+				caNode = nodes[rand.Intn(len(nodes))] //nolint:gosec // G404: probe node selection is not security-sensitive
+			}
+		}
 		wwNode := wwProbeNodes[rand.Intn(len(wwProbeNodes))] //nolint:gosec // G404: probe node selection is not security-sensitive
 		var wg sync.WaitGroup
 		wg.Add(2)

@@ -24,6 +24,16 @@ chain_id   = "akashnet-2" # official chain-id (e.g. akashnet-2, cheqd-mainnet-1)
 # rpc_url  = "http://10.0.0.68:36657"   # only needed for non-standard ports
 # rest_url = "http://10.0.0.68:2317"
 
+[vm.ping]
+# country: ISO 3166-1 alpha-2 code of the datacenter's country.
+# vLog uses check-host.net to probe your VM from a regional node in this country,
+# populating the DC latency column on the Chain Status dashboard.
+# Supported values: CA  US  FR  DE  NL  GB  FI  JP  SG  BR  IN
+country  = "CA"
+# provider: (optional) pin to a specific check-host.net node, e.g. "ca1", "fi1".
+# Leave empty to pick randomly from the country's available nodes.
+provider = ""
+
 # [[vm]]
 # name       = "elys"
 # host       = "198.51.100.10"

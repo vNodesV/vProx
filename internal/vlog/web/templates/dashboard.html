@@ -381,7 +381,10 @@
         });
         return;
       }
-      fetch(BASE + '/api/v1/probe?host=' + encodeURIComponent(host))
+      var probeURL = BASE + '/api/v1/probe?host=' + encodeURIComponent(host);
+      if (c.ping_country) probeURL += '&country=' + encodeURIComponent(c.ping_country);
+      if (c.ping_provider) probeURL += '&provider=' + encodeURIComponent(c.ping_provider);
+      fetch(probeURL)
         .then(function(r) { return r.json(); })
         .then(function(p) {
           var errDash = '<span style="opacity:.3;font-size:.72rem">—</span>';
@@ -392,8 +395,8 @@
             });
             return;
           }
-          var caLabel = (p.ca && p.ca.node) ? p.ca.node.toUpperCase() : 'CA';
-          var wwLabel = (p.ww && p.ww.node) ? p.ww.node.toUpperCase() : 'WW';
+          var caLabel = c.ping_country || ((p.ca && p.ca.node) ? p.ca.node.split('.')[0].toUpperCase() : 'DC');
+          var wwLabel = (p.ww && p.ww.node) ? p.ww.node.split('.')[0].toUpperCase() : 'WW';
           var elL  = document.getElementById('probe-local-' + idx);
           var elCA = document.getElementById('probe-ca-'   + idx);
           var elWW = document.getElementById('probe-ww-'   + idx);
@@ -506,7 +509,8 @@
         '<tr>' +
         '<th colspan="5" style="' + catStyle + '">Chain Information</th>' +
         '<th colspan="4" style="' + catStyle + ';border-left:1px solid var(--vn-border)">Governance</th>' +
-        '<th colspan="6" style="' + catStyle + ';border-left:1px solid var(--vn-border)">Performance</th>' +
+        '<th colspan="3" style="' + catStyle + ';border-left:1px solid var(--vn-border)">Ping</th>' +
+        '<th colspan="3" style="' + catStyle + ';border-left:1px solid var(--vn-border)">Server</th>' +
         '<th style="' + catStyle + '"></th>' +
         '</tr>';
       var colRow =
@@ -521,9 +525,9 @@
         '<th style="' + thStyle + '">Upgrade</th>' +
         '<th style="' + thStyle + '">Part. Avg</th>' +
         '<th style="' + thStyle + ';border-left:1px solid var(--vn-border)">L</th>' +
-        '<th style="' + thStyle + '">CA</th>' +
+        '<th style="' + thStyle + '">DC</th>' +
         '<th style="' + thStyle + '">WW</th>' +
-        '<th style="' + thStyle + '">Free Space</th>' +
+        '<th style="' + thStyle + ';border-left:1px solid var(--vn-border)">Free Space</th>' +
         '<th style="' + thStyle + '">Load AVG</th>' +
         '<th style="' + thStyle + '">APT</th>' +
         '<th style="' + thStyle + '"></th>' +

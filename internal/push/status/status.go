@@ -45,10 +45,12 @@ type ChainStatus struct {
 	UpgradeProposalID string `json:"upgrade_proposal_id,omitempty"`
 
 	// Metadata
-	Datacenter  string    `json:"datacenter,omitempty"`
-	ExplorerURL string    `json:"explorer_url,omitempty"`
-	UpdatedAt   time.Time `json:"updated_at"`
-	Error       string    `json:"error,omitempty"`
+	Datacenter   string    `json:"datacenter,omitempty"`
+	ExplorerURL  string    `json:"explorer_url,omitempty"`
+	PingCountry  string    `json:"ping_country,omitempty"`
+	PingProvider string    `json:"ping_provider,omitempty"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	Error        string    `json:"error,omitempty"`
 }
 
 // Poll fetches full chain status from rpcURL and restURL.

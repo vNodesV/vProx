@@ -88,6 +88,8 @@ func (s *Service) pollAll(ctx context.Context) {
 			st.Type = vm.Type
 			st.Datacenter = vm.Datacenter
 			st.ExplorerURL = vm.ExplorerChainURL()
+			st.PingCountry = vm.Ping.Country
+			st.PingProvider = vm.Ping.Provider
 			s.mu.Lock()
 			s.statuses[vm.Name] = st
 			s.mu.Unlock()
