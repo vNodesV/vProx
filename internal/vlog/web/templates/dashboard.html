@@ -310,9 +310,7 @@
 
   // Probe cell placeholder — shown until probe completes.
   function probeInitCell() {
-    var sep = '<span style="opacity:.2;margin:0 .1rem">·</span>';
-    var dash = '<span style="opacity:.35;font-size:.68rem">—</span>';
-    return '<span style="white-space:nowrap">' + dash + sep + dash + sep + dash + '</span>';
+    return '<span style="opacity:.3;font-size:.68rem">—</span>';
   }
 
   function statusTag(st) {
@@ -370,33 +368,44 @@
     return '<span style="color:#4caf50;font-size:.68rem">' + escH(label) + ':' + ms + '</span>';
   }
 
-  // Fire probes for each chain asynchronously; update probe-{idx} cells as results arrive.
+  // Fire probes for each chain asynchronously; update probe-local/ca/ww-{idx} cells as results arrive.
   function fireProbes(chains, tmap) {
     chains.forEach(function(c, idx) {
       var tf = matchTraffic(tmap, c.chain);
       var host = tf ? tf.host : '';
       if (!host && c.rpc_url) host = extractHost(c.rpc_url);
       if (!host) {
-        var cell = document.getElementById('probe-' + idx);
-        if (cell) cell.innerHTML = '<span style="opacity:.3;font-size:.72rem">—</span>';
+        var dash = '<span style="opacity:.3;font-size:.72rem">—</span>';
+        ['probe-local-','probe-ca-','probe-ww-'].forEach(function(pfx) {
+          var el = document.getElementById(pfx + idx); if (el) el.innerHTML = dash;
+        });
         return;
       }
       fetch(BASE + '/api/v1/probe?host=' + encodeURIComponent(host))
         .then(function(r) { return r.json(); })
         .then(function(p) {
-          var cell = document.getElementById('probe-' + idx);
-          if (!cell) return;
-          if (p.error) { cell.innerHTML = '<span style="opacity:.3;font-size:.72rem" title="' + escH(p.error) + '">—</span>'; return; }
-          var sep = '<span style="opacity:.25;margin:0 .15rem">·</span>';
+          var errDash = '<span style="opacity:.3;font-size:.72rem">—</span>';
+          if (p.error) {
+            ['probe-local-','probe-ca-','probe-ww-'].forEach(function(pfx) {
+              var el = document.getElementById(pfx + idx);
+              if (el) el.innerHTML = '<span style="opacity:.3;font-size:.72rem" title="' + escH(p.error) + '">—</span>';
+            });
+            return;
+          }
           var caLabel = (p.ca && p.ca.node) ? p.ca.node.toUpperCase() : 'CA';
           var wwLabel = (p.ww && p.ww.node) ? p.ww.node.toUpperCase() : 'WW';
-          cell.innerHTML = '<span style="white-space:nowrap">' +
-            probeMs(p.local, 'L') + sep + probeMs(p.ca, caLabel) + sep + probeMs(p.ww, wwLabel) +
-            '</span>';
+          var elL  = document.getElementById('probe-local-' + idx);
+          var elCA = document.getElementById('probe-ca-'   + idx);
+          var elWW = document.getElementById('probe-ww-'   + idx);
+          if (elL)  elL.innerHTML  = probeMs(p.local, 'L');
+          if (elCA) elCA.innerHTML = probeMs(p.ca,    caLabel);
+          if (elWW) elWW.innerHTML = probeMs(p.ww,    wwLabel);
         })
         .catch(function() {
-          var cell = document.getElementById('probe-' + idx);
-          if (cell) cell.innerHTML = '<span style="opacity:.3;font-size:.72rem">—</span>';
+          var dash = '<span style="opacity:.3;font-size:.72rem">—</span>';
+          ['probe-local-','probe-ca-','probe-ww-'].forEach(function(pfx) {
+            var el = document.getElementById(pfx + idx); if (el) el.innerHTML = dash;
+          });
         });
     });
   }
@@ -482,7 +491,9 @@
           '<td style="' + tdNum  + ';font-size:.7rem">' + votingEnds + '</td>' +
           '<td style="' + tdStyle + '">' + upg + '</td>' +
           '<td style="' + tdStyle + ';opacity:.4;font-size:.7rem">—</td>' +
-          '<td id="probe-' + idx + '" style="' + tdStyle + ';white-space:nowrap">' + probeInitCell() + '</td>' +
+          '<td id="probe-local-' + idx + '" style="' + tdStyle + ';white-space:nowrap;border-left:1px solid var(--vn-border)">' + probeInitCell() + '</td>' +
+          '<td id="probe-ca-'    + idx + '" style="' + tdStyle + ';white-space:nowrap">' + probeInitCell() + '</td>' +
+          '<td id="probe-ww-'    + idx + '" style="' + tdStyle + ';white-space:nowrap">' + probeInitCell() + '</td>' +
           '<td style="' + tdStyle + ';opacity:.4;font-size:.7rem">—</td>' +
           '<td style="' + tdStyle + ';opacity:.4;font-size:.7rem">—</td>' +
           '<td style="' + tdStyle + ';opacity:.4;font-size:.7rem">—</td>' +
@@ -495,7 +506,7 @@
         '<tr>' +
         '<th colspan="5" style="' + catStyle + '">Chain Information</th>' +
         '<th colspan="4" style="' + catStyle + ';border-left:1px solid var(--vn-border)">Governance</th>' +
-        '<th colspan="4" style="' + catStyle + ';border-left:1px solid var(--vn-border)">Performance</th>' +
+        '<th colspan="6" style="' + catStyle + ';border-left:1px solid var(--vn-border)">Performance</th>' +
         '<th style="' + catStyle + '"></th>' +
         '</tr>';
       var colRow =
@@ -509,7 +520,9 @@
         '<th style="' + thStyle + '">Voting Ends</th>' +
         '<th style="' + thStyle + '">Upgrade</th>' +
         '<th style="' + thStyle + '">Part. Avg</th>' +
-        '<th style="' + thStyle + ';border-left:1px solid var(--vn-border)">Pings</th>' +
+        '<th style="' + thStyle + ';border-left:1px solid var(--vn-border)">L</th>' +
+        '<th style="' + thStyle + '">CA</th>' +
+        '<th style="' + thStyle + '">WW</th>' +
         '<th style="' + thStyle + '">Free Space</th>' +
         '<th style="' + thStyle + '">Load AVG</th>' +
         '<th style="' + thStyle + '">APT</th>' +
