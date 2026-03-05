@@ -67,6 +67,7 @@ scripts/set_required_checks.sh
 agents/
 .github/agents/*.*
 .github/dependabot.yml
+.github/CODEOWNERS
 AGENT_DIRECTIVE.md
 doc.go
 scripts/*.*
