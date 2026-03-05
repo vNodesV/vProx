@@ -3,6 +3,9 @@
 # Copy this file and customize for each chain you want to proxy
 # Place chain configs in: $VPROX_HOME/config/chains/
 
+# Schema version for forward compatibility. Do not change unless instructed by an upgrade guide.
+schema_version = 1
+
 chain_name     = "your_chain"
 host           = "api-link.example.com"
 ip             = "127.0.0.1"

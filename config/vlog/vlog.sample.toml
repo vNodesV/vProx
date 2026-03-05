@@ -31,6 +31,10 @@ port = 8889
 # Default: $VPROX_HOME/data/logs/archives
 # archives_dir = "/home/user/.vProx/data/logs/archives"
 
+# Path to the vProx executable used by the "Refresh" (backup) dashboard button.
+# Default: "vprox" (resolved from $PATH at runtime).
+# vprox_bin = "/usr/local/bin/vprox"
+
 # How often (seconds) to poll archives_dir for new archives.
 # Set to 0 to disable background polling (use on-demand ingest only).
 # Default: 60
