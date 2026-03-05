@@ -884,6 +884,7 @@
         if (d.error) { arcResult('Error: ' + d.error, false); return; }
         arcResult('Imported ' + (d.processed || 0) + ' archive(s).', true);
         applyArcSummary(d.summary);
+        setTimeout(loadArcStats, 800);
       })
       .catch(function(e) { arcBtnState(false); arcResult('Request failed: ' + e, false); });
   };
@@ -898,6 +899,7 @@
         if (d.error) { arcResult('Error: ' + d.error, false); return; }
         arcResult('Backup done · imported ' + (d.processed || 0) + ' new archive(s).', true);
         applyArcSummary(d.summary);
+        setTimeout(loadArcStats, 800);
       })
       .catch(function(e) { arcBtnState(false); arcResult('Request failed: ' + e, false); });
   };
