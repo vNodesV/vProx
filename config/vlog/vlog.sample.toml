@@ -1,4 +1,5 @@
 # vLog configuration — copy to $VPROX_HOME/config/vlog.toml and edit.
+# rev: {{SAMPLE_REV}}
 # vLog is a standalone log archive analyzer for vProx.
 
 [vlog]

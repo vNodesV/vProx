@@ -1,4 +1,5 @@
 # vProx Backup Configuration
+# rev: {{SAMPLE_REV}}
 # Copy to: $VPROX_HOME/config/backup/backup.toml
 
 [backup]

@@ -1,4 +1,5 @@
 # vProx Chain Configuration Sample
+# rev: {{SAMPLE_REV}}
 # Copy this file and customize for each chain you want to proxy
 # Place chain configs in: $VPROX_HOME/config/chains/
 

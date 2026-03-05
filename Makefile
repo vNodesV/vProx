@@ -23,6 +23,10 @@ GEO_DIR := $(DATA_DIR)/geolocation
 DIR_LIST := $(DATA_DIR) $(LOG_DIR) $(CFG_DIR) $(CFG_DIR)/chains $(CFG_DIR)/backup \
             $(CFG_DIR)/push $(CFG_DIR)/vlog $(INTERNAL_DIR) $(ARCHIVE_DIR) $(SERVICE_DIR) $(GEO_DIR)
 
+# Sample file revision: rev<major.minor.patch>-<git-short-sha>
+# Injected into the "# rev: {{SAMPLE_REV}}" placeholder in every .sample.toml at copy time.
+SAMPLE_REV := rev1.0.0-$(shell git rev-parse --short HEAD 2>/dev/null || echo dev)
+
 # GeoLocation database — bundled in assets/geo/, extracted to user data dir
 GEO_DB_SRC := assets/geo/ip2location.mmdb.gz
 GEO_DB_DST := $(GEO_DIR)/ip2location.mmdb
@@ -185,12 +189,17 @@ config-push:
 		echo "✓ $(CFG_DIR)/push/vms.toml already exists"; \
 	fi
 
-## Overwrite ALL push sample files in CFG_DIR — safe to run anytime; never touches live vms.toml
+## Overwrite ALL sample files in CFG_DIR — safe to run anytime; never touches live config files.
+## Injects current git rev into each sample as: # rev: rev1.0.0-<sha>
 samples-push:
-	@mkdir -p "$(CFG_DIR)/push"
-	@cp "config/push/vms.sample.toml" "$(CFG_DIR)/push/vms.sample.toml"; \
-	  echo "✓ Refreshed vms.sample.toml → $(CFG_DIR)/push/vms.sample.toml"
-	@echo "Done. Edit $(CFG_DIR)/push/vms.toml to configure your VMs."
+	@mkdir -p "$(CFG_DIR)/push" "$(CFG_DIR)/vlog" "$(CFG_DIR)/chains" "$(CFG_DIR)/backup"
+	@_rev="$(SAMPLE_REV)"; \
+	_copy() { sed "s/{{SAMPLE_REV}}/$$_rev/" "$$1" > "$$2" && echo "✓ $$2 [$$_rev]"; }; \
+	_copy "config/push/vms.sample.toml"     "$(CFG_DIR)/push/vms.sample.toml"; \
+	_copy "config/vlog/vlog.sample.toml"    "$(CFG_DIR)/vlog/vlog.sample.toml"; \
+	_copy "config/chains/chain.sample.toml" "$(CFG_DIR)/chains/chain.sample.toml"; \
+	_copy "config/backup.sample.toml"       "$(CFG_DIR)/backup/backup.sample.toml"
+	@echo "Done. Samples refreshed with $(SAMPLE_REV)."
 
 ## Install modules registry stub
 
