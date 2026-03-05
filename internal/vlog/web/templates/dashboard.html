@@ -246,11 +246,11 @@
         <button id="arc-backup-btn" onclick="doBackupAndImport()"
           style="background:none;border:1px solid rgba(0,255,0,0.35);color:#00ff00;padding:.25rem .7rem;border-radius:4px;cursor:pointer;font-size:.8rem;font-family:Inter,sans-serif;transition:all 0.2s"
           onmouseover="this.style.background='rgba(0,255,0,0.10)';this.style.borderColor='#00ff00'"
-          onmouseout="this.style.background='none';this.style.borderColor='rgba(0,255,0,0.35)'">Backup &amp; Import</button>
+          onmouseout="this.style.background='none';this.style.borderColor='rgba(0,255,0,0.35)'">Refresh</button>
         <button id="arc-import-btn" onclick="doImportOnly()"
           style="background:none;border:1px solid rgba(0,255,0,0.35);color:#00ff00;padding:.25rem .7rem;border-radius:4px;cursor:pointer;font-size:.8rem;font-family:Inter,sans-serif;transition:all 0.2s;margin-left:.4rem"
           onmouseover="this.style.background='rgba(0,255,0,0.10)';this.style.borderColor='#00ff00'"
-          onmouseout="this.style.background='none';this.style.borderColor='rgba(0,255,0,0.35)'">Import</button>
+          onmouseout="this.style.background='none';this.style.borderColor='rgba(0,255,0,0.35)'">Manual Import</button>
       </div>
     </summary>
     <div class="v-block-body">
@@ -856,7 +856,7 @@
   function arcBtnState(busy) {
     var b = document.getElementById('arc-backup-btn');
     var i = document.getElementById('arc-import-btn');
-    if (b) { b.disabled = busy; b.textContent = busy ? '…' : 'Backup & Import'; }
+    if (b) { b.disabled = busy; b.textContent = busy ? '…' : 'Refresh'; }
     if (i) { i.disabled = busy; }
   }
 
