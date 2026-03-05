@@ -32,10 +32,15 @@
   </div>
 </div>
 
-<article class="v-block">
+<div id="blocks-container">
+<article class="v-block" data-block-id="traffic">
   <details open>
-    <summary onclick="if(event.target.closest('select')){event.preventDefault()}">
+    <summary onclick="if(event.target.closest('select,button')){event.preventDefault()}">
+      <span class="v-drag-handle">⠿</span>
       <span class="v-block-title">Traffic Analytics</span>
+      <div class="v-block-actions">
+        <button id="chart-expand-btn" class="v-expand-btn" onclick="expandChartBlock()" title="2×2 chart view">⊞</button>
+      </div>
     </summary>
     <div class="v-block-body" style="padding:.65rem">
       <div class="chart-row">
@@ -77,15 +82,50 @@
             <canvas id="chart-right"></canvas>
           </div>
         </div>
+        <!-- BOTTOM-LEFT: visible in 2×2 mode -->
+        <div class="chart-block chart-block-b">
+          <div class="chart-header">
+            <select id="chart-bl-type" onchange="loadChart('bl')">
+              <option value="requests_by_country">Requests by country</option>
+              <option value="top_countries">Top countries</option>
+              <option value="ips_over_time">IPs over time</option>
+              <option value="threat_distribution">Threat distribution</option>
+              <option value="ratelimits_over_time">Rate limits over time</option>
+            </select>
+            <select id="chart-bl-days" onchange="loadChart('bl')" class="chart-days-select">
+              <option value="7">7 days</option>
+              <option value="30" selected>30 days</option>
+              <option value="90">90 days</option>
+            </select>
+          </div>
+          <div class="chart-canvas-wrap"><canvas id="chart-bl"></canvas></div>
+        </div>
+        <!-- BOTTOM-RIGHT: visible in 2×2 mode -->
+        <div class="chart-block chart-block-b">
+          <div class="chart-header">
+            <select id="chart-br-type" onchange="loadChart('br')">
+              <option value="top_ips_by_requests">Top IPs by requests</option>
+              <option value="status_breakdown">Status breakdown</option>
+              <option value="requests_over_time">Requests over time</option>
+              <option value="ratelimits_over_time">Rate limits over time</option>
+            </select>
+            <select id="chart-br-days" onchange="loadChart('br')" class="chart-days-select">
+              <option value="7">7 days</option>
+              <option value="30" selected>30 days</option>
+              <option value="90">90 days</option>
+            </select>
+          </div>
+          <div class="chart-canvas-wrap"><canvas id="chart-br"></canvas></div>
+        </div>
       </div>
     </div>
   </details>
 </article>
 
 <!-- TOP THREAT ACCOUNTS -->
-<article class="v-block">
+<article class="v-block" data-block-id="threats">
   <details open>
-    <summary><span class="v-block-title">Top Threat Accounts</span></summary>
+    <summary><span class="v-drag-handle">⠿</span><span class="v-block-title">Top Threat Accounts</span></summary>
     <div class="v-block-body">
   {{if .TopThreatAccounts}}
   <div style="overflow-x:auto">
@@ -135,9 +175,10 @@
 </article>
 
 <!-- CHAIN STATUS (full width) -->
-<div class="v-blocks-row">
+<div class="v-blocks-row" data-block-id="chain-server-row">
+<div class="v-row-handle"><span class="v-drag-handle">⠿</span> Chain Status &amp; Servers / VM</div>
 
-<article class="v-block">
+<article id="block-chain" class="v-block">
   <details open>
     <summary onclick="if(event.target.closest('button')){event.preventDefault()}">
       <span class="v-block-title">Chain Status</span>
@@ -150,7 +191,7 @@
           style="background:none;border:1px solid rgba(0,255,0,0.35);color:#00ff00;padding:.25rem .7rem;border-radius:4px;cursor:pointer;font-size:.8rem;font-family:Inter,sans-serif;transition:all 0.2s"
           onmouseover="this.style.background='rgba(0,255,0,0.10)';this.style.borderColor='#00ff00'"
           onmouseout="this.style.background='none';this.style.borderColor='rgba(0,255,0,0.35)'">Refresh</button>
-        <button id="chain-expand-btn" class="v-expand-btn" onclick="toggleChainExpand()" title="Show more columns">›</button>
+        <button id="chain-expand-btn" class="v-expand-btn" onclick="expandBlockRow('left')" title="Expand block">›</button>
       </div>
     </summary>
     <div class="v-block-body">
@@ -172,14 +213,15 @@
       </details>
     </div>
   </details>
+  <div class="v-block-strip-label" onclick="expandBlockRow('left')">Chain Status</div>
 </article>
 
-<article class="v-block">
+<article id="block-server" class="v-block">
   <details open>
     <summary onclick="if(event.target.closest('button')){event.preventDefault()}">
       <span class="v-block-title">Servers / VM</span>
       <div class="v-block-actions">
-        <button id="vm-expand-btn" class="v-expand-btn" onclick="toggleVMExpand()" title="Show more columns">‹</button>
+        <button id="vm-expand-btn" class="v-expand-btn" onclick="expandBlockRow('right')" title="Expand block">‹</button>
         <button id="vm-refresh-btn" onclick="doVMRefresh()"
           style="background:none;border:1px solid rgba(0,255,0,0.35);color:#00ff00;padding:.25rem .7rem;border-radius:4px;cursor:pointer;font-size:.8rem;font-family:Inter,sans-serif;transition:all 0.2s"
           onmouseover="this.style.background='rgba(0,255,0,0.10)';this.style.borderColor='#00ff00'"
@@ -190,13 +232,13 @@
       <div id="vm-status-panel" style="overflow-x:auto;font-size:.78rem"></div>
     </div>
   </details>
+  <div class="v-block-strip-label" onclick="expandBlockRow('right')">Servers / VM</div>
 </article>
 
-</div><!-- /.v-blocks-row -->
-
-<article class="v-block" style="max-width:50%">
+<article class="v-block" data-block-id="archive" style="max-width:50%">
   <details open>
     <summary onclick="if(event.target.closest('button')){event.preventDefault()}">
+      <span class="v-drag-handle">⠿</span>
       <span class="v-block-title">Archive Ingestion</span>
       <div class="v-block-actions">
         <button id="arc-backup-btn" onclick="doBackupAndImport()"
@@ -234,6 +276,7 @@
     </div>
   </details>
 </article>
+</div><!-- /.blocks-container -->
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <script>
@@ -616,12 +659,13 @@
       .catch(function(){ chainPinging=false; if(btn){btn.disabled=false;btn.textContent='Refresh';} loadChainStatus(); });
   }
 
-  window.loadChainStatus  = loadChainStatus;
+  window.loadChainStatus   = loadChainStatus;
   window.toggleChainExpand = toggleChainExpand;
-  window.addChain         = addChain;
-  window.removeChain      = removeChain;
-  window.doPing           = doPing;
-  window.doRefresh        = doRefresh;
+  window.getChainExpanded  = function() { return chainExpanded; };
+  window.addChain          = addChain;
+  window.removeChain       = removeChain;
+  window.doPing            = doPing;
+  window.doRefresh         = doRefresh;
 
   loadChart('left');
   loadChart('right');
@@ -745,6 +789,7 @@
     if (btn) btn.textContent = vmExpanded ? '›' : '‹';
     if (vmCachedVMs) renderVMTable(vmCachedVMs);
   };
+  window.getVMExpanded = function() { return vmExpanded; };
 
   function loadVMStatus() {
     fetch(BASE + '/api/v1/push/vms/status')
@@ -860,6 +905,132 @@
   };
 
   loadArcStats();
+})();
+</script>
+
+<script>
+// ── Chart 2×2 expansion ──────────────────────────────────────────────────────
+(function() {
+  var chartEx = false;
+  window.expandChartBlock = function() {
+    chartEx = !chartEx;
+    var row = document.querySelector('.chart-row');
+    var btn = document.getElementById('chart-expand-btn');
+    if (row) row.classList.toggle('chart-2x2', chartEx);
+    if (btn) btn.textContent = chartEx ? '⊟' : '⊞';
+    if (chartEx) { loadChart('bl'); loadChart('br'); }
+  };
+})();
+
+// ── Block-row expansion (Chain ›3:1 | Server 1:3‹) ───────────────────────────
+(function() {
+  var state = null;
+  window._rowExpandState = null;
+  window.expandBlockRow = function(dir) {
+    var row  = document.querySelector('.v-blocks-row');
+    var cBlk = document.getElementById('block-chain');
+    var sBlk = document.getElementById('block-server');
+    if (!row || !cBlk || !sBlk) return;
+
+    row.classList.remove('row-expand-left', 'row-expand-right');
+    cBlk.classList.remove('is-strip');
+    sBlk.classList.remove('is-strip');
+
+    if (state === dir) {
+      // collapse back to 50/50
+      state = null;
+      window._rowExpandState = null;
+    } else {
+      if (dir === 'left') {
+        row.classList.add('row-expand-left');
+        sBlk.classList.add('is-strip');
+        if (window.getChainExpanded && !window.getChainExpanded()) window.toggleChainExpand();
+      } else {
+        row.classList.add('row-expand-right');
+        cBlk.classList.add('is-strip');
+        if (window.getVMExpanded && !window.getVMExpanded()) window.toggleVMExpand();
+      }
+      state = dir;
+      window._rowExpandState = dir;
+    }
+  };
+})();
+
+// ── Drag-and-drop block reordering ───────────────────────────────────────────
+(function() {
+  var STORE = 'vlog-block-order';
+  var src = null, fromHandle = false;
+
+  function container() { return document.getElementById('blocks-container'); }
+
+  function saveOrder() {
+    try {
+      var ids = [].slice.call(container().children).map(function(el) {
+        return el.getAttribute('data-block-id');
+      });
+      localStorage.setItem(STORE, JSON.stringify(ids));
+    } catch(e) {}
+  }
+
+  function applyOrder() {
+    try {
+      var saved = JSON.parse(localStorage.getItem(STORE));
+      if (!saved || !saved.length) return;
+      var c = container(), map = {};
+      [].slice.call(c.children).forEach(function(el) {
+        var id = el.getAttribute('data-block-id');
+        if (id) map[id] = el;
+      });
+      saved.forEach(function(id) { if (map[id]) c.appendChild(map[id]); });
+    } catch(e) {}
+  }
+
+  function clearIndicators() {
+    [].slice.call(container().children).forEach(function(el) {
+      el.classList.remove('drag-over-above', 'drag-over-below');
+    });
+  }
+
+  function bind(el) {
+    if (!el.getAttribute('data-block-id')) return;
+    el.setAttribute('draggable', 'true');
+    el.addEventListener('mousedown', function(e) {
+      fromHandle = !!e.target.closest('.v-drag-handle');
+    });
+    el.addEventListener('dragstart', function(e) {
+      if (!fromHandle) { e.preventDefault(); return; }
+      src = el;
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', el.getAttribute('data-block-id') || '');
+      setTimeout(function() { el.classList.add('dragging'); }, 0);
+    });
+    el.addEventListener('dragend', function() {
+      el.classList.remove('dragging');
+      clearIndicators();
+    });
+    el.addEventListener('dragover', function(e) {
+      if (!src || src === el) return;
+      e.preventDefault();
+      clearIndicators();
+      var mid = el.getBoundingClientRect().top + el.offsetHeight / 2;
+      el.classList.add(e.clientY < mid ? 'drag-over-above' : 'drag-over-below');
+    });
+    el.addEventListener('dragleave', function() {
+      el.classList.remove('drag-over-above', 'drag-over-below');
+    });
+    el.addEventListener('drop', function(e) {
+      if (!src || src === el) return;
+      e.preventDefault();
+      clearIndicators();
+      var mid = el.getBoundingClientRect().top + el.offsetHeight / 2;
+      container().insertBefore(src, e.clientY < mid ? el : el.nextSibling);
+      src = null;
+      saveOrder();
+    });
+  }
+
+  applyOrder();
+  [].slice.call(container().children).forEach(bind);
 })();
 </script>
 {{end}}

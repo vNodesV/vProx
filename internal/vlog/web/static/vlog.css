@@ -804,3 +804,49 @@ summary { list-style: none; }
   line-height: 1;
 }
 .v-expand-btn:hover { border-color: rgba(0,255,0,.7); color: #00ff00; }
+
+/* ── Chart 2×2 expansion ── */
+.chart-block-b { display: none; }
+.chart-row.chart-2x2 .chart-block-b { display: block; }
+.chart-row.chart-2x2 .chart-canvas-wrap { height: 170px; }
+
+/* ── Drag-and-drop reordering ── */
+.v-drag-handle {
+  cursor: grab; opacity: .25; padding: .05rem .28rem .05rem 0;
+  font-size: .78rem; flex-shrink: 0; transition: opacity .15s; line-height: 1; letter-spacing: -.05em;
+}
+.v-drag-handle:hover { opacity: .65; }
+[data-block-id].dragging { opacity: .3; }
+[data-block-id].drag-over-above { outline: 2px solid rgba(0,255,0,.42); outline-offset: -1px; border-radius: 7px; }
+[data-block-id].drag-over-below { outline: 2px solid rgba(0,255,0,.42); outline-offset: -1px; border-radius: 7px; }
+
+/* ── v-blocks-row: transition + expand states ── */
+.v-blocks-row { transition: grid-template-columns .3s ease; }
+.v-blocks-row.row-expand-left  { grid-template-columns: 3fr 44px; }
+.v-blocks-row.row-expand-right { grid-template-columns: 44px 3fr; }
+
+/* ── Row drag handle bar (spans both grid columns) ── */
+.v-row-handle {
+  grid-column: 1 / -1; display: flex; align-items: center; gap: .4rem;
+  padding: .18rem .5rem .14rem; cursor: grab; opacity: .32;
+  font-family: var(--font-mono); font-size: .58rem; letter-spacing: .09em;
+  text-transform: uppercase; color: rgba(0,255,0,.55);
+  border-bottom: 1px solid rgba(255,255,255,.03); transition: opacity .15s;
+}
+.v-row-handle:hover { opacity: .75; }
+
+/* ── Collapsed vertical strip ── */
+.v-block.is-strip { overflow: hidden; cursor: pointer; }
+.v-block.is-strip > details { display: none; }
+.v-block-strip-label {
+  display: none; width: 44px; min-height: 200px;
+  align-items: center; justify-content: center;
+  writing-mode: vertical-rl; transform: rotate(180deg);
+  font-family: var(--font-mono); font-size: .6rem;
+  color: rgba(0,255,0,.32); letter-spacing: .13em; text-transform: uppercase;
+  user-select: none; padding: .6rem 0;
+  border: 1px solid var(--vn-green-border); border-radius: 7px;
+  transition: color .15s, border-color .15s;
+}
+.v-block.is-strip .v-block-strip-label { display: flex; }
+.v-block.is-strip:hover .v-block-strip-label { color: rgba(0,255,0,.8); border-color: rgba(0,255,0,.35); }
