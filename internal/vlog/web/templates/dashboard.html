@@ -806,6 +806,7 @@
     panel.innerHTML = '<table style="width:100%;border-collapse:collapse"><thead>' +
       catRow + colRow + '</thead><tbody>' + rows + '</tbody></table>';
     if (ex) fireVMProbes(vms);
+  }
 
   window.toggleAptRow = function(idx) {
     var row = document.getElementById('vm-apt-' + idx);
