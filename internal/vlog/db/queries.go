@@ -979,19 +979,19 @@ func (d *DB) CountRequestsByHost() ([]HostTraffic, error) {
 
 // ArchiveSummary holds aggregate stats across all ingested archives.
 type ArchiveSummary struct {
-TotalArchives  int64  `json:"total_archives"`
-TotalBytes     int64  `json:"total_bytes"`
-TotalRequests  int64  `json:"total_requests"`
-TotalRateLimit int64  `json:"total_ratelimit"`
-LastIngestedAt string `json:"last_ingested_at"` // RFC3339, empty if none
-LastFilename   string `json:"last_filename"`
+	TotalArchives  int64  `json:"total_archives"`
+	TotalBytes     int64  `json:"total_bytes"`
+	TotalRequests  int64  `json:"total_requests"`
+	TotalRateLimit int64  `json:"total_ratelimit"`
+	LastIngestedAt string `json:"last_ingested_at"` // RFC3339, empty if none
+	LastFilename   string `json:"last_filename"`
 }
 
 // ArchiveSummary returns aggregate stats from the ingested_archives table.
 func (d *DB) ArchiveSummary() (*ArchiveSummary, error) {
-s := &ArchiveSummary{}
+	s := &ArchiveSummary{}
 
-row := d.QueryRow(`
+	row := d.QueryRow(`
 SELECT
 COUNT(*),
 COALESCE(SUM(size_bytes),0),
@@ -1001,12 +1001,12 @@ COALESCE(MAX(ingested_at),''),
 COALESCE((SELECT filename FROM ingested_archives ORDER BY ingested_at DESC LIMIT 1),'')
 FROM ingested_archives`)
 
-return s, row.Scan(
-&s.TotalArchives,
-&s.TotalBytes,
-&s.TotalRequests,
-&s.TotalRateLimit,
-&s.LastIngestedAt,
-&s.LastFilename,
-)
+	return s, row.Scan(
+		&s.TotalArchives,
+		&s.TotalBytes,
+		&s.TotalRequests,
+		&s.TotalRateLimit,
+		&s.LastIngestedAt,
+		&s.LastFilename,
+	)
 }

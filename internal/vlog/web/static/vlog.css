@@ -766,6 +766,40 @@ summary { list-style: none; }
 .v-block-title { flex: 1; }
 .v-block-actions { margin-left: auto; display: flex; gap: .5rem; align-items: center; }
 .v-block-body { padding: .85rem; }
+/* Static block header — same visual as summary but not interactive */
+.v-block-header {
+  display: flex;
+  align-items: center;
+  padding: .52rem .85rem;
+  font-family: var(--font-mono);
+  font-size: .71rem;
+  font-weight: 600;
+  color: rgba(0,255,0,.58);
+  letter-spacing: .11em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--vn-green-border);
+  border-radius: 7px 7px 0 0;
+}
+/* Loading spinner for panels */
+.panel-loading {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .6rem .4rem;
+  opacity: .55;
+  font-size: .75rem;
+  font-family: var(--font-mono);
+  color: var(--vn-green);
+}
+.panel-loading-ring {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(0,255,0,.2);
+  border-top-color: var(--vn-green);
+  border-radius: 50%;
+  animation: probe-spin .7s linear infinite;
+  flex-shrink: 0;
+}
 
 /* ── Side-by-side block row ── */
 .v-blocks-row {

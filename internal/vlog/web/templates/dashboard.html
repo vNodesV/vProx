@@ -195,48 +195,46 @@
 </div><!-- /#chain-server-row -->
 
 <article class="v-block">
-  <details open>
-    <summary onclick="if(event.target.closest('button')){event.preventDefault()}">
-      <span class="v-block-title">Archive Ingestion</span>
-      <div class="v-block-actions">
-        <button id="arc-backup-btn" onclick="doBackupAndImport()"
-          style="background:none;border:1px solid rgba(0,255,0,0.35);color:#00ff00;padding:.25rem .7rem;border-radius:4px;cursor:pointer;font-size:.8rem;font-family:Inter,sans-serif;transition:all 0.2s"
-          onmouseover="this.style.background='rgba(0,255,0,0.10)';this.style.borderColor='#00ff00'"
-          onmouseout="this.style.background='none';this.style.borderColor='rgba(0,255,0,0.35)'">Refresh</button>
-        <button id="arc-import-btn" onclick="doImportOnly()"
-          style="background:none;border:1px solid rgba(0,255,0,0.35);color:#00ff00;padding:.25rem .7rem;border-radius:4px;cursor:pointer;font-size:.8rem;font-family:Inter,sans-serif;transition:all 0.2s;margin-left:.4rem"
-          onmouseover="this.style.background='rgba(0,255,0,0.10)';this.style.borderColor='#00ff00'"
-          onmouseout="this.style.background='none';this.style.borderColor='rgba(0,255,0,0.35)'">Manual Import</button>
-        <button id="arc-ufw-btn" onclick="doUFWSync()"
-          style="background:none;border:1px solid rgba(0,255,0,0.20);color:rgba(0,255,0,0.55);padding:.25rem .7rem;border-radius:4px;cursor:pointer;font-size:.8rem;font-family:Inter,sans-serif;transition:all 0.2s;margin-left:.4rem"
-          onmouseover="this.style.background='rgba(0,255,0,0.08)';this.style.borderColor='rgba(0,255,0,0.5)';this.style.color='#00ff00'"
-          onmouseout="this.style.background='none';this.style.borderColor='rgba(0,255,0,0.20)';this.style.color='rgba(0,255,0,0.55)'">Sync UFW</button>
-      </div>
-    </summary>
-    <div class="v-block-body">
-      <table style="width:100%;border-collapse:collapse;font-size:.8rem;font-family:Inter,sans-serif">
-        <thead>
-          <tr style="border-bottom:1px solid rgba(255,255,255,0.08)">
-            <th style="text-align:left;padding:.3rem .5rem;opacity:.5;font-weight:500">Archives</th>
-            <th style="text-align:left;padding:.3rem .5rem;opacity:.5;font-weight:500">Total Data</th>
-            <th style="text-align:left;padding:.3rem .5rem;opacity:.5;font-weight:500">Requests</th>
-            <th style="text-align:left;padding:.3rem .5rem;opacity:.5;font-weight:500">Rate Events</th>
-            <th style="text-align:left;padding:.3rem .5rem;opacity:.5;font-weight:500">Last Import</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td id="arc-total" style="padding:.3rem .5rem">—</td>
-            <td id="arc-size"  style="padding:.3rem .5rem">—</td>
-            <td id="arc-reqs"  style="padding:.3rem .5rem">—</td>
-            <td id="arc-rate"  style="padding:.3rem .5rem">—</td>
-            <td id="arc-last"  style="padding:.3rem .5rem">—</td>
-          </tr>
-        </tbody>
-      </table>
-      <div id="arc-result" style="margin-top:.5rem;font-size:.75rem;opacity:.7;min-height:1.2em"></div>
+  <div class="v-block-header">
+    <span class="v-block-title">Archive Ingestion</span>
+    <div class="v-block-actions">
+      <button id="arc-backup-btn" onclick="doBackupAndImport()"
+        style="background:none;border:1px solid rgba(0,255,0,0.35);color:#00ff00;padding:.25rem .7rem;border-radius:4px;cursor:pointer;font-size:.8rem;font-family:Inter,sans-serif;transition:all 0.2s"
+        onmouseover="this.style.background='rgba(0,255,0,0.10)';this.style.borderColor='#00ff00'"
+        onmouseout="this.style.background='none';this.style.borderColor='rgba(0,255,0,0.35)'">Refresh</button>
+      <button id="arc-import-btn" onclick="doImportOnly()"
+        style="background:none;border:1px solid rgba(0,255,0,0.35);color:#00ff00;padding:.25rem .7rem;border-radius:4px;cursor:pointer;font-size:.8rem;font-family:Inter,sans-serif;transition:all 0.2s;margin-left:.4rem"
+        onmouseover="this.style.background='rgba(0,255,0,0.10)';this.style.borderColor='#00ff00'"
+        onmouseout="this.style.background='none';this.style.borderColor='rgba(0,255,0,0.35)'">Manual Import</button>
+      <button id="arc-ufw-btn" onclick="doUFWSync()"
+        style="background:none;border:1px solid rgba(0,255,0,0.20);color:rgba(0,255,0,0.55);padding:.25rem .7rem;border-radius:4px;cursor:pointer;font-size:.8rem;font-family:Inter,sans-serif;transition:all 0.2s;margin-left:.4rem"
+        onmouseover="this.style.background='rgba(0,255,0,0.08)';this.style.borderColor='rgba(0,255,0,0.5)';this.style.color='#00ff00'"
+        onmouseout="this.style.background='none';this.style.borderColor='rgba(0,255,0,0.20)';this.style.color='rgba(0,255,0,0.55)'">Sync UFW</button>
     </div>
-  </details>
+  </div>
+  <div class="v-block-body">
+    <table style="width:100%;border-collapse:collapse;font-size:.8rem;font-family:Inter,sans-serif">
+      <thead>
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.08)">
+          <th style="text-align:left;padding:.3rem .5rem;opacity:.5;font-weight:500">Archives</th>
+          <th style="text-align:left;padding:.3rem .5rem;opacity:.5;font-weight:500">Total Data</th>
+          <th style="text-align:left;padding:.3rem .5rem;opacity:.5;font-weight:500">Requests</th>
+          <th style="text-align:left;padding:.3rem .5rem;opacity:.5;font-weight:500">Rate Events</th>
+          <th style="text-align:left;padding:.3rem .5rem;opacity:.5;font-weight:500">Last Import</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td id="arc-total" style="padding:.3rem .5rem">—</td>
+          <td id="arc-size"  style="padding:.3rem .5rem">—</td>
+          <td id="arc-reqs"  style="padding:.3rem .5rem">—</td>
+          <td id="arc-rate"  style="padding:.3rem .5rem">—</td>
+          <td id="arc-last"  style="padding:.3rem .5rem">—</td>
+        </tr>
+      </tbody>
+    </table>
+    <div id="arc-result" style="margin-top:.5rem;font-size:.75rem;opacity:.7;min-height:1.2em"></div>
+  </div>
 </article>
 </div><!-- /#blocks-container -->
 
@@ -261,6 +259,10 @@
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   }
   window.escH = escH; // shared by VM status and archive scripts
+  window.showLoading = function(panelId) {
+    var p = document.getElementById(panelId);
+    if (p) p.innerHTML = '<div class="panel-loading"><div class="panel-loading-ring"></div>Loading…</div>';
+  };
 
   // Render ChartSeries (multi-line) on dual y-axes.
   // series[0] → left y-axis, series[1] → right y-axis.
@@ -363,7 +365,8 @@
   var chainExpanded = false;
   var chainCachedData = null; // {chains, registeredSet, tmap}
 
-  function probeInitCell() { return '<span style="opacity:.3;font-size:.68rem">—</span>'; }
+  function probeInitCell() { return '<span class="probe-spinner"></span>'; }
+  function showLoading(panelId) { window.showLoading(panelId); }
 
   function statusTag(st) {
     if (st === 'synced' || st === 'syncing')
@@ -555,6 +558,7 @@
   function loadChainStatus() {
     var panel = document.getElementById('chain-status-panel');
     if (!panel) return;
+    if (!chainCachedData) showLoading('chain-status-panel');
     Promise.all([
       fetch(BASE + '/api/v1/push/chains').then(function(r){ return r.json(); }),
       fetch(BASE + '/api/v1/push/chains/registered').then(function(r){ return r.json(); }).catch(function(){ return {registered_chains:[]}; }),
@@ -639,7 +643,7 @@
   var vmCdSec     = VM_INTERVAL;
   var vmRefreshing = false;
 
-  function vmProbeInit() { return '<span style="opacity:.3;font-size:.68rem">—</span>'; }
+  function vmProbeInit() { return '<span class="probe-spinner"></span>'; }
   function vmProbeMs(res, label) {
     if (!res) return '<span style="opacity:.4;font-size:.68rem">' + label + ':—</span>';
     if (!res.ok) return '<span style="color:#ef5350;font-size:.68rem">' + label + ':✗</span>';
@@ -786,6 +790,7 @@
   window.getVMExpanded = function() { return vmExpanded; };
 
   function loadVMStatus() {
+    if (!vmCachedVMs && window.showLoading) window.showLoading('vm-status-panel');
     fetch(BASE + '/api/v1/push/vms/status')
       .then(function(r) { return r.json(); })
       .then(function(d) {
@@ -831,17 +836,19 @@
       })
       .catch(function() { if (btn) { btn.disabled = false; btn.textContent = 'Ping'; } });
   };
+  };
 
-  // Staggered start: 30s after chain poll to avoid SSH burst at same time.
+  // Load immediately at pageload; use 10s stagger for INTERVAL to avoid SSH burst with CS.
+  loadVMStatus();
+  updateVMCountdown();
   setTimeout(function() {
-    loadVMStatus();
     setInterval(function() {
       if (vmRefreshing) return;
       vmCdSec--;
       updateVMCountdown();
       if (vmCdSec <= 0) { vmCdSec = VM_INTERVAL; loadVMStatus(); }
     }, 1000);
-  }, 30000);
+  }, 10000);
 
 })();
 </script>

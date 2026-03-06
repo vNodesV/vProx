@@ -1020,7 +1020,15 @@ func (s *Server) handleAPIUFWSync(w http.ResponseWriter, r *http.Request) {
 	ips, err := ufw.ListBlocked()
 	if err != nil {
 		log.Printf("[web] ufw sync: %v", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		// Provide actionable guidance when sudo permission is missing.
+		note := err.Error()
+		if strings.Contains(note, "password") || strings.Contains(note, "askpass") {
+			note = "sudo permission denied — add to /etc/sudoers:\n" +
+				"  Cmnd_Alias VLOG_UFW = /usr/sbin/ufw deny from *, " +
+				"/usr/sbin/ufw delete deny from *, /usr/sbin/ufw status numbered\n" +
+				"  www-data ALL=(ALL) NOPASSWD: VLOG_UFW"
+		}
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": note})
 		return
 	}
 	if ips == nil {

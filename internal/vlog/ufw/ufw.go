@@ -49,14 +49,18 @@ func Unblock(ip string) error {
 	return nil
 }
 
-// ListBlocked runs "sudo ufw status numbered" and returns all IPs with a DENY rule.
+// ListBlocked runs "sudo -n ufw status numbered" and returns all IPs with a DENY rule.
 // Returns (nil, nil) when ufw is not installed. CIDR subnets are skipped; only
 // host addresses are returned so they can be matched against ip_accounts.
+// Requires a sudoers NOPASSWD entry for the vlog process user:
+//
+//	Cmnd_Alias VLOG_UFW = /usr/sbin/ufw deny from *, /usr/sbin/ufw delete deny from *, /usr/sbin/ufw status numbered
+//	www-data ALL=(ALL) NOPASSWD: VLOG_UFW
 func ListBlocked() ([]string, error) {
 	if !IsAvailable() {
 		return nil, nil
 	}
-	cmd := exec.Command("sudo", "/usr/sbin/ufw", "status", "numbered")
+	cmd := exec.Command("sudo", "-n", "/usr/sbin/ufw", "status", "numbered")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return nil, fmt.Errorf("ufw status: %w: %s", err, string(out))
