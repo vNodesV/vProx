@@ -193,7 +193,7 @@ func (d *DB) ListIPAccounts(limit, offset int) ([]*IPAccount, error) {
 	}
 	defer rows.Close()
 
-	var out []*IPAccount
+	out := make([]*IPAccount, 0)
 	for rows.Next() {
 		a := &IPAccount{}
 		if err := rows.Scan(
@@ -230,7 +230,7 @@ func (d *DB) SearchIPAccounts(query string, limit, offset int) ([]*IPAccount, er
 	}
 	defer rows.Close()
 
-	var out []*IPAccount
+	out := make([]*IPAccount, 0)
 	for rows.Next() {
 		a := &IPAccount{}
 		if err := rows.Scan(
@@ -316,7 +316,7 @@ func (d *DB) ListBlockedIPs() ([]BlockedIP, error) {
 		return nil, fmt.Errorf("list blocked_ips: %w", err)
 	}
 	defer rows.Close()
-	var out []BlockedIP
+	out := make([]BlockedIP, 0)
 	for rows.Next() {
 		var b BlockedIP
 		if err := rows.Scan(&b.ID, &b.IP, &b.BlockedAt, &b.Reason, &b.UFWApplied); err != nil {
@@ -439,7 +439,7 @@ func (d *DB) ListRequestEventsByIP(ip string, limit int) ([]*RequestEvent, error
 		return nil, fmt.Errorf("list request_events ip=%s: %w", ip, err)
 	}
 	defer rows.Close()
-	var out []*RequestEvent
+	out := make([]*RequestEvent, 0)
 	for rows.Next() {
 		e := &RequestEvent{}
 		if err := rows.Scan(&e.ID, &e.Archive, &e.Ts, &e.RequestID, &e.IP, &e.Method,
@@ -461,7 +461,7 @@ func (d *DB) ListRateLimitEventsByIP(ip string, limit int) ([]*RateLimitEvent, e
 		return nil, fmt.Errorf("list ratelimit_events ip=%s: %w", ip, err)
 	}
 	defer rows.Close()
-	var out []*RateLimitEvent
+	out := make([]*RateLimitEvent, 0)
 	for rows.Next() {
 		e := &RateLimitEvent{}
 		if err := rows.Scan(&e.ID, &e.Archive, &e.Ts, &e.RequestID, &e.IP, &e.Event,
@@ -488,7 +488,7 @@ func (d *DB) ListBlockedAccounts() ([]*IPAccount, error) {
 		return nil, fmt.Errorf("list blocked accounts: %w", err)
 	}
 	defer rows.Close()
-	var out []*IPAccount
+	out := make([]*IPAccount, 0)
 	for rows.Next() {
 		a := &IPAccount{}
 		if err := rows.Scan(
@@ -517,7 +517,7 @@ func (d *DB) ListTopThreatAccounts(limit int) ([]*IPAccount, error) {
 		return nil, fmt.Errorf("list top threat accounts: %w", err)
 	}
 	defer rows.Close()
-	var out []*IPAccount
+	out := make([]*IPAccount, 0)
 	for rows.Next() {
 		a := &IPAccount{}
 		if err := rows.Scan(
@@ -559,7 +559,7 @@ func (d *DB) ListIngestedArchives(limit int) ([]*IngestedArchive, error) {
 	}
 	defer rows.Close()
 
-	var out []*IngestedArchive
+	out := make([]*IngestedArchive, 0)
 	for rows.Next() {
 		a := &IngestedArchive{}
 		if err := rows.Scan(&a.Filename, &a.IngestedAt, &a.RequestCount, &a.RatelimitCount, &a.SizeBytes); err != nil {
@@ -675,7 +675,7 @@ func (d *DB) timeSeriesQuery(q, arg string) ([]ChartPoint, error) {
 		return nil, fmt.Errorf("time series query: %w", err)
 	}
 	defer rows.Close()
-	var out []ChartPoint
+	out := make([]ChartPoint, 0)
 	for rows.Next() {
 		var p ChartPoint
 		var v int64
@@ -706,7 +706,7 @@ func (d *DB) StatusBreakdown() ([]ChartPoint, error) {
 		return nil, fmt.Errorf("status breakdown: %w", err)
 	}
 	defer rows.Close()
-	var out []ChartPoint
+	out := make([]ChartPoint, 0)
 	for rows.Next() {
 		var p ChartPoint
 		var v int64
@@ -738,7 +738,7 @@ func (d *DB) ThreatDistribution() ([]ChartPoint, error) {
 		return nil, fmt.Errorf("threat distribution: %w", err)
 	}
 	defer rows.Close()
-	var out []ChartPoint
+	out := make([]ChartPoint, 0)
 	for rows.Next() {
 		var p ChartPoint
 		var v int64
@@ -771,7 +771,7 @@ func (d *DB) labelCountQuery(q string, limit int) ([]ChartPoint, error) {
 		return nil, fmt.Errorf("label count query: %w", err)
 	}
 	defer rows.Close()
-	var out []ChartPoint
+	out := make([]ChartPoint, 0)
 	for rows.Next() {
 		var p ChartPoint
 		var v int64
@@ -871,7 +871,7 @@ GROUP BY LOWER(host) ORDER BY reqs DESC LIMIT ?`
 		return nil, fmt.Errorf("endpoint summary: %w", err)
 	}
 	defer rows.Close()
-	var out []EndpointStat
+	out := make([]EndpointStat, 0)
 	for rows.Next() {
 		var e EndpointStat
 		if err := rows.Scan(&e.Host, &e.Requests, &e.UniqueIPs, &e.LastSeen); err != nil {
@@ -962,7 +962,7 @@ func (d *DB) CountRequestsByHost() ([]HostTraffic, error) {
 		return nil, fmt.Errorf("count requests by host: %w", err)
 	}
 	defer rows.Close()
-	var out []HostTraffic
+	out := make([]HostTraffic, 0)
 	for rows.Next() {
 		var t HostTraffic
 		if err := rows.Scan(&t.Host, &t.HTTP, &t.WS); err != nil {

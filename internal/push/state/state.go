@@ -123,7 +123,7 @@ func (d *DB) ListDeployments(chain string) ([]Deployment, error) {
 	}
 	defer rows.Close()
 
-	var out []Deployment
+	out := make([]Deployment, 0)
 	for rows.Next() {
 		var dep Deployment
 		if err := rows.Scan(
@@ -163,7 +163,7 @@ func (d *DB) ListRegisteredChains() ([]RegisteredChain, error) {
 	}
 	defer rows.Close()
 
-	var out []RegisteredChain
+	out := make([]RegisteredChain, 0)
 	for rows.Next() {
 		var rc RegisteredChain
 		if err := rows.Scan(&rc.Chain, &rc.RPCURL, &rc.RESTURL, &rc.Note, &rc.AddedAt); err != nil {
