@@ -194,6 +194,7 @@
 
 </div><!-- /#chain-server-row -->
 
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:0;width:100%">
 <article class="v-block">
   <div class="v-block-header">
     <span class="v-block-title">Archive Ingestion</span>
@@ -236,6 +237,8 @@
     <div id="arc-result" style="margin-top:.5rem;font-size:.75rem;opacity:.7;min-height:1.2em"></div>
   </div>
 </article>
+<div style="background:transparent"></div>
+</div><!-- Archive 50/50 grid -->
 </div><!-- /#blocks-container -->
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
@@ -429,17 +432,30 @@
       fetch(probeURL)
         .then(function(r){ return r.json(); })
         .then(function(p){
-          if (p.error) return;
           var caLabel = c.ping_country || ((p.ca && p.ca.node) ? p.ca.node.split('.')[0].toUpperCase() : 'DC');
           var wwLabel = (p.ww && p.ww.node) ? p.ww.node.split('.')[0].toUpperCase() : 'WW';
           var elL  = document.getElementById('probe-local-' + idx);
           var elCA = document.getElementById('probe-ca-'    + idx);
           var elWW = document.getElementById('probe-ww-'    + idx);
-          if (elL)  elL.innerHTML  = probeMs(p.local, 'L');
-          if (elCA) elCA.innerHTML = probeMs(p.ca,    caLabel);
-          if (elWW) elWW.innerHTML = probeMs(p.ww,    wwLabel);
+          if (p.error) {
+            if (elL)  elL.innerHTML  = '<span style="color:#ef5350;font-size:.68rem">L:' + escH(p.error) + '</span>';
+            if (elCA) elCA.innerHTML = '<span style="color:#ef5350;font-size:.68rem">' + caLabel + ':' + escH(p.error) + '</span>';
+            if (elWW) elWW.innerHTML = '<span style="color:#ef5350;font-size:.68rem">WW:' + escH(p.error) + '</span>';
+          } else {
+            if (elL)  elL.innerHTML  = probeMs(p.local, 'L');
+            if (elCA) elCA.innerHTML = probeMs(p.ca,    caLabel);
+            if (elWW) elWW.innerHTML = probeMs(p.ww,    wwLabel);
+          }
         })
-        .catch(function(){});
+        .catch(function(e){
+          var elL  = document.getElementById('probe-local-' + idx);
+          var elCA = document.getElementById('probe-ca-'    + idx);
+          var elWW = document.getElementById('probe-ww-'    + idx);
+          var caLabel = c.ping_country || 'DC';
+          if (elL)  elL.innerHTML  = '<span style="color:#ef5350;font-size:.68rem">L:net</span>';
+          if (elCA) elCA.innerHTML = '<span style="color:#ef5350;font-size:.68rem">' + caLabel + ':net</span>';
+          if (elWW) elWW.innerHTML = '<span style="color:#ef5350;font-size:.68rem">WW:net</span>';
+        });
     });
   }
 
@@ -584,7 +600,7 @@
 
   function removeChain(chain) {
     if (!confirm('Remove "'+chain+'" from monitoring?')) return;
-    fetch(BASE + '/api/v1/push/chains/registered/' + encodeURIComponent(chain), {method:'POST'})
+    fetch(BASE + '/api/v1/push/chains/registered/' + encodeURIComponent(chain), {method:'DELETE'})
       .then(function(r){
         if (!r.ok) { alert('Remove failed (HTTP '+r.status+').'); return; }
         loadChainStatus();
@@ -668,17 +684,30 @@
       fetch(probeURL)
         .then(function(r){ return r.json(); })
         .then(function(p){
-          if (p.error) return;
           var caLabel = vm.ping_country || 'DC';
           var wwLabel = (p.ww && p.ww.node) ? p.ww.node.split('.')[0].toUpperCase() : 'WW';
           var elL  = document.getElementById('vm-probe-local-' + idx);
           var elDC = document.getElementById('vm-probe-dc-'    + idx);
           var elWW = document.getElementById('vm-probe-ww-'    + idx);
-          if (elL)  elL.innerHTML  = vmProbeMs(p.local, 'L');
-          if (elDC) elDC.innerHTML = vmProbeMs(p.ca, caLabel);
-          if (elWW) elWW.innerHTML = vmProbeMs(p.ww, wwLabel);
+          if (p.error) {
+            if (elL)  elL.innerHTML  = '<span style="color:#ef5350;font-size:.68rem">L:' + escH(p.error) + '</span>';
+            if (elDC) elDC.innerHTML = '<span style="color:#ef5350;font-size:.68rem">' + caLabel + ':' + escH(p.error) + '</span>';
+            if (elWW) elWW.innerHTML = '<span style="color:#ef5350;font-size:.68rem">WW:' + escH(p.error) + '</span>';
+          } else {
+            if (elL)  elL.innerHTML  = vmProbeMs(p.local, 'L');
+            if (elDC) elDC.innerHTML = vmProbeMs(p.ca, caLabel);
+            if (elWW) elWW.innerHTML = vmProbeMs(p.ww, wwLabel);
+          }
         })
-        .catch(function(){});
+        .catch(function(e){
+          var elL  = document.getElementById('vm-probe-local-' + idx);
+          var elDC = document.getElementById('vm-probe-dc-'    + idx);
+          var elWW = document.getElementById('vm-probe-ww-'    + idx);
+          var caLabel = vm.ping_country || 'DC';
+          if (elL)  elL.innerHTML  = '<span style="color:#ef5350;font-size:.68rem">L:net</span>';
+          if (elDC) elDC.innerHTML = '<span style="color:#ef5350;font-size:.68rem">' + caLabel + ':net</span>';
+          if (elWW) elWW.innerHTML = '<span style="color:#ef5350;font-size:.68rem">WW:net</span>';
+        });
     });
   }
 
