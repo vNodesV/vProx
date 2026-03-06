@@ -1477,3 +1477,85 @@ All PATCH targets applied and committed in `8c4f363`:
 | PR merge | `vLog/v1.2.0` → `develop` → `main` | CI must pass |
 | Release | Tag `vProxVL-v1.2.0` | After merge |
 | Prod deploy | Flat vms.toml migration + `[vm.ping]` sections | Per VM, per datacenter |
+
+---
+
+## Session Checkpoint — 2026-03-06 (vLog/v1.2.0 — Dashboard batch fixes)
+
+### Commits This Session
+
+| SHA | Message |
+|-----|---------|
+| `38cd470` | vlog: remove Add Chain UI, fix hcol pill height expansion |
+| `76ed378` | fix(vlog): remove stale window.addChain export — caused IIFE crash |
+| `de28222` | feat(vlog): row isolation, countdown in button, ping cols on expand, UFW sync |
+| `3458069` | fix(vlog): 6x dashboard fixes — A/I static block, SV immediate load, spinners, UFW sudo |
+
+### Features Shipped
+
+#### `de28222` — 4-item batch
+1. **Row isolation** — Archive block moved outside `chain-server-row`; hcol only affects CS↔SV pair.
+2. **Countdown in Refresh button** — CS and SV Refresh buttons show `Refresh (Xs)` live countdown.
+3. **Ping columns (L/DC/WW)** — Added to both CS and SV tables; hidden by default; rendered only when hcol-expanded; probes fire automatically post-expand via `fireProbes`/`fireVMProbes`.
+4. **hcol↔expand coupling** — `toggleHcol('left')` auto-calls `toggleChainExpand()`; `reset()` collapses both block states on return to 50/50.
+5. **UFW sync** — `ufw.ListBlocked()` parses `sudo -n ufw status numbered` DENY rules; `POST /api/v1/ufw/sync` imports unknown IPs to vLog DB; "Sync UFW" button in Archive block.
+
+#### `3458069` — 6-bug fix batch
+1. **A/I static block** — `<details>/<summary>` removed; Archive block uses `.v-block-header` div (always open, no vcol controls).
+2. **S/V immediate load** — 30s `setTimeout` removed; `loadVMStatus()` fires at pageload; countdown interval starts after 10s stagger.
+3. **Probe spinner** — `probeInitCell()` and `vmProbeInit()` return `.probe-spinner` CSS animation instead of static dash.
+4. **Panel loading indicator** — `window.showLoading(panelId)` added to chart IIFE (shared global); CS and SV panels show ring spinner + "Loading…" during first fetch.
+5. **CSS additions** — `.v-block-header` (static header matching summary style) + `.panel-loading` / `.panel-loading-ring`.
+6. **UFW sudoers** — `sudo -n` (non-interactive) prevents TTY hang; handler detects `password`/`askpass` in error and returns actionable sudoers snippet in the JSON error body.
+
+### Critical Bug Fixed: IIFE crash (`76ed378`)
+
+`window.addChain = addChain` left on line 599 after `addChain()` was deleted in `38cd470`.
+`ReferenceError` at that line crashed the entire CS IIFE at startup → no auto-refresh, no countdown, no `doPing`, no `removeChain`.
+**Pattern established**: any deletion of a JS function must also remove its `window.*` export.
+
+### Architecture Patterns Established
+
+**hcol ↔ expand coupling:**
+```js
+// hcol IIFE: when left expands → chain block expands; reset() collapses both
+function reset() {
+  if (window.getChainExpanded && window.getChainExpanded()) window.toggleChainExpand();
+  if (window.getVMExpanded    && window.getVMExpanded())    window.toggleVMExpand();
+}
+window.toggleHcol = function(side) {
+  reset();
+  if (!active) {
+    if (side === 'left' && !window.getChainExpanded()) window.toggleChainExpand();
+    if (side === 'right' && !window.getVMExpanded()) window.toggleVMExpand();
+  }
+};
+```
+
+**UFW sudoers requirement (for Sync UFW to work):**
+```
+Cmnd_Alias VLOG_UFW = /usr/sbin/ufw deny from *, /usr/sbin/ufw delete deny from *, /usr/sbin/ufw status numbered
+www-data ALL=(ALL) NOPASSWD: VLOG_UFW
+```
+Add via `sudo visudo` on the vLog server.
+
+**Static block header (no vcol):**
+- Use `<div class="v-block-header">` instead of `<details><summary>` when block should not be collapsible.
+- Archive/Ingestion block is the canonical example.
+
+**Shared JS globals from chart IIFE (first script block):**
+- `window.escH` — HTML escape (used by all IIFEs)
+- `window.showLoading(panelId)` — panel loading spinner (used by CS + SV IIFEs)
+
+### Open Work (Updated)
+
+| ID | Task | Status | Notes |
+|----|------|--------|-------|
+| `host-traffic-table` | Add `host_traffic` pre-aggregated table | pending | Efficient per-chain request count |
+| `gov-v1-fix` | Fix governance API: v1 with v1beta1 fallback | pending | Newer chains use v1 |
+| `vm-build-verify` | Build + verify all changes | pending | — |
+| `ssh-setup-docs` | Document SSH key setup for push module | pending | Deferred |
+| UFW sudoers deploy | Add VLOG_UFW alias to production sudoers | pending | User action required on server |
+| Probe debug | Confirm L/DC/WW probes populate after hcol expand | pending | Needs live server test |
+| PR merge | `vLog/v1.2.0` → `develop` → `main` | pending | CI must pass |
+| Release | Tag `vProxVL-v1.2.0` | pending | After merge |

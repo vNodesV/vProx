@@ -6,7 +6,10 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"net"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/vNodesV/vProx/internal/push"
@@ -251,6 +254,68 @@ func (h *Handlers) HandlePoll(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	h.svc.Poll(ctx)
 	writeJSON(w, http.StatusOK, map[string]any{"chains": h.svc.AllStatuses()})
+}
+
+// ProbeHostMap returns the set of hosts referenced by configured VMs and
+// registered chains. Used by the dashboard probe API to authorize requests.
+func (h *Handlers) ProbeHostMap() map[string]struct{} {
+	if h == nil || h.svc == nil {
+		return nil
+	}
+	hosts := make(map[string]struct{})
+
+	addHost := func(raw string) {
+		if host := parseProbeHost(raw); host != "" {
+			hosts[strings.ToLower(host)] = struct{}{}
+		}
+	}
+
+	cfg := h.svc.Config()
+	if cfg != nil {
+		for _, vm := range cfg.VMs {
+			addHost(vm.Host)
+			addHost(vm.LanIP)
+			addHost(vm.PublicIP)
+			addHost(vm.RPC())
+			addHost(vm.REST())
+			addHost(vm.DisplayLanIP())
+		}
+	}
+
+	if regs, err := h.svc.DB().ListRegisteredChains(); err == nil {
+		for _, rc := range regs {
+			addHost(rc.RPCURL)
+			addHost(rc.RESTURL)
+		}
+	}
+	return hosts
+}
+
+func parseProbeHost(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	if strings.Contains(raw, "://") {
+		if u, err := url.Parse(raw); err == nil {
+			if host := u.Hostname(); host != "" {
+				return host
+			}
+			if u.Host != "" {
+				if host, _, err := net.SplitHostPort(u.Host); err == nil {
+					return host
+				}
+				return u.Host
+			}
+		}
+	}
+	if host, _, err := net.SplitHostPort(raw); err == nil {
+		return host
+	}
+	if idx := strings.IndexAny(raw, "/:"); idx >= 0 {
+		return raw[:idx]
+	}
+	return raw
 }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {

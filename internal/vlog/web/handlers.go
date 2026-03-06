@@ -853,22 +853,33 @@ func (s *Server) handleAPIProbe(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 		return
 	}
-	known := false
+	hostKey := normalizeProbeHost(host)
+	hostSet := make(map[string]struct{}, len(stats))
 	for _, e := range stats {
-		if strings.EqualFold(e.Host, host) {
-			known = true
-			break
+		if h := normalizeProbeHost(e.Host); h != "" {
+			hostSet[h] = struct{}{}
 		}
 	}
-	if !known {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "host not in dataset"})
+	pushHosts := s.pushHostSet()
+	for h := range pushHosts {
+		hostSet[h] = struct{}{}
+	}
+	if hostKey == "" {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "host not authorized"})
+		return
+	}
+	if _, ok := hostSet[hostKey]; !ok {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "host not authorized"})
 		return
 	}
 
-	// Additional SSRF layer: reject if host is a literal private/loopback IP.
+	// Additional SSRF layer: reject literal private/loopback IPs that are not
+	// part of the configured push hosts.
 	if ip := net.ParseIP(host); ip != nil && isPrivateIP(host) {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "private address not allowed"})
-		return
+		if _, ok := pushHosts[hostKey]; !ok {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "private address not allowed"})
+			return
+		}
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 14*time.Second)
@@ -1095,6 +1106,25 @@ func isPrivateIP(ipStr string) bool {
 		}
 	}
 	return false
+}
+
+func normalizeProbeHost(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	if host, _, err := net.SplitHostPort(raw); err == nil {
+		raw = host
+	}
+	raw = strings.Trim(raw, "[]")
+	return strings.ToLower(raw)
+}
+
+func (s *Server) pushHostSet() map[string]struct{} {
+	if s.push == nil {
+		return nil
+	}
+	return s.push.ProbeHostMap()
 }
 
 func queryInt(r *http.Request, key string, fallback int) int {
