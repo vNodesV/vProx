@@ -318,6 +318,8 @@
 | Server-Sent Events (SSE) | 4 | Keepalive goroutine (15s `: ping`), `context.Background()` isolation from `r.Context()`, Apache `ProxyTimeout` interaction, done-channel shutdown; `http.ResponseWriter` concurrency safety (keepalive + emit MUST be mutex-serialized); production-shipped in vLog (`handleAPIInvestigate`, `handleAPIEnrich`, `handleAPIosint`) |
 | Dashboard patterns | 3 | Status panels, metric widgets, collapsible blocks (`<details>`/`<summary>`), drag/drop layout (HTML5 DnD + localStorage persistence), reset layout button; vcol/hcol block expansion system — production in vLog v1.2.0 |
 | Dashboard vcol/hcol | 3 | vcol: `∧`/`∨` button toggles `details.open` manually (onclick guard bypass); hcol: `›`/`‹` toggles `.row-expand-left/right` (75/25% grid split); strip pill: `.is-strip` hides details, shows rotated label, `width:44px; justify-self:center`; toggle IIFE reflows grid on vcol; `collapseBlockRow()` restores 50/50 |
+| Dashboard JS debugging | 4 | IIFE scope isolation (per-block JS IIFEs, `window.*` exports for cross-IIFE calls); brace balance analysis; CSP `connect-src` debugging; `ReferenceError` from stale `window.fn = fn` after fn deletion — production-learned in vLog `76ed378` |
+| Go/JSON nil-vs-empty slice | 4 | `var []T` → `null` vs `make([]T,0)` → `[]` in `encoding/json`; production gotcha in API responses — fixed in `7b149e0` |
 | CSS frameworks (light) | 2 | Pico CSS, classless frameworks for admin UIs without build step |
 
 ---
@@ -362,6 +364,8 @@
 | IP enrichment orchestration | 3 | Async enrichment queue, cache TTL, API rate limiting, graceful degradation |
 | FS watcher patterns | 3 | Poll-based archive watcher, dedup via processed-file registry, trigger-on-new logic |
 | Log analyzer web UI | 3 | Dashboard + CRM account view (search/sort/per-page/Investigate btn) + query builder + threat panel; htmx partial SSE updates; production-shipped in vLog v1.1.0 |
+| TOML config design patterns | 4 | Struct backfill defaults, tri-state `*bool`, soft migration (dual-source loading with precedence), vms-to-chain consolidation pattern, deprecation warnings, backward compat strategy — applied in v1.3.0 chain.toml redesign |
+| Soft migration patterns | 4 | Dual-source loading (old config still works, new config wins when present), deprecation log warnings, backward compat via fallback struct, phased rollout — v1.3.0 vms.toml→chain.toml `[management]` |
 
 ---
 
@@ -389,11 +393,45 @@
 | VM registry management | 3 | TOML-based VM inventory (vms.toml); per-VM: host, port, user, key_path, datacenter, chain list |
 | Validator chain operations | 4 | Node/validator/provider/relayer component types; chain script layout (`scripts/chains/{chain}/{component}/{script}.sh`); akash patterns |
 | Chain status polling | 3 | Cosmos RPC height + gov + upgrade plan polling; stale-node detection |
+| check-host.net HTTP probe API | 4 | Submit+poll pattern, `countryNodes` map, `sanitizeProbeNode()` SSRF whitelist, 12s deadline 2s interval, concurrent CA+WW with `sync.WaitGroup`; `?country=&provider=` params; production in vLog `handleAPIProbe` |
+| SSH VM metrics collection | 4 | Compound bash command pattern (`df + free + uptime` in single SSH session), metrics struct parsing, concurrent SSH polling with `sync.WaitGroup` + `sync.Mutex` on results; production in vLog Chain Status Server columns |
 | Deployment tracking (SQLite) | 3 | `deployments` + `registered_chains` tables; deployment history; upgrade state machine |
 | Module management | 3 | `internal/modules/` pattern; git fetch + `go build` + binary install + service restart automation |
 | Chain upgrade automation | 4 | `/current_plan` polling → halt-height detection → binary pre-download → swap at halt → snapshot → service restart |
 
 ---
+
+| Area | Current | Target | Notes |
+|------|---------|--------|-------|
+## 19. Binary Consolidation & Single-Binary Distribution
+
+| Skill | Depth | Notes |
+|-------|-------|-------|
+| Multi-binary → single-binary consolidation | 3 | `cmd/` layout: `cmd/vprox/`, `cmd/vlog/` → `cmd/vprox/` with subcommands; shared `internal/` packages; goreleaser multi-binary config |
+| Embedded HTTP server multiplexing | 4 | Multiple HTTP servers in one Go binary (separate goroutines, separate listen ports, shared config); `errgroup`/`os.Signal` graceful shutdown coordination |
+| go:embed asset management | 3 | `go:embed` for templates/CSS/static files; build tags for feature inclusion/exclusion; `fs.FS` routing; cache invalidation (`go clean -cache`) |
+| CLI subcommand trees | 3 | cobra/flag: `vprox vlog start|stop|status` pattern; shared flag inheritance; nested FlagSets; help formatting |
+| UPX / binary compression | 2 | `upx --best` awareness; trade-off: startup time vs disk size; not needed for server daemons |
+| Module lifecycle management | 3 | `internal/modules/`: git fetch + `go build` + binary install + systemd service; `config/modules.toml` state |
+| Service consolidation (systemd) | 3 | `vlog.service` → `vprox.service` with `vlog` subcommand; ExecStart args; user migration |
+
+---
+
+## 20. Strategic Product Thinking (CEO/Venture Mode)
+
+| Skill | Depth | Notes |
+|-------|-------|-------|
+| RICE/ICE prioritization | 3 | `(Reach × Impact × Confidence) / Effort` scoring; backlog triage; feature ranking |
+| Technical debt accounting | 4 | Velocity impact, compound interest metaphor, decision framework; when to pay vs when to carry |
+| Build vs buy vs borrow | 3 | Dependency risk matrix, maintenance burden, community health signals (stars/commits/issues) |
+| MVP definition | 3 | Minimum that ships value; scope boxing; user-first framing |
+| North Star metrics | 3 | vProx: proxy uptime × chains managed; vLog: threats detected × response time; metric trees |
+| Opportunity cost reasoning | 3 | "What are we NOT building while doing this?" framing; time-value of features |
+| Milestone planning | 3 | Phase-gated delivery; launch criteria definition; acceptance vs scope trade-offs |
+
+---
+
+## Growth Target
 
 | Area | Current | Target | Notes |
 |------|---------|--------|-------|
@@ -431,13 +469,15 @@ Technical Docs:       ███████████████████�
 AI Agent Design:      ████████████████████ 4/4
 Web Server Eng:       ████████████████████ 4/4
 Web Service Arch:     ████████████████████ 4/4
-Web GUI Eng:          ████████████████     3/4    (architecture selected, implementation pending)
+Web GUI Eng:          ████████████████     3.5/4  (JS debugging, JSON nil-vs-empty, CSP — production patterns)
 Log Analysis & Intel: ████████████████████ 4/4  (production: auth, Matrix theme, SSE intel, accounts, ingestion, vLog v1.2.0)
 UI/UX Design Systems: ████████████████████ 4/4  (CSS tokens, glass morphism, viewport-fill, sticky footer, session auth UX — production)
-Infrastructure Deploy:████████████         3/4    (SSH dispatcher, VM registry, chain scripts — active; Phase E CLI planned)
+Infrastructure Deploy:████████████████     3.5/4  (SSH dispatcher, VM registry, chain scripts, check-host.net probe, SSH metrics — active)
+Binary Consolidation: ████████████         3/4    (multi-binary awareness, cmd/ layout, go:embed, module lifecycle — planned for v1.4.0)
+Strategic Thinking:   ████████████         3/4    (RICE/ICE, tech debt, build/buy, MVP, North Star metrics)
 ```
 
 ---
 
 *Skills are living documentation. Update this file when capabilities change or new domains are acquired.*
-*Last updated: 2026-03-05 (rev16: §14 Dashboard patterns 2→3 + vcol/hcol row added; §17 drag/drop row added; base.agent.md vcol/hcol + drag/drop + sample revision schema + go:embed cache invalidation patterns added; capability index Web GUI 3→3.5; upgrade history rev16 entry)*
+*Last updated: 2026-03-07 (rev17: §19 Binary Consolidation NEW (multi-binary, go:embed, CLI trees, module lifecycle); §20 Strategic Product Thinking NEW (RICE/ICE, tech debt, build/buy, MVP, North Star); §14 Dashboard JS debugging 3→4 + JSON nil-vs-empty 4 added; §16 TOML config design 4 + soft migration 4 added; §18 check-host.net probe 4 + SSH VM metrics 4 added; capability index updated: Web GUI 3→3.5, Infra Deploy 3→3.5, Binary Consolidation 3 NEW, Strategic Thinking 3 NEW)*

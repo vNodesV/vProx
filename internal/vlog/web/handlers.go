@@ -842,7 +842,8 @@ func (s *Server) handleAPIProbe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Optional datacenter probe params.
+	// Optional parameters.
+	rpcURL := strings.TrimSpace(r.URL.Query().Get("rpc_url"))
 	countryParam := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("country")))
 	providerParam := strings.TrimSpace(r.URL.Query().Get("provider"))
 
@@ -885,10 +886,18 @@ func (s *Server) handleAPIProbe(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 14*time.Second)
 	defer cancel()
 
-	// Step 1: local probe — discovers the best reachable URL.
-	localR, bestURL := localProbe(host)
+	// Step 1: local probe — either use provided rpc_url or discover one.
+	var localR locResult
+	var bestURL string
+	if rpcURL != "" {
+		// If rpc_url is provided, probe it directly.
+		localR, bestURL = probeURL(rpcURL)
+	} else {
+		// Otherwise, discover the best reachable URL.
+		localR, bestURL = localProbe(host)
+	}
 
-	// Step 2: fire external probes concurrently using the discovered URL.
+	// Step 2: fire external probes concurrently using the discovered/provided URL.
 	var caR, wwR locResult
 	if bestURL == "" {
 		caR = locResult{Error: "no reachable URL"}
@@ -920,6 +929,23 @@ func (s *Server) handleAPIProbe(w http.ResponseWriter, r *http.Request) {
 		CA:    caR,
 		WW:    wwR,
 	})
+}
+
+// probeURL probes a single URL and returns the result and URL.
+func probeURL(url string) (locResult, string) {
+	client := &http.Client{Timeout: 5 * time.Second}
+	start := time.Now()
+	resp, err := client.Get(url) //nolint:noctx
+	lat := time.Since(start).Milliseconds()
+	if err != nil {
+		return locResult{Error: err.Error()}, ""
+	}
+	defer resp.Body.Close()
+	code := resp.StatusCode
+	if code < 400 {
+		return locResult{OK: true, Code: code, LatencyMs: lat}, url
+	}
+	return locResult{Code: code, LatencyMs: lat}, url
 }
 
 // localProbe tries candidate URLs for host in order, returning the first 2xx

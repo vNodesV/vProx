@@ -73,12 +73,41 @@ type WSConfig struct {
 	MaxLifetimeSec int `toml:"max_lifetime_sec"` // 0 = no hard cap
 }
 
+// ManagementPing configures the check-host.net datacenter probe for this managed host.
+type ManagementPing struct {
+	Country  string `toml:"country"`  // ISO 3166-1 alpha-2 country code, e.g. "CA"
+	Provider string `toml:"provider"` // optional: pin to a specific check-host.net node, e.g. "ca1"
+}
+
+// Management embeds server/VM management configuration directly in chain.toml.
+// When managed_host = true, this section provides SSH access and status polling
+// for the node, replacing the need for a separate [[vm]] entry in vms.toml.
+//
+// Global defaults for user and key_path are sourced from [vlog.push.defaults]
+// in vlog.toml when the corresponding fields are empty here.
+type Management struct {
+	ManagedHost     bool           `toml:"managed_host"`      // true = include this host in the push module
+	LanIP           string         `toml:"lan_ip"`            // SSH target IP; empty = use chain.ip
+	PublicIP        string         `toml:"public_ip"`         // display-only; optional
+	User            string         `toml:"user"`              // SSH user; empty = [vlog.push.defaults].user
+	KeyPath         string         `toml:"key_path"`          // SSH key path; empty = [vlog.push.defaults].key_path
+	Port            int            `toml:"port"`              // SSH port; 0 = default 22
+	Type            []string       `toml:"type"`              // service roles: validator | sp | relayer | node
+	Datacenter      string         `toml:"datacenter"`        // location label, e.g. "QC"
+	ExposedServices bool           `toml:"exposed_services"`  // true = probe via public chain.host domain
+	Ping            ManagementPing `toml:"ping"`
+}
+
 // ChainConfig is the top-level per-chain TOML configuration.
 type ChainConfig struct {
 	SchemaVersion int    `toml:"schema_version"`
 	ChainName     string `toml:"chain_name"`
 	Host          string `toml:"host"`
 	IP            string `toml:"ip"`
+
+	// v1.3.0: chain identity and block explorer
+	ChainID      string `toml:"chain_id"`      // official chain-id, e.g. "cheqd-mainnet-1"
+	ExplorerBase string `toml:"explorer_base"` // block explorer base URL; empty = no explorer link
 
 	RPCAliases  []string `toml:"rpc_aliases"`  // extra RPC hostnames; active only when expose.vhost = true
 	RESTAliases []string `toml:"rest_aliases"` // extra REST/API hostnames; active only when expose.vhost = true
@@ -91,6 +120,9 @@ type ChainConfig struct {
 	Features Features   `toml:"features"`
 	Logging  LoggingCfg `toml:"logging"`
 	Message  Message    `toml:"message"`
+
+	// v1.3.0: embedded server management (replaces [[vm]] in vms.toml)
+	Management Management `toml:"management"`
 
 	DefaultPorts bool `toml:"default_ports"`
 	MsgRPC       bool `toml:"msg_rpc"` // enable rpc_msg banner injection

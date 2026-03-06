@@ -53,7 +53,7 @@ func runChainStatus(home string, args []string) {
 		os.Exit(1)
 	}
 
-	cfgPath := filepath.Join(home, "config", "vms.toml")
+	cfgPath := filepath.Join(home, "config", "push", "vms.toml")
 	cfg, err := pushcfg.Load(cfgPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "chain status: load vms.toml: %v\n", err)

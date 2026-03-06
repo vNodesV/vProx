@@ -1559,3 +1559,119 @@ Add via `sudo visudo` on the vLog server.
 | Probe debug | Confirm L/DC/WW probes populate after hcol expand | pending | Needs live server test |
 | PR merge | `vLog/v1.2.0` → `develop` → `main` | pending | CI must pass |
 | Release | Tag `vProxVL-v1.2.0` | pending | After merge |
+
+---
+
+## Session: 2026-03-07 (vLog1.3.0 branch — chain.toml consolidation)
+
+### Active Branch
+`vLog1.3.0` — created 2026-03-06 from `vLog/v1.2.0`
+HEAD: `6ae8204` (fix: add missing closing brace in renderVMTable function)
+
+### v1.3.0 Goal
+Eliminate `vms.toml` — embed VM/server management data in each chain's `config/chains/{chain}.toml` via `[management]` section. Self-contained chain config files.
+
+### Architecture Decisions Locked (2026-03-06)
+
+| Decision | Rationale |
+|----------|-----------|
+| No `hosts.toml` — each chain self-contained | Avoids cross-file references; chain add/remove is atomic |
+| Global SSH defaults in `[vlog.push.defaults]` | DRY: `user` + `key_path` shared across all chains |
+| `[management.ping]` subtable | check-host.net country/provider per chain (matches existing VMPing) |
+| Soft migration: vms.toml still works | chain.toml wins when `managed_host=true`; deprecation warning on vms.toml load |
+| `explorer_urls` deferred to v2 | Ship `explorer_base` only (single string) — simpler, covers 95% of cases |
+| vLog binary integration deferred to v1.4.0 | Dashboard must be stable first; estimated 3-4 days of work |
+
+### chain.toml [management] Final Schema
+
+```toml
+# Existing chain fields (unchanged):
+name          = "cheqd-testnet"
+rpc_url       = "https://rpc.cheqd-testnet.example.com"
+# ...
+
+# NEW top-level fields (v1.3.0):
+chain_id      = "cheqd-testnet-6"   # moved from dead [explorer] section
+explorer_base = ""                   # replaces [explorer].explorer
+
+# NEW management section (v1.3.0 — replaces vms.toml per-VM entry):
+[management]
+managed_host     = true
+lan_ip           = "10.0.0.66"
+public_ip        = ""
+user             = ""          # empty → [vlog.push.defaults].user
+key_path         = ""          # empty → [vlog.push.defaults].key_path
+port             = 0           # 0 → default 22
+type             = ["validator", "sp"]
+datacenter       = "QC"
+exposed_services = true
+
+[management.ping]
+country  = "CA"
+provider = ""
+```
+
+### 6-Phase Implementation Plan
+
+| Phase | Files | Description |
+|-------|-------|-------------|
+| 1 | `internal/config/config.go` | Add `ManagementConfig`, `ManagementPing`, `ExplorerCfg` structs + fields to `ChainConfig` |
+| 2 | `internal/push/config/config.go` | Add `LoadFromChainConfigs()` + `MergeConfigs()` |
+| 3 | `internal/push/push.go` + `status/*.go` | Update `New()` signature, `pollAll()`, add `ExplorerURL` to `ChainStatus` |
+| 4 | `internal/vlog/config/config.go` | Add `ChainsDir` + `PushDefaults` struct to vLog config |
+| 5 | `cmd/vprox/push.go` + `chain.go` | CLI adaptation + fix wrong vms.toml path bug |
+| 6 | Sample files | `chain.sample.toml` (add `[management]`), `vms.sample.toml` (deprecation notice), `vlog.sample.toml` (add `[vlog.push.defaults]`) |
+
+### Open Bugs (Carry to v1.3.0)
+
+| Bug | Location | Description | Status |
+|-----|----------|-------------|--------|
+| Wrong vms.toml path | `cmd/vprox/chain.go:56` | Loads `config/vms.toml` instead of `config/push/vms.toml` | pending — fix in Phase 5 |
+| Dead [explorer] section | `config/chains/*.toml` | `[explorer]` never parsed by Go; dead config | pending — replace with `explorer_base` in Phase 1 |
+| VM probe "unreachable" | probe endpoint | Probe endpoint now accepts `rpc_url` param | in progress |
+
+### Recent Commits on vLog1.3.0
+
+| SHA | Message |
+|-----|---------|
+| `6ae8204` | fix(vlog): add missing closing brace in renderVMTable function |
+| `48f9462` | docs(config): update sample TOML files with uncommented default paths |
+| `588a51b` | fix(vlog): export loadVMStatus to window and allow CDN in CSP connect-src |
+| `7b149e0` | fix(push,vlog): initialize empty slices to encode as [] not null in JSON |
+| `34b2efc` | fix(vlog): add one-time warning when vms.toml not found but path is readable |
+| `d5a66ee` | docs: add vlog + vms config templates with issue analysis |
+| `3dc2777` | fix(dashboard): display ping errors, lock archive to half-block, use DELETE for chain removal |
+| `fe3f6b5` | fix(vlog): authorize push-configured hosts in dashboard probe guard |
+| `3458069` | fix(vlog): 6x dashboard fixes — A/I static block, SV immediate load, spinners, UFW sudo |
+| `de28222` | feat(vlog): row isolation, countdown in button, ping cols on expand, UFW sync |
+
+### Patterns Established This Session
+
+- **JSON nil-vs-empty**: `make([]T, 0)` not `var []T` for API responses (commit `7b149e0`)
+- **One-time deprecation warning**: Log warning once per missing/deprecated config file, not per request
+- **CSP connect-src debugging**: Check browser DevTools Network tab for blocked requests; CDN URLs need explicit allowlist
+- **IIFE crash from stale window.export**: Always grep for `window.fnName` after deleting a function
+
+### vLog Binary Integration (Deferred to v1.4.0)
+
+**Estimated effort**: 3-4 days
+**Requirements**:
+1. `cmd/vlog/` → `vprox vlog start|stop|status` subcommand
+2. Unified config: `vlog.toml` section embedded in `vprox.toml`
+3. Single systemd unit with multi-server `errgroup` coordination
+4. `vlog.service` backward-compat alias
+5. Build tags: `//go:build !novlog` for proxy-only distribution
+
+### Follow-ups
+
+| ID | Task | Status | Notes |
+|----|------|--------|-------|
+| phase-1 | Add ManagementConfig struct to ChainConfig | pending | First implementation step |
+| phase-2 | LoadFromChainConfigs + MergeConfigs | pending | Soft migration logic |
+| phase-3 | Push/Status integration | pending | Wire new config through push pipeline |
+| phase-4 | vLog config update | pending | ChainsDir + PushDefaults |
+| phase-5 | CLI fix + adaptation | pending | Fix vms.toml path bug |
+| phase-6 | Sample files | pending | chain.sample.toml + deprecation notices |
+| host-traffic-table | Add host_traffic pre-aggregated table | pending | Efficient per-chain request count |
+| gov-v1-fix | Fix governance API: v1 with v1beta1 fallback | pending | Newer chains use v1 |
+| v1.4.0-plan | Binary consolidation planning | deferred | After v1.3.0 ships |

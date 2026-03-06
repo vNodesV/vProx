@@ -49,6 +49,9 @@ You are the repository PR reviewer and quality gatekeeper for `vProx`.
 - **Push scripts: path must be repo-relative** — remote bash scripts MUST be in `~/vProx/scripts/chains/{chain}/{component}/{script}.sh`; never construct script paths from untrusted request parameters; validate chain/component/script name against allowlist before SSH exec.
 - **Cosmos IBC queries: enforce pagination** — any handler that proxies `/ibc/core/channel/v1/channels` or `/packet_commitments` MUST inject `pagination.limit` if absent; unbounded IBC channel queries can OOM query nodes.
 - **Cosmos upgrade detection: cache /current_plan** — if vProx or vLog polls `/cosmos/upgrade/v1beta1/current_plan`, responses must be cached (60s TTL); never poll on every request; alert/log when `latest_block_height >= Plan.Height`.
+- **Go/JSON nil-vs-empty slice** — API handlers returning `[]T` MUST use `make([]T, 0)` or `[]T{}`, never `var s []T`; `encoding/json` marshals `nil` slice as `null`, breaking frontend `Array.isArray()` / `.length` checks.
+- **Soft migration: dual-source config loading** — when consolidating config files (e.g., vms.toml → chain.toml), both sources must be loaded with new-wins precedence; log deprecation warning; never hard-cut in a single release.
+- **Chain.toml self-contained** — each chain config file should be self-contained (identity, endpoints, management, ping, explorer); no cross-file references; global defaults in parent config section.
 
 ## Module awareness
 - **Core proxy** (`cmd/vprox/main.go`): HTTP/WS proxy, rate limiting, geo, config loading, access-count batching (1s ticker), regex caching (rewriteLinks); `splitLogWriter` dual-output (stdout+file) for start mode and `--backup` flag; CLI commands: `start`, `stop`, `restart`; flags: `-d`/`--daemon`, `--new-backup`, `--list-backup`, `--backup-status`, `--disable-backup`; `runServiceCommand()` delegates to `sudo service vProx start|stop|restart` (passwordless via `/etc/sudoers.d/vprox`)
@@ -61,12 +64,13 @@ You are the repository PR reviewer and quality gatekeeper for `vProx`.
 - **push** (`internal/push/`): SSH control plane for validator VMs; packages: config/ (vms.toml), ssh/ (dispatcher, x/crypto/ssh), runner/ (remote bash exec), state/ (SQLite deployments), status/ (Cosmos RPC poller), api/ (HTTP handlers); scripts at `scripts/chains/{chain}/{component}/{script}.sh`
 - **vLog** (`cmd/vlog/`, `internal/vlog/`): standalone log-analyzer binary; SQLite (modernc.org/sqlite) for IP accounts; ingests `archives/*.tar.gz`; VirusTotal + AbuseIPDB + Shodan intel; composite threat score; embedded web UI (Matrix [V] dark theme); session auth (login page, bcrypt, 32-byte `crypto/rand` tokens, 24h TTL, `requireSession` middleware, auth bypass if `password_hash == ""`); `POST /api/v1/ingest` endpoint for vProx backup hook; config at `$VPROX_HOME/config/vlog.toml` (`[vlog.auth]` section for `password_hash`)
 
-## Config layout (current)
+## Config layout (current — v1.3.0 chain.toml consolidation in progress)
 - `config/webservice.toml` — webserver module enable + `[server]` listen addresses
 - `config/vhosts/*.toml` — one file per vhost; flat fields, no `[[vhost]]` prefix
-- `config/chains/*.toml` — one file per chain (primary), also scans `~/.vProx/chains/` (legacy)
+- `config/chains/*.toml` — one file per chain (primary); v1.3.0 adds `[management]` + `[management.ping]` sections + `chain_id` + `explorer_base` top-level fields
 - `config/backup/backup.toml` — backup: `automation bool`, `[backup.files]` lists
 - `config/ports.toml` — default proxy ports
+- `config/push/vms.toml` — VM registry (DEPRECATED in v1.3.0; chain.toml `[management]` takes precedence when `managed_host=true`)
 - TOML config takes priority over `.env` variables; `.env` is for deployment secrets/overrides only
 
 ## Config architecture (P4 planned)

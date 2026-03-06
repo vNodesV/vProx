@@ -51,6 +51,40 @@ func New(vmsCfgPath, dbPath string) (*Service, error) {
 	}, nil
 }
 
+// NewEmpty creates a Service with an empty VM registry and opens the SQLite database.
+// Use when no vms.toml exists but chain management sections will be loaded via
+// AddChainConfigs. The push module starts managing VMs after AddChainConfigs is called.
+func NewEmpty(dbPath string) (*Service, error) {
+	db, err := state.Open(dbPath)
+	if err != nil {
+		return nil, fmt.Errorf("push: open state db: %w", err)
+	}
+	return &Service{
+		cfg:      &config.Config{},
+		db:       db,
+		runner:   runner.New(),
+		statuses: make(map[string]*status.ChainStatus),
+	}, nil
+}
+
+// AddChainConfigs merges VM entries derived from chain TOML [management] sections
+// into the service config. Chain-derived entries take precedence over vms.toml.
+// Call after New() (or NewEmpty()) when chains_dir is configured in vlog.toml.
+func (s *Service) AddChainConfigs(chainsDir string, defaults config.PushDefaults) error {
+	chainCfg, err := config.LoadFromChainConfigs(chainsDir, defaults)
+	if err != nil {
+		return fmt.Errorf("push: load chain configs from %s: %w", chainsDir, err)
+	}
+	if len(chainCfg.VMs) == 0 {
+		return nil
+	}
+
+	s.mu.Lock()
+	s.cfg = config.MergeConfigs(s.cfg, chainCfg)
+	s.mu.Unlock()
+	return nil
+}
+
 // Close releases the underlying database connection.
 func (s *Service) Close() error { return s.db.Close() }
 

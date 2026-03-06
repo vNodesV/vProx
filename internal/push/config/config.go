@@ -3,9 +3,13 @@ package config
 
 import (
 	"fmt"
+	"log"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/pelletier/go-toml/v2"
+	chainconfig "github.com/vNodesV/vProx/internal/config"
 )
 
 // VMPing holds probe configuration for external latency checks via check-host.net.
@@ -134,4 +138,152 @@ func (c *Config) AllChains() []string {
 		}
 	}
 	return chains
+}
+
+// PushDefaults holds global SSH credential defaults for chain-managed hosts.
+// Applied when [management] user or key_path are empty in chain.toml.
+// Sourced from [vlog.push.defaults] in vlog.toml.
+type PushDefaults struct {
+	User    string
+	KeyPath string
+}
+
+// LoadFromChainConfigs reads all chain TOML files from dir and extracts
+// [management] sections with managed_host = true as VM entries.
+// Per-chain management config takes precedence over vms.toml when merged.
+// Returns a Config with only chain-derived VMs (no Hosts).
+func LoadFromChainConfigs(dir string, defaults PushDefaults) (*Config, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return &Config{}, nil
+		}
+		return nil, fmt.Errorf("push/config: read chains dir %s: %w", dir, err)
+	}
+
+	var vms []VM
+	for _, e := range entries {
+		if e.IsDir() || !chainconfig.IsChainTOML(e.Name()) {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(dir, e.Name()))
+		if err != nil {
+			log.Printf("[push] warn: skip chain file %s: %v", e.Name(), err)
+			continue
+		}
+		var cc chainconfig.ChainConfig
+		if err := toml.Unmarshal(data, &cc); err != nil {
+			log.Printf("[push] warn: parse chain file %s: %v", e.Name(), err)
+			continue
+		}
+		if !cc.Management.ManagedHost {
+			continue
+		}
+		m := cc.Management
+
+		// Derive SSH target: prefer [management].lan_ip, fall back to chain.ip
+		sshHost := m.LanIP
+		if sshHost == "" {
+			sshHost = cc.IP
+		}
+
+		// Apply global defaults for empty credentials
+		user := m.User
+		if user == "" {
+			user = defaults.User
+		}
+		keyPath := m.KeyPath
+		if keyPath == "" {
+			keyPath = defaults.KeyPath
+		}
+
+		port := m.Port
+		if port == 0 {
+			port = 22
+		}
+
+		// Derive probe URLs: if exposed_services=true use the public chain.host domain,
+		// otherwise leave empty (vm.RPC() will derive from sshHost = LAN IP).
+		rpcURL := ""
+		restURL := ""
+		if m.ExposedServices && cc.Host != "" {
+			rpcURL = "http://" + cc.Host
+			restURL = "http://" + cc.Host
+		}
+
+		vms = append(vms, VM{
+			Name:       chainVMName(cc.ChainName, cc.Host),
+			Host:       sshHost,
+			LanIP:      sshHost,
+			PublicIP:   m.PublicIP,
+			Port:       port,
+			User:       user,
+			KeyPath:    keyPath,
+			Datacenter: m.Datacenter,
+			Type:       strings.Join(m.Type, ","),
+			RPCURL:     rpcURL,
+			RESTURL:    restURL,
+			Ping: VMPing{
+				Country:  m.Ping.Country,
+				Provider: m.Ping.Provider,
+			},
+		})
+	}
+
+	return &Config{VMs: vms}, nil
+}
+
+// MergeConfigs merges chain-derived VMs into the base vms.toml config.
+// Chain-derived entries with the same name override vms.toml entries.
+// Hosts from vms.toml are preserved; chain configs add no host records.
+func MergeConfigs(base, chains *Config) *Config {
+	if base == nil || len(base.VMs) == 0 {
+		if chains == nil {
+			return &Config{}
+		}
+		return chains
+	}
+	if chains == nil || len(chains.VMs) == 0 {
+		return base
+	}
+
+	// Index chain VMs by name for O(1) lookup.
+	chainByName := make(map[string]VM, len(chains.VMs))
+	for _, v := range chains.VMs {
+		chainByName[v.Name] = v
+	}
+
+	// Build merged list: chain entry wins when names match.
+	merged := make([]VM, 0, len(base.VMs)+len(chains.VMs))
+	seen := make(map[string]bool, len(base.VMs))
+	for _, v := range base.VMs {
+		if cv, ok := chainByName[v.Name]; ok {
+			merged = append(merged, cv) // chain-derived takes precedence
+		} else {
+			merged = append(merged, v)
+		}
+		seen[v.Name] = true
+	}
+	// Append chain VMs not present in vms.toml.
+	for _, v := range chains.VMs {
+		if !seen[v.Name] {
+			merged = append(merged, v)
+		}
+	}
+
+	return &Config{
+		Hosts: base.Hosts, // preserve physical host records from vms.toml
+		VMs:   merged,
+	}
+}
+
+// chainVMName derives a stable VM name from chain metadata.
+// Prefers chain_name (lowercase, spaces→dashes), falls back to host.
+func chainVMName(chainName, host string) string {
+	n := strings.ToLower(strings.TrimSpace(chainName))
+	n = strings.ReplaceAll(n, " ", "-")
+	if n != "" {
+		return n
+	}
+	return host
 }

@@ -385,6 +385,10 @@ resources ebpf        → Section 14
 resources webgui      → Section 15 (CSS/dashboard/htmx/SSE)
 resources auth        → Section 16 (session auth, bcrypt, cookies)
 resources css         → Section 15 (CSS custom props, glass morphism, background-size)
+resources mcp         → Section 18 (MCP servers: filesystem, SQLite, memory, git, Playwright, Brave)
+resources binary      → Section 19 (binary consolidation, goreleaser, cobra, go:embed, UPX)
+resources strategy    → Section 20 (RICE/ICE, tech debt, build/buy, Kano model)
+resources infra       → Section 17 (SSH, VM registry, chain upgrade, circuit breaker)
 ```
 
 ---
@@ -565,4 +569,84 @@ resources css         → Section 15 (CSS custom props, glass morphism, backgrou
 
 ---
 
-*Last updated: 2026-03-03 (rev14: §2b Cosmos SDK Hidden Gems NEW — WS limits, upgrade detection, IBC DoS patterns, ABCI cost split, mempool health; §17 Infrastructure Deployment NEW — SSH, sync detection, upgrade API, circuit breaker; Cosmos SDK depth 3.5→4 across CometBFT+IBC; Quick Domain Lookup updated)*
+## 18. MCP Server Ecosystem
+
+### Official Reference Servers (modelcontextprotocol)
+| Resource | URL | Notes |
+|----------|-----|-------|
+| MCP Servers Repo | https://github.com/modelcontextprotocol/servers | Official reference servers — filesystem, SQLite, memory, git, fetch |
+| MCP Registry (GitHub) | https://github.blog/ai-and-ml/generative-ai/how-to-find-install-and-manage-mcp-servers-with-the-github-mcp-registry | GitHub registry for MCP server discovery + one-click VS Code install |
+| MCP Specification | https://modelcontextprotocol.io/specification/2025-03-26/server | MCP server specification (latest) |
+
+### High-Value MCP Servers for vProx/vLog
+| Server | Install | Why for vProx/vLog |
+|--------|---------|-------------------|
+| `@modelcontextprotocol/server-filesystem` | `npx @modelcontextprotocol/server-filesystem /path` | Direct file ops on config/templates/TOML without shell; secure directory scoping |
+| `@modelcontextprotocol/server-sqlite` | `npx @modelcontextprotocol/server-sqlite --db-path /path/vlog.db` | Direct query access to vlog.db + push.db — debug IP accounts, deployments, intel_cache without Go code |
+| `@modelcontextprotocol/server-memory` | `npx @modelcontextprotocol/server-memory` | Persistent cross-session knowledge graph — track architecture decisions, pattern evolution across sessions |
+| `@modelcontextprotocol/server-sequentialthinking` | `npx @modelcontextprotocol/server-sequentialthinking` | Structured multi-step reasoning for complex refactors (chain.toml consolidation, binary merger planning) |
+| `mcp-server-git` | `npx @modelcontextprotocol/server-git --repository /path` | Git operations beyond gh CLI — diff analysis, commit history, branch management for multi-branch workflow |
+| `@playwright/mcp` | `npx @playwright/mcp@latest` | Browser automation for vLog dashboard testing — accessibility tree based, deterministic, multi-browser |
+| `brave-search-mcp-server` | `npx brave-search-mcp-server` | Web search with API key — CVE lookup, Cosmos SDK changelog monitoring, dependency research |
+
+### MCP Client Configuration (VS Code)
+| Resource | URL | Notes |
+|----------|-----|-------|
+| VS Code MCP integration | https://code.visualstudio.com/docs/copilot/chat/mcp-servers | VS Code MCP server configuration guide |
+| @playwright/mcp | https://github.com/microsoft/playwright-mcp | Playwright MCP — browser automation via accessibility tree |
+| @playwright/mcp (npm) | https://www.npmjs.com/package/@playwright/mcp | npm package — `npx @playwright/mcp@latest` |
+| Brave Search MCP | https://github.com/brave/brave-search-mcp-server | Brave web/news/image search for AI agents |
+
+---
+
+## 19. Binary Consolidation & CLI Design
+
+### Multi-Binary Patterns
+| Resource | URL | Notes |
+|----------|-----|-------|
+| GoReleaser multi-binary | https://goreleaser.com/customization/builds/#multiple-builds | Multiple `builds:` entries in `.goreleaser.yaml` for `cmd/vprox` + `cmd/vlog` |
+| GoReleaser monorepo | https://goreleaser.com/customization/monorepo | GoReleaser support for multi-module repos |
+| Go cmd/ layout | https://go.dev/doc/modules/layout#server-project | Official Go project layout: `cmd/`, `internal/`, shared packages |
+
+### CLI Frameworks
+| Resource | URL | Notes |
+|----------|-----|-------|
+| cobra | https://github.com/spf13/cobra | CLI framework — subcommand trees, flag inheritance, auto-help; used by kubectl, gh, docker |
+| cobra user guide | https://github.com/spf13/cobra/blob/main/site/content/user_guide.md | Cobra patterns: PersistentFlags, PreRun, subcommand grouping |
+| flag (stdlib) | https://pkg.go.dev/flag | Go standard library flag parsing — current vProx approach |
+| go:embed fs.FS | https://pkg.go.dev/embed#hdr-File_Systems | Embedding static files as fs.FS for single-binary distribution |
+| UPX binary packer | https://upx.github.io | Binary compression — 50-70% size reduction; trade-off: slower startup |
+
+### Service Consolidation
+| Resource | URL | Notes |
+|----------|-----|-------|
+| systemd exec multiple binaries | https://www.freedesktop.org/software/systemd/man/systemd.service.html | ExecStartPre/ExecStartPost for coordinated multi-service → single-service migration |
+| errgroup | https://pkg.go.dev/golang.org/x/sync/errgroup | Concurrent server goroutine management with error propagation — ideal for multi-server binary |
+
+---
+
+## 20. Strategic Product Thinking
+
+### Prioritization Frameworks
+| Resource | URL | Notes |
+|----------|-----|-------|
+| RICE Scoring | https://www.intercom.com/blog/rice-simple-prioritization-for-product-managers | Reach × Impact × Confidence / Effort — Intercom's framework |
+| ICE Scoring | https://blog.growthhackers.com/the-practical-advantage-of-the-ice-score-as-a-test-prioritization-framework-cdd5f0f4571 | Impact × Confidence × Ease — lighter alternative to RICE |
+| Kano Model | https://foldingburritos.com/blog/kano-model | Feature classification: must-have, performance, delight |
+
+### Technical Debt
+| Resource | URL | Notes |
+|----------|-----|-------|
+| Martin Fowler — Tech Debt | https://martinfowler.com/bliki/TechnicalDebt.html | Debt quadrant: reckless/prudent × deliberate/inadvertent |
+| Tech Debt Metaphor (Cunningham) | https://wiki.c2.com/?WardExplainsDebtMetaphor | Original debt metaphor — design decisions as financial leverage |
+| Accelerate (Forsgren et al.) | https://itrevolution.com/product/accelerate | DORA metrics, velocity impact of tech debt |
+
+### Build vs Buy
+| Resource | URL | Notes |
+|----------|-----|-------|
+| Joel Spolsky — In-House vs Buy | https://www.joelonsoftware.com/2001/10/14/in-defense-of-not-invented-here-syndrome | When NIH is rational; core competency vs commodity |
+| Dependency risk analysis | https://research.swtch.com/deps | Russ Cox on dependency decisions — maintenance cost, transitive risk |
+
+---
+
+*Last updated: 2026-03-07 (rev17: §18 MCP Server Ecosystem NEW — filesystem, SQLite, memory, sequential-thinking, git, Playwright, Brave Search servers; §19 Binary Consolidation & CLI Design NEW — goreleaser, cobra, cmd/ layout, go:embed patterns; §20 Strategic Product Thinking NEW — RICE/ICE, tech debt, build/buy, MVP frameworks; Quick Domain Lookup updated)*

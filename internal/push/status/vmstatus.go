@@ -21,6 +21,10 @@ type VMStatus struct {
 	HostRef    string `json:"host_ref,omitempty"`
 	Type       string `json:"type"`
 
+	// RPC/REST endpoints (for dashboard probing)
+	RPCURL  string `json:"rpc_url,omitempty"`
+	RESTURL string `json:"rest_url,omitempty"`
+
 	// Probe config (forwarded for dashboard ping)
 	PingCountry  string `json:"ping_country,omitempty"`
 	PingProvider string `json:"ping_provider,omitempty"`
@@ -66,6 +70,8 @@ func pollVM(vm config.VM, cfg *config.Config) VMStatus {
 		PublicIP:     resolvePublicIP(vm, cfg),
 		HostRef:      vm.HostRef,
 		Type:         vm.Type,
+		RPCURL:       vm.RPC(),
+		RESTURL:      vm.REST(),
 		PingCountry:  vm.Ping.Country,
 		PingProvider: vm.Ping.Provider,
 		PolledAt:     time.Now(),

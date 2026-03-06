@@ -1,6 +1,18 @@
 # vms.toml — push VM registry
 # rev: {{SAMPLE_REV}}
 #
+# ── DEPRECATION NOTICE (v1.3.0) ────────────────────────────────────────────────
+#
+# vms.toml is DEPRECATED in favour of [management] sections in chain.toml.
+#
+# Migration: add a [management] block to each chain's TOML file in
+# $VPROX_HOME/config/chains/ and set managed_host = true.  See
+# config/chains/chain.sample.toml for the complete field reference.
+#
+# Backward compatibility: vms.toml continues to work. When both exist,
+# chain.toml [management] entries take precedence for matching chains.
+# This file will be removed in a future major release.
+#
 # ── TOPOLOGY ────────────────────────────────────────────────────────────────────
 #
 # Option A: Physical host + VMs (recommended for home labs / bare-metal setups)

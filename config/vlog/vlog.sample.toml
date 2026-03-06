@@ -46,22 +46,38 @@ watch_interval_sec = 60
 # ── push module (validator deployment control plane) ───────────────────────
 # Enables the Deploy Wizard and Chain Status panels on the vLog dashboard.
 # The push module SSHes to validator VMs and runs chain scripts from vProx.
-# Leave vms_path empty to disable the push module (no VM/chain status polling).
+#
+# v1.3.0: the push module can now be configured entirely from chain.toml
+# [management] sections — no vms.toml required. Set managed_host = true in
+# any chain config to automatically register that node with the push module.
 [vlog.push]
 # Path to the VM registry file (vms.toml).
+# DEPRECATED (v1.3.0): use [management] in chain.toml instead.
 # Default: "" (empty) → uses $VPROX_HOME/config/push/vms.toml
 # Override by setting to an absolute path if vms.toml is stored elsewhere.
 vms_path = ""
 
+# Directory containing chain TOML files with [management] sections.
+# Default: "" (empty) → uses $VPROX_HOME/config/chains
+# Only needed if your chains directory is not at the standard location.
+chains_dir = ""
+
 # Path to the push module's SQLite state database (deployment history).
 # Default: "" (empty) → uses $VPROX_HOME/data/push.db
-# Override by setting to an absolute path (e.g. on a mounted volume).
 db_path = ""
 
 # How often (seconds) to poll chain status (block height, governance, etc.).
 # Set to 0 to disable background polling (use on-demand polling only).
 # Default: 60
 poll_interval_sec = 60
+
+# ── push global defaults ───────────────────────────────────────────────────
+# Default SSH credentials for chain-managed hosts.
+# Applied when [management] user or key_path are empty in chain.toml.
+# Generate the push key: ssh-keygen -t ed25519 -C "vprox-push" -f $HOME/.vprox/secret/id.push
+[vlog.push.defaults]
+user     = ""    # default SSH user for all chain-managed hosts
+key_path = ""    # default SSH private key path ($HOME expanded at runtime)
 
 [vlog.intel]
 # Automatically enrich new IP accounts with threat intelligence.

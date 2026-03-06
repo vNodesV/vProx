@@ -9,6 +9,14 @@ schema_version = 1
 chain_name     = "your_chain"
 host           = "api-link.example.com"
 ip             = "127.0.0.1"
+
+# Official chain-id (e.g. "cheqd-mainnet-1"). Used by vLog dashboard for explorer links.
+chain_id       = ""
+
+# Block explorer base URL. Leave empty to disable explorer links on the dashboard.
+# Examples: "ping.pub", "testnets.ping.pub", "https://testnet-explorer.cheqd.io"
+explorer_base  = ""
+
 default_ports  = false
 msg_rpc        = false   # enable rpc_msg banner on RPC index
 msg_api        = false   # enable api_msg banner on REST/swagger
@@ -64,9 +72,50 @@ api_aliases    = []      # e.g. ["api-alt.example.com"]
     file   = "your_chain.log"       # Per-chain log file (logs in data/logs/)
     format = "summary"              # summary | json | raw
 
-[explorer]
-    # Block explorer used by vLog dashboard for governance and upgrade links.
-    # chain_id is the official chain-id (e.g. "cheqd-mainnet-1"); the slug
-    # for the explorer URL is derived by trimming from the first "-" onwards.
-    explorer = "ping.pub"
-    chain_id = ""       # e.g. "cheqd-mainnet-1" → https://ping.pub/cheqd/gov
+# ── Management (v1.3.0) ────────────────────────────────────────────────────────
+# Embeds server/VM management directly in chain.toml.
+# When managed_host = true, this replaces the [[vm]] entry in config/push/vms.toml.
+#
+# Global SSH defaults (user, key_path) are read from [vlog.push.defaults] in vlog.toml
+# and applied when the fields below are left empty ("").
+#
+# Note: fields left at their default values are described in the comments.
+[management]
+# Set to true to enable push module management for this chain's node.
+managed_host     = false
+
+# LAN / SSH target IP of the node. Defaults to chain.ip when empty.
+lan_ip           = ""
+
+# Public IP (display-only, shown in the Server Status block). Optional.
+public_ip        = ""
+
+# SSH user. Empty = fall back to [vlog.push.defaults].user.
+user             = ""
+
+# Path to the SSH private key. Empty = fall back to [vlog.push.defaults].key_path.
+key_path         = ""
+
+# SSH port. 0 = default (22).
+port             = 0
+
+# Service role(s) for this node. Used for dashboard badges.
+# Values: "validator", "sp", "relayer", "node" (list multiple roles)
+type             = ["validator"]
+
+# Datacenter / location label shown on the dashboard (e.g. "QC", "RBX", "AMS").
+datacenter       = ""
+
+# When true, vLog probes this node via the public chain.host domain (through vProx).
+# Set false if vLog is on the same LAN as the node and should probe via lan_ip directly.
+exposed_services = true
+
+[management.ping]
+# ISO 3166-1 alpha-2 country code of the datacenter's country.
+# vLog uses check-host.net to probe from a regional node in this country,
+# populating the DC latency column on the Chain Status dashboard.
+# Supported values: CA  US  FR  DE  NL  GB  FI  JP  SG  BR  IN
+country  = ""
+# (optional) Pin to a specific check-host.net node, e.g. "ca1", "fi1".
+# Leave empty to select randomly from the country's available nodes.
+provider = ""

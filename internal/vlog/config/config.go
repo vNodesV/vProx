@@ -89,11 +89,31 @@ type IntelKeys struct {
 	Shodan     string `toml:"shodan"`
 }
 
+// PushDefaults holds global SSH credential defaults for chain-managed hosts.
+// Applied when [management] user or key_path are empty in chain.toml.
+type PushDefaults struct {
+	// User is the default SSH username for chain-managed hosts.
+	User string `toml:"user"`
+	// KeyPath is the default SSH private key path for chain-managed hosts.
+	KeyPath string `toml:"key_path"`
+}
+
 // PushConfig configures the integrated push validator deployment module.
 type PushConfig struct {
 	// VMsPath is the path to the VM registry TOML file.
 	// Default: $VPROX_HOME/config/push/vms.toml
+	// DEPRECATED (v1.3.0): use chain.toml [management] sections instead.
+	// vms.toml still works; chain [management] entries take precedence for matching chains.
 	VMsPath string `toml:"vms_path"`
+
+	// ChainsDir is the directory containing chain TOML files with [management] sections.
+	// When set, the push module reads managed_host=true entries in addition to vms.toml.
+	// Default: $VPROX_HOME/config/chains
+	ChainsDir string `toml:"chains_dir"`
+
+	// Defaults holds global SSH credential fallbacks for chain-managed hosts.
+	// Applied when [management] user or key_path are empty in a chain.toml file.
+	Defaults PushDefaults `toml:"defaults"`
 
 	// DBPath is the path to the push SQLite state database.
 	// Default: $VPROX_HOME/data/push.db
@@ -210,6 +230,9 @@ func Load(path string) (Config, error) {
 	}
 	if strings.TrimSpace(cfg.VLog.Push.VMsPath) == "" {
 		cfg.VLog.Push.VMsPath = filepath.Join(home, "config", "push", "vms.toml")
+	}
+	if strings.TrimSpace(cfg.VLog.Push.ChainsDir) == "" {
+		cfg.VLog.Push.ChainsDir = filepath.Join(home, "config", "chains")
 	}
 	if strings.TrimSpace(cfg.VLog.Push.DBPath) == "" {
 		cfg.VLog.Push.DBPath = filepath.Join(home, "data", "push.db")

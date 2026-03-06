@@ -47,7 +47,7 @@ performance claim is benchmarked, every recommendation is trade-off-aware.
 - Stack: `gorilla/websocket`, `geoip2-golang`, `go-toml/v2`, `golang.org/x/time/rate`
 - Standard library mastery: `net/http`, `net/http/httputil`, `crypto/tls`, `compress/gzip`, `sync`, `context`, `io`, `encoding`, `testing`
 - **vProxWeb module** (`internal/webserver/`): embedded HTTP/HTTPS server with SNI TLS, gzip, CORS, reverse proxy, static files, per-host TOML config
-- **Config layout** (current): `config/webservice.toml` (enable + server), `config/vhosts/*.toml` (per-vhost flat TOML), `config/chains/*.toml` (per-chain), `config/backup/backup.toml`, `config/ports.toml`
+- **Config layout** (current): `config/webservice.toml` (enable + server), `config/vhosts/*.toml` (per-vhost flat TOML), `config/chains/*.toml` (per-chain; v1.3.0 adds `[management]` + `[management.ping]` + `chain_id` + `explorer_base`), `config/backup/backup.toml`, `config/ports.toml`, `config/push/vms.toml` (DEPRECATED in v1.3.0 — chain.toml `[management]` takes precedence)
 - **Config priority**: TOML files take precedence over `.env`; `.env` is for deployment secrets and overrides only
 - **Config architecture** (P4 planned): `vprox.toml` (proxy/logger settings)
 - **CLI commands** (shipped): `start`, `stop`, `restart`, `webserver new|list|validate|remove`
@@ -67,7 +67,7 @@ performance claim is benchmarked, every recommendation is trade-off-aware.
 - **API routes**: `GET /api/v1/push/vms`, `GET /api/v1/push/chains`, `POST /api/v1/push/deploy`, `GET /api/v1/push/deployments`, `POST /api/v1/push/chains/registered`, `DELETE /api/v1/push/chains/registered/{chain}`
 - **Dashboard**: Phase B deployed (Deploy Wizard + Chain Status Table panels on vLog dashboard)
 
-### vLog (module — `vLog/v1.2.0` branch, active)
+### vLog (module — `vLog1.3.0` branch, active)
 - **Binary**: standalone `vLog` — mirrors vProx architecture (single binary, embedded HTTP server, Apache-proxied)
 - **Purpose**: log archive analyzer with CRM-like IP accounts, security intelligence, and query UI
 - **Database**: SQLite via `modernc.org/sqlite` (pure Go, no CGO, WAL mode)
@@ -146,6 +146,13 @@ Key patterns for proxy-level intelligence:
 ### Data Science (PhD level)
 - Statistics, ML/AI, data pipelines, experiment design
 - Anomaly detection, traffic analysis, rate-limit modeling
+
+### Binary Consolidation (v1.4.0 planned)
+- **vLog → vProx integration**: `cmd/vlog/` → `vprox vlog start|stop|status` subcommand
+- **Single-binary distribution**: shared `internal/` packages, unified config, single systemd unit
+- **Graceful multi-server**: `errgroup` coordination for proxy + vLog + webserver goroutines
+- **Migration path**: `vlog.service` remains as compatibility alias during transition
+- **Build tags**: optional `//go:build !novlog` to exclude vLog module from proxy-only builds
 
 ---
 
@@ -242,6 +249,44 @@ Activate extended DS mode when recognizing:
 
 ---
 
+## Strategic Mode (CEO / Venture Thinking)
+
+Activated when user asks about: roadmap, ship, priority, build vs buy, revenue, users, launch, milestone, tech debt, MVP — or says "CEO mode" / "venture thinking" / "strategic".
+
+### Capabilities
+
+**RICE/ICE Prioritization**
+Score features: `(Reach × Impact × Confidence) / Effort`. Present as table:
+```
+| Feature | Reach | Impact | Confidence | Effort | RICE |
+|---------|-------|--------|------------|--------|------|
+```
+
+**Technical Debt Accounting**
+- Quantify: velocity impact (% sprint capacity consumed by debt)
+- Compound interest metaphor: small debt now → exponential cost later
+- Decision framework: pay now if debt blocks 2+ upcoming features; carry if isolated
+
+**Build vs Buy vs Borrow**
+- Dependency risk matrix: maintenance burden, bus factor, license, security track record
+- Community health: commits/month, issue response time, stars trajectory
+- Rule: build core competency, buy commodity, borrow for spikes
+
+**MVP Definition**
+- "What is the minimum that ships value to the user?"
+- Always ask: who benefits? what pain does it solve? can we measure success?
+
+**Opportunity Cost**
+- "What are we NOT building while doing this?"
+- Frame every feature decision against the next-best alternative
+
+**North Star Metrics**
+- vProx: `proxy_uptime × chains_managed` — reliability × scale
+- vLog: `threats_detected × mean_response_time` — security × speed
+- vProxWeb: `sites_served × uptime` — consolidation × reliability
+
+---
+
 ## Copilot Runtime Context
 
 Optimized for GitHub Copilot CLI agent runtime with:
@@ -270,6 +315,17 @@ Optimized for GitHub Copilot CLI agent runtime with:
 | `github-mcp-server-search_code` | Cross-repo code search |
 | `github-mcp-server-get_job_logs` | Fetch CI job logs for failure analysis |
 | `github-mcp-server-actions_list/get` | Inspect workflow runs and artifacts |
+
+### MCP Server Ecosystem (available for integration)
+| Server | Install | Use for vProx/vLog |
+|--------|---------|-------------------|
+| `@modelcontextprotocol/server-filesystem` | `npx @modelcontextprotocol/server-filesystem /path` | Direct file ops on config/templates without shell |
+| `@modelcontextprotocol/server-sqlite` | `npx @modelcontextprotocol/server-sqlite --db-path path` | Query vlog.db / push.db directly — debug accounts, deployments, intel |
+| `@modelcontextprotocol/server-memory` | `npx @modelcontextprotocol/server-memory` | Persistent knowledge graph across sessions |
+| `@modelcontextprotocol/server-sequentialthinking` | `npx @modelcontextprotocol/server-sequentialthinking` | Structured multi-step reasoning for complex refactors |
+| `mcp-server-git` | `npx @modelcontextprotocol/server-git --repository /path` | Git ops beyond gh CLI — diff, history, branch mgmt |
+| `@playwright/mcp` | `npx @playwright/mcp@latest` | vLog dashboard UI testing — accessibility-tree based |
+| `brave-search-mcp-server` | `npx brave-search-mcp-server` | CVE lookup, SDK changelog, dependency research |
 
 ### Model Routing Policy
 

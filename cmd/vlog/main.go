@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/vNodesV/vProx/internal/push"
+	pushcfg "github.com/vNodesV/vProx/internal/push/config"
 	"github.com/vNodesV/vProx/internal/vlog/config"
 	"github.com/vNodesV/vProx/internal/vlog/db"
 	"github.com/vNodesV/vProx/internal/vlog/ingest"
@@ -380,25 +381,66 @@ func cmdStart(f flags) int {
 		watcher.Start()
 	}
 
-	// Push module — initialize if vms.toml exists at the configured path.
+	// Push module — initialize from vms.toml (legacy) and/or chain [management] sections.
 	var pushSvc *push.Service
-	if _, err := os.Stat(cfg.VLog.Push.VMsPath); err == nil {
-		svc, err := push.New(cfg.VLog.Push.VMsPath, cfg.VLog.Push.DBPath)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "vlog: push init warning: %v (push module disabled)\n", err)
+	{
+		vmsPath := cfg.VLog.Push.VMsPath
+		chainsDir := cfg.VLog.Push.ChainsDir
+		defs := pushcfg.PushDefaults{
+			User:    cfg.VLog.Push.Defaults.User,
+			KeyPath: cfg.VLog.Push.Defaults.KeyPath,
+		}
+
+		_, vmsStatErr := os.Stat(vmsPath)
+		vmsExists := vmsStatErr == nil
+
+		if !vmsExists && vmsStatErr != nil && !os.IsNotExist(vmsStatErr) {
+			// File exists but can't be read (permission error, etc.) — warn once.
+			fmt.Fprintf(os.Stderr, "vlog: push vms.toml error: %v\n", vmsStatErr)
+		}
+
+		if vmsExists {
+			// Legacy path: initialize from vms.toml, then merge chain management on top.
+			svc, err := push.New(vmsPath, cfg.VLog.Push.DBPath)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "vlog: push init warning: %v (push module disabled)\n", err)
+			} else {
+				pushSvc = svc
+				defer svc.Close()
+				if _, err := os.Stat(chainsDir); err == nil {
+					if err := svc.AddChainConfigs(chainsDir, defs); err != nil {
+						fmt.Fprintf(os.Stderr, "vlog: chain management warning: %v\n", err)
+					}
+				}
+				go svc.StartPolling(context.Background(), time.Duration(cfg.VLog.Push.PollIntervalSec)*time.Second)
+				if !f.quiet {
+					fmt.Fprintf(os.Stdout, "  push:     %s (%ds poll)\n", vmsPath, cfg.VLog.Push.PollIntervalSec)
+				}
+			}
 		} else {
-			pushSvc = svc
-			defer svc.Close()
-			go svc.StartPolling(context.Background(), time.Duration(cfg.VLog.Push.PollIntervalSec)*time.Second)
-			if !f.quiet {
-				fmt.Fprintf(os.Stdout, "  push:     %s (%ds poll)\n", cfg.VLog.Push.VMsPath, cfg.VLog.Push.PollIntervalSec)
+			// No vms.toml — try chain management sections as sole source.
+			if _, err := os.Stat(chainsDir); err == nil {
+				svc, err := push.NewEmpty(cfg.VLog.Push.DBPath)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "vlog: push db error: %v\n", err)
+				} else {
+					if err := svc.AddChainConfigs(chainsDir, defs); err != nil {
+						fmt.Fprintf(os.Stderr, "vlog: chain management warning: %v\n", err)
+					}
+					if len(svc.VMs()) > 0 {
+						pushSvc = svc
+						defer svc.Close()
+						go svc.StartPolling(context.Background(), time.Duration(cfg.VLog.Push.PollIntervalSec)*time.Second)
+						if !f.quiet {
+							fmt.Fprintf(os.Stdout, "  push:     chain management (%ds poll)\n", cfg.VLog.Push.PollIntervalSec)
+						}
+					} else {
+						svc.Close()
+					}
+				}
 			}
 		}
-	} else if !os.IsNotExist(err) {
-		// File exists but can't be read (permission error, etc.) — warn once.
-		fmt.Fprintf(os.Stderr, "vlog: push vms.toml error: %v (push module disabled)\n", err)
 	}
-	// else: file doesn't exist at default/configured path; silently skip push module (normal state).
 
 	server, err := web.New(database, enricher, ingester, cfg, pushSvc)
 	if err != nil {
