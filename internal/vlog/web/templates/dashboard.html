@@ -865,7 +865,8 @@
       })
       .catch(function() { if (btn) { btn.disabled = false; btn.textContent = 'Ping'; } });
   };
-  };
+
+  window.loadVMStatus = loadVMStatus;
 
   // Load immediately at pageload; use 10s stagger for INTERVAL to avoid SSH burst with CS.
   loadVMStatus();
