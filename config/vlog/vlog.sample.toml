@@ -10,30 +10,33 @@ port = 8889
 # → If Apache is on the SAME machine: keep 127.0.0.1, point ProxyPass to http://127.0.0.1:8889/
 # → If Apache is on a DIFFERENT machine: set to this server's LAN IP (e.g. "10.0.0.65")
 #   and restrict with UFW: ufw allow from <apache-ip> to any port 8889
-# bind_address = "127.0.0.1"
+bind_address = "127.0.0.1"
 
 # URL base path when vLog is served behind a reverse proxy at a sub-path.
 # Example: set to "/vlog" if Apache proxies https://example.com/vlog → vLog.
 # Leave empty (default) when vLog is served at the root path.
-# base_path = "/vlog"
+base_path = ""
 
 # API key required to call the block/unblock endpoints (POST /api/v1/block/{ip}).
 # These endpoints manipulate UFW firewall rules — they must be protected.
 # Leave empty to disable block/unblock entirely (endpoints return 503).
 # Generate a strong key: openssl rand -hex 32
-# api_key = ""
+api_key = ""
 
 # Path to the SQLite database file.
-# Default: $VPROX_HOME/data/vlog.db
-# db_path = "/home/user/.vProx/data/vlog.db"
+# Default: "" (empty) → uses $VPROX_HOME/data/vlog.db
+# Override by setting to an absolute path (e.g. "/data/vlog.db" on a mounted volume).
+db_path = ""
 
 # Directory containing vProx log archives (*.tar.gz).
-# Default: $VPROX_HOME/data/logs/archives
-# archives_dir = "/home/user/.vProx/data/logs/archives"
+# Default: "" (empty) → uses $VPROX_HOME/data/logs/archives
+# Override by setting to an absolute path if archives are stored elsewhere.
+archives_dir = ""
 
 # Path to the vProx executable used by the "Refresh" (backup) dashboard button.
 # Default: "vprox" (resolved from $PATH at runtime).
-# vprox_bin = "/usr/local/bin/vprox"
+# Override if vProx is installed at a non-standard location.
+vprox_bin = "vprox"
 
 # How often (seconds) to poll archives_dir for new archives.
 # Set to 0 to disable background polling (use on-demand ingest only).
@@ -42,12 +45,23 @@ watch_interval_sec = 60
 
 # ── push module (validator deployment control plane) ───────────────────────
 # Enables the Deploy Wizard and Chain Status panels on the vLog dashboard.
-# The push module SSHes to validator VMs and runs chain scripts from vApp.
-# Leave vms_path unset (or point to a non-existent file) to disable.
+# The push module SSHes to validator VMs and runs chain scripts from vProx.
+# Leave vms_path empty to disable the push module (no VM/chain status polling).
 [vlog.push]
-# vms_path        = "/etc/vprox/config/push/vms.toml"   # VM registry
-# db_path         = "/etc/vprox/data/push.db"            # deployment history
-# poll_interval_sec = 60                                  # chain status refresh
+# Path to the VM registry file (vms.toml).
+# Default: "" (empty) → uses $VPROX_HOME/config/push/vms.toml
+# Override by setting to an absolute path if vms.toml is stored elsewhere.
+vms_path = ""
+
+# Path to the push module's SQLite state database (deployment history).
+# Default: "" (empty) → uses $VPROX_HOME/data/push.db
+# Override by setting to an absolute path (e.g. on a mounted volume).
+db_path = ""
+
+# How often (seconds) to poll chain status (block height, governance, etc.).
+# Set to 0 to disable background polling (use on-demand polling only).
+# Default: 60
+poll_interval_sec = 60
 
 [vlog.intel]
 # Automatically enrich new IP accounts with threat intelligence.
