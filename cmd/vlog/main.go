@@ -394,7 +394,11 @@ func cmdStart(f flags) int {
 				fmt.Fprintf(os.Stdout, "  push:     %s (%ds poll)\n", cfg.VLog.Push.VMsPath, cfg.VLog.Push.PollIntervalSec)
 			}
 		}
+	} else if !os.IsNotExist(err) {
+		// File exists but can't be read (permission error, etc.) — warn once.
+		fmt.Fprintf(os.Stderr, "vlog: push vms.toml error: %v (push module disabled)\n", err)
 	}
+	// else: file doesn't exist at default/configured path; silently skip push module (normal state).
 
 	server, err := web.New(database, enricher, ingester, cfg, pushSvc)
 	if err != nil {
