@@ -1,4 +1,5 @@
 # ports.toml — Default port assignments and global proxy settings.
+# rev: {{SAMPLE_REV}}
 # Copy to config/ports.toml and adjust for your deployment.
 
 rpc     = 26657

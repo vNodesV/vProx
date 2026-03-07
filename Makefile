@@ -26,7 +26,7 @@ DIR_LIST := $(DATA_DIR) $(LOG_DIR) $(CFG_DIR) $(CFG_DIR)/chains $(CFG_DIR)/backu
 # Sample file revision — format: r{major}_{MMDDYY}_{seq}
 # Increment {seq} for multiple revisions on the same day; reset to 0 on new date.
 # Injected into the "# rev: {{SAMPLE_REV}}" placeholder in every .sample.toml at install/refresh time.
-SAMPLE_REV := r2_030626_0
+SAMPLE_REV := r2_030726_0
 
 # GeoLocation database — bundled in assets/geo/, extracted to user data dir
 GEO_DB_SRC := assets/geo/ip2location.mmdb.gz
@@ -143,24 +143,29 @@ env:
 config: dirs config-push config-modules
 	@if [[ ! -f "$(CFG_DIR)/ports.toml" ]]; then \
 		echo "Creating default ports.toml..."; \
-		{ \
-			echo "# Default ports for all chains (override per-chain with default_ports = false)"; \
-			echo "rpc      = 26657"; \
-			echo "rest     = 1317"; \
-			echo "grpc     = 9090"; \
-			echo "grpc_web = 9091"; \
-			echo "api      = 1317"; \
-		} > "$(CFG_DIR)/ports.toml"; \
-		echo "✓ Created $(CFG_DIR)/ports.toml"; \
+		if [[ -f "config/chains/ports.sample.toml" ]]; then \
+			sed "s/{{SAMPLE_REV}}/$(SAMPLE_REV)/" "config/chains/ports.sample.toml" > "$(CFG_DIR)/ports.toml"; \
+			echo "✓ Installed ports.toml → $(CFG_DIR)/ports.toml"; \
+		else \
+			{ \
+				echo "# Default ports for all chains (override per-chain with default_ports = false)"; \
+				echo "rpc      = 26657"; \
+				echo "rest     = 1317"; \
+				echo "grpc     = 9090"; \
+				echo "grpc_web = 9091"; \
+				echo "api      = 1317"; \
+			} > "$(CFG_DIR)/ports.toml"; \
+			echo "✓ Created $(CFG_DIR)/ports.toml (minimal fallback)"; \
+		fi \
 	else \
 		echo "✓ $(CFG_DIR)/ports.toml already exists"; \
 	fi
 	@if [[ ! -f "$(CFG_DIR)/backup/backup.toml" ]]; then \
-		if [[ -f "config/backup.sample.toml" ]]; then \
-			cp "config/backup.sample.toml" "$(CFG_DIR)/backup/backup.toml"; \
-			echo "✓ Copied backup.sample.toml to $(CFG_DIR)/backup/backup.toml"; \
+		if [[ -f "config/backup/backup.sample.toml" ]]; then \
+			sed "s/{{SAMPLE_REV}}/$(SAMPLE_REV)/" "config/backup/backup.sample.toml" > "$(CFG_DIR)/backup/backup.toml"; \
+			echo "✓ Installed backup.toml → $(CFG_DIR)/backup/backup.toml"; \
 		else \
-			echo "NOTE: config/backup.sample.toml not found; skipping backup.toml install"; \
+			echo "NOTE: config/backup/backup.sample.toml not found; skipping backup.toml install"; \
 		fi \
 	else \
 		echo "✓ $(CFG_DIR)/backup/backup.toml already exists"; \
@@ -200,10 +205,11 @@ samples-push:
 		fi; \
 	}; \
 	_copy() { sed "s/{{SAMPLE_REV}}/$$_rev/" "$$1" > "$$2" && echo "✓ $$2 [$$_rev]"; }; \
-	_archive "$(CFG_DIR)/push/vms.sample.toml";      _copy "config/push/vms.sample.toml"     "$(CFG_DIR)/push/vms.sample.toml"; \
-	_archive "$(CFG_DIR)/vlog/vlog.sample.toml";     _copy "config/vlog/vlog.sample.toml"    "$(CFG_DIR)/vlog/vlog.sample.toml"; \
-	_archive "$(CFG_DIR)/chains/chain.sample.toml";  _copy "config/chains/chain.sample.toml" "$(CFG_DIR)/chains/chain.sample.toml"; \
-	_archive "$(CFG_DIR)/backup/backup.sample.toml"; _copy "config/backup.sample.toml"       "$(CFG_DIR)/backup/backup.sample.toml"
+	_archive "$(CFG_DIR)/push/vms.sample.toml";      _copy "config/push/vms.sample.toml"           "$(CFG_DIR)/push/vms.sample.toml"; \
+	_archive "$(CFG_DIR)/vlog/vlog.sample.toml";     _copy "config/vlog/vlog.sample.toml"          "$(CFG_DIR)/vlog/vlog.sample.toml"; \
+	_archive "$(CFG_DIR)/chains/chain.sample.toml";  _copy "config/chains/chain.sample.toml"       "$(CFG_DIR)/chains/chain.sample.toml"; \
+	_archive "$(CFG_DIR)/chains/ports.sample.toml";  _copy "config/chains/ports.sample.toml"       "$(CFG_DIR)/chains/ports.sample.toml"; \
+	_archive "$(CFG_DIR)/backup/backup.sample.toml"; _copy "config/backup/backup.sample.toml"      "$(CFG_DIR)/backup/backup.sample.toml"
 	@echo "Done. Samples refreshed with $(SAMPLE_REV)."
 
 ## Install modules registry stub
