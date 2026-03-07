@@ -206,9 +206,14 @@ Recommendation: Option [X] because [evidence].
 2. HYPOTHESIZE  → Form root cause hypothesis; state assumptions explicitly.
 3. INVESTIGATE  → Confirm with code inspection, logs, or tool output.
 4. PATCH        → Apply minimal targeted fix (or present options if non-trivial).
+                  ↳ If refactoring: invoke [refactor] skill before rewriting.
 5. VERIFY       → Format, build, test, benchmark (as appropriate to scope).
+                  ↳ If tests needed: invoke [polyglot-test-agent] skill.
 6. DOCUMENT     → Update inline docs, config docs, migration notes if behavior changed.
+                  ↳ If docs > 1 file: invoke [documentation-writer] skill.
 7. SUMMARIZE    → Changed files, verification performed, open follow-ups, next steps.
+                  ↳ On commit: invoke [git-commit] → then [conventional-commit] to validate.
+                  ↳ On release/deploy: invoke [devops-rollout-plan] before pushing to main/tag.
 ```
 
 For data science tasks, extend steps 2–4 with:
@@ -393,6 +398,29 @@ Always specify `model:` in `task` calls. Parallelize when tasks are independent.
 | `agents/projects/vprox.state.md` | vProx project memory (Copilot sessions) |
 | `agents/projects/vproxweb.vscode.state.md` | vProxWeb module project memory |
 | `.github/agents/reviewer.agent.md` | PR review quality gatekeeper |
+
+---
+
+## Installed Skills (`.github/skills/` — auto-loaded every session)
+
+These skills are installed locally in `.github/skills/` and are **automatically available** in every
+Copilot session. Invoke them explicitly when the trigger conditions match. Do not re-download; use as-is.
+
+| Skill | Trigger Conditions | Bundled Assets |
+|-------|--------------------|----------------|
+| [`polyglot-test-agent`](.github/skills/polyglot-test-agent/) | Writing/generating Go tests; improving coverage; "add test coverage"; "write unit tests" | `unit-test-generation.prompt.md` |
+| [`conventional-commit`](.github/skills/conventional-commit/) | Generating commit messages; validating commit format; enforcing `feat(scope):` style | None |
+| [`git-commit`](.github/skills/git-commit/) | User says "commit", "/commit"; auto-stage + message from diff | None |
+| [`devops-rollout-plan`](.github/skills/devops-rollout-plan/) | v1.x.0 releases; systemd service deploys; "rollout plan"; preflight + rollback procedures | None |
+| [`refactor`](.github/skills/refactor/) | Code smell removal; extracting functions; breaking god functions; "refactor this"; "improve maintainability" | None |
+| [`documentation-writer`](.github/skills/documentation-writer/) | Writing/updating README, MODULES, SECURITY, CLI guides; Diataxis-style docs | None |
+
+**Auto-invoke rules:**
+- Any test generation request → **polyglot-test-agent** (before writing tests manually)
+- Any commit operation → **git-commit** (generates message from diff) + **conventional-commit** (validates format)
+- Any production deploy / release → **devops-rollout-plan** (before `git push` to main or tag)
+- Any "clean up", "simplify", "extract" code request → **refactor**
+- Any documentation update > 1 file → **documentation-writer**
 
 ---
 
@@ -691,7 +719,7 @@ Skill source: `https://github.com/github/awesome-copilot/blob/main/docs/README.s
               write-coding-standards-from-file
 
   4c. Resources library (new references, dead-link pruning):
-      Skills: documentation-writer
+      Skills: documentation-writer ✅ INSTALLED (.github/skills/documentation-writer/)
               microsoft-docs
               microsoft-code-reference
               microsoft-skill-creator
@@ -730,10 +758,10 @@ Skill source: `https://github.com/github/awesome-copilot/blob/main/docs/README.s
 
   4g. CI/CD + DevOps files:
       Skills: create-github-action-workflow-specification
-              devops-rollout-plan
-              git-commit
+              devops-rollout-plan ✅ INSTALLED (.github/skills/devops-rollout-plan/)
+              git-commit ✅ INSTALLED (.github/skills/git-commit/)
               git-flow-branch-creator
-              conventional-commit
+              conventional-commit ✅ INSTALLED (.github/skills/conventional-commit/)
               make-repo-contribution
               editorconfig
               multi-stage-dockerfile
@@ -760,11 +788,11 @@ Skill source: `https://github.com/github/awesome-copilot/blob/main/docs/README.s
               copilot-instructions-blueprint-generator
 
   4j. Code quality + security:
-      Skills: refactor
+      Skills: refactor ✅ INSTALLED (.github/skills/refactor/)
               refactor-plan
               refactor-method-complexity-reduce
               review-and-refactor
-              polyglot-test-agent
+              polyglot-test-agent ✅ INSTALLED (.github/skills/polyglot-test-agent/)
               ai-prompt-engineering-safety-review
               sql-code-review
               sql-optimization
@@ -833,8 +861,8 @@ Skill source: `https://github.com/github/awesome-copilot/blob/main/docs/README.s
 6. REPORT       → Changed files, gaps closed, new capabilities, upgrade history entry.
                    Commit with conventional message; create issues for deferred items.
                    Skills: tldr-prompt
-                           conventional-commit
-                           git-commit
+                           conventional-commit ✅ INSTALLED
+                           git-commit ✅ INSTALLED
                            make-repo-contribution
                            github-issues
                            create-github-issue-feature-from-specification
