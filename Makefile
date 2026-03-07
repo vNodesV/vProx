@@ -23,9 +23,10 @@ GEO_DIR := $(DATA_DIR)/geolocation
 DIR_LIST := $(DATA_DIR) $(LOG_DIR) $(CFG_DIR) $(CFG_DIR)/chains $(CFG_DIR)/backup \
             $(CFG_DIR)/push $(CFG_DIR)/vlog $(INTERNAL_DIR) $(ARCHIVE_DIR) $(SERVICE_DIR) $(GEO_DIR)
 
-# Sample file revision: rev<major.minor.patch>-<git-short-sha>
-# Injected into the "# rev: {{SAMPLE_REV}}" placeholder in every .sample.toml at copy time.
-SAMPLE_REV := rev1.0.0-$(shell git rev-parse --short HEAD 2>/dev/null || echo dev)
+# Sample file revision — format: r{major}_{MMDDYY}_{seq}
+# Increment {seq} for multiple revisions on the same day; reset to 0 on new date.
+# Injected into the "# rev: {{SAMPLE_REV}}" placeholder in every .sample.toml at install/refresh time.
+SAMPLE_REV := r2_030626_0
 
 # GeoLocation database — bundled in assets/geo/, extracted to user data dir
 GEO_DB_SRC := assets/geo/ip2location.mmdb.gz
@@ -46,7 +47,7 @@ EFFECTIVE_GOROOT  := $(if $(_TOOLCHAIN_GOROOT),$(_TOOLCHAIN_GOROOT),$(GOROOT))
 
 .PHONY: all install clean ufw help \
         validate-go dirs geo config config-push config-vlog config-modules \
-        build build-vlog systemd service-vlog
+        build build-vlog systemd service-vlog samples-push
 
 all: help
 
@@ -62,7 +63,7 @@ help:
 	@echo "  make ufw              Passwordless UFW sudoers for vLog block/unblock"
 	@echo ""
 
-install: validate-go dirs geo config config-vlog config-push config-modules env
+install: validate-go dirs geo config config-vlog config-push config-modules env samples-push
 
 ## Validate Go environment
 
@@ -137,16 +138,9 @@ env:
 		echo "✓ $(ENV_FILE) already exists"; \
 	fi
 
-## Copy chain sample config to user's chains directory
+## Install live config defaults (ports.toml, backup.toml) — samples handled by samples-push
 
 config: dirs config-push config-modules
-	@echo "Installing sample chain configuration..."
-	@if [[ -f "config/chains/chain.sample.toml" ]]; then \
-		cp "config/chains/chain.sample.toml" "$(CFG_DIR)/chains/chain.sample.toml"; \
-		echo "✓ Copied chain.sample.toml to $(CFG_DIR)/chains/"; \
-	else \
-		echo "WARNING: config/chains/chain.sample.toml not found in repo"; \
-	fi
 	@if [[ ! -f "$(CFG_DIR)/ports.toml" ]]; then \
 		echo "Creating default ports.toml..."; \
 		{ \
@@ -190,15 +184,26 @@ config-push:
 	fi
 
 ## Overwrite ALL sample files in CFG_DIR — safe to run anytime; never touches live config files.
-## Injects current git rev into each sample as: # rev: rev1.0.0-<sha>
+## Archives the existing sample before overwriting: *.sample.toml → archives/*.sample.toml.{old_rev}
 samples-push:
 	@mkdir -p "$(CFG_DIR)/push" "$(CFG_DIR)/vlog" "$(CFG_DIR)/chains" "$(CFG_DIR)/backup"
 	@_rev="$(SAMPLE_REV)"; \
+	_archive() { \
+		local dst="$$1" adir old_rev; \
+		adir="$$(dirname "$$dst")/archives"; \
+		if [[ -f "$$dst" ]]; then \
+			old_rev="$$(grep -m1 '^# rev:' "$$dst" 2>/dev/null | sed 's/.*# rev: *//' | tr -d '[:space:]')"; \
+			old_rev="$${old_rev:-unknown}"; \
+			mkdir -p "$$adir"; \
+			mv "$$dst" "$$adir/$$(basename "$$dst").$${old_rev}"; \
+			echo "  ↳ archived → $$adir/$$(basename "$$dst").$${old_rev}"; \
+		fi; \
+	}; \
 	_copy() { sed "s/{{SAMPLE_REV}}/$$_rev/" "$$1" > "$$2" && echo "✓ $$2 [$$_rev]"; }; \
-	_copy "config/push/vms.sample.toml"     "$(CFG_DIR)/push/vms.sample.toml"; \
-	_copy "config/vlog/vlog.sample.toml"    "$(CFG_DIR)/vlog/vlog.sample.toml"; \
-	_copy "config/chains/chain.sample.toml" "$(CFG_DIR)/chains/chain.sample.toml"; \
-	_copy "config/backup.sample.toml"       "$(CFG_DIR)/backup/backup.sample.toml"
+	_archive "$(CFG_DIR)/push/vms.sample.toml";      _copy "config/push/vms.sample.toml"     "$(CFG_DIR)/push/vms.sample.toml"; \
+	_archive "$(CFG_DIR)/vlog/vlog.sample.toml";     _copy "config/vlog/vlog.sample.toml"    "$(CFG_DIR)/vlog/vlog.sample.toml"; \
+	_archive "$(CFG_DIR)/chains/chain.sample.toml";  _copy "config/chains/chain.sample.toml" "$(CFG_DIR)/chains/chain.sample.toml"; \
+	_archive "$(CFG_DIR)/backup/backup.sample.toml"; _copy "config/backup.sample.toml"       "$(CFG_DIR)/backup/backup.sample.toml"
 	@echo "Done. Samples refreshed with $(SAMPLE_REV)."
 
 ## Install modules registry stub
@@ -252,14 +257,7 @@ add-%: validate-go dirs
 	    echo "✓ $(VLOG_NAME) → $(GOPATH_BIN)/$(VLOG_NAME)"; \
 	    $(MAKE) config-vlog; \
 	    $(MAKE) config-push; \
-	    if [[ -f "config/chains/chain.sample.toml" ]]; then \
-	      cp "config/chains/chain.sample.toml" "$(CFG_DIR)/chains/chain.sample.toml"; \
-	      echo "✓ Refreshed chain.sample.toml → $(CFG_DIR)/chains/"; \
-	    fi; \
-	    if [[ -f "config/push/vms.sample.toml" ]]; then \
-	      cp "config/push/vms.sample.toml" "$(CFG_DIR)/push/vms.sample.toml"; \
-	      echo "✓ Refreshed vms.sample.toml → $(CFG_DIR)/push/"; \
-	    fi; \
+	    $(MAKE) samples-push; \
 	    $(MAKE) service-vlog; \
 	    ;; \
 	  vProx|vprox) \
