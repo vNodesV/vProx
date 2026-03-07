@@ -367,6 +367,7 @@
   var chainPinging = false;
   var chainExpanded = false;
   var chainCachedData = null; // {chains, registeredSet, tmap}
+  var chainTreeExpanded = {}; // per chain_name group: true=expanded (default true)
 
   function showLoading(panelId) { window.showLoading(panelId); }
 
@@ -389,13 +390,13 @@
   function servicesPills(type) {
     var types = (type || '').toLowerCase().split(',').map(function(t){ return t.trim(); });
     return [
-      {key:'validator', label:'VAL'},
-      {key:'sp',        label:'API'},
-      {key:'rpc',       label:'RPC'},
-      {key:'relayer',   label:'RLY'},
-      {key:'node',      label:'NODE'}
+      {keys:['node','sp'],        label:'NODE'},
+      {keys:['validator'],        label:'VAL'},
+      {keys:['sp','rpc','api'],   label:'API/RPC'},
+      {keys:['relayer'],          label:'RLYR'}
     ].map(function(d) {
-      return '<span class="svc-pill' + (types.indexOf(d.key) >= 0 ? ' svc-on' : '') + '">' + d.label + '</span>';
+      var on = d.keys.some(function(k){ return types.indexOf(k) >= 0; });
+      return '<span class="svc-pill' + (on ? ' svc-on' : '') + '">' + d.label + '</span>';
     }).join('');
   }
   function updateCountdown() {
@@ -420,13 +421,23 @@
     try { return new URL(url).hostname; }
     catch(e) { return url.replace(/^https?:\/\//,'').split(/[/:?#]/)[0]; }
   }
+  function deriveChainBase(c) {
+    if (c.chain_name) return c.chain_name;
+    var s = c.chain_id || c.chain || '';
+    var m = s.match(/^([a-zA-Z][a-zA-Z0-9]*)/);
+    return m ? m[1].toLowerCase() : s;
+  }
+  window.toggleChainGroup = function(key) {
+    chainTreeExpanded[key] = !(chainTreeExpanded[key] !== false);
+    if (chainCachedData) renderChainTable(chainCachedData);
+  };
+
   function renderChainTable(data) {
     var panel = document.getElementById('chain-status-panel');
     if (!panel) return;
-    var chains       = data.chains;
+    var chains        = data.chains;
     var registeredSet = data.registeredSet;
-    var tmap         = data.tmap;
-    var ex           = chainExpanded; // snapshot
+    var ex            = chainExpanded;
 
     if (!chains || chains.length === 0) {
       panel.innerHTML = '<p style="padding:.4rem;opacity:.5;font-size:.78rem">No chains configured.</p>';
@@ -439,9 +450,16 @@
     var catStyle = 'text-align:left;padding:.2rem .35rem;font-size:.68rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase;opacity:.45;border-bottom:1px solid var(--vn-border)';
     var rmStyle  = 'background:none;border:1px solid rgba(239,83,80,0.4);color:#ef5350;padding:.06rem .38rem;border-radius:3px;cursor:pointer;font-size:.7rem;transition:all 0.2s';
 
-    var rows = chains.map(function(c, idx) {
-      var height   = c.height          ? Number(c.height).toLocaleString()          : '—';
-      var earliest = c.earliest_height ? Number(c.earliest_height).toLocaleString() : '—';
+    function netBadge(nt) {
+      if (!nt) return '';
+      if (nt === 'testnet')
+        return ' <span style="font-size:.58rem;padding:.02rem .18rem;border-radius:2px;border:1px solid rgba(255,167,38,.45);color:#ffa726">testnet</span>';
+      return ' <span style="font-size:.58rem;padding:.02rem .18rem;border-radius:2px;border:1px solid rgba(76,175,80,.35);color:#4caf50;opacity:.7">mainnet</span>';
+    }
+
+    function buildChainRow(c, isChild) {
+      var height       = c.height          ? Number(c.height).toLocaleString()          : '—';
+      var earliest     = c.earliest_height ? Number(c.earliest_height).toLocaleString() : '—';
       var explorerBase = c.explorer_url || '';
       var activeProp;
       if (c.active_proposals > 0) {
@@ -460,8 +478,7 @@
         var upgURL = (c.upgrade_proposal_id && explorerBase)
           ? explorerBase + '/gov/' + encodeURIComponent(c.upgrade_proposal_id)
           : (explorerBase ? explorerBase + '/gov' : 'https://ping.pub/' + encodeURIComponent(c.chain) + '/gov');
-        var upgLabel = '@' + Number(c.upgrade_height).toLocaleString();
-        upg = '<a href="' + upgURL + '" target="_blank" rel="noopener" style="color:#ef5350;font-weight:600;text-decoration:none" title="' + escH(c.upgrade_name || '') + '">' + upgLabel + '</a>';
+        upg = '<a href="' + upgURL + '" target="_blank" rel="noopener" style="color:#ef5350;font-weight:600;text-decoration:none" title="' + escH(c.upgrade_name || '') + '">@' + Number(c.upgrade_height).toLocaleString() + '</a>';
       } else {
         upg = '<span style="opacity:.3">—</span>';
       }
@@ -471,15 +488,18 @@
       var rmBtn = registeredSet[c.chain]
         ? '<button onclick="removeChain(\'' + escH(c.chain) + '\')" style="' + rmStyle + '">remove</button>'
         : '';
+      var indentPfx = isChild ? 'padding-left:.9rem;' : '';
+      var monikerPfx = isChild ? '<span style="opacity:.3;font-size:.65rem;margin-right:.25rem">└</span>' : '';
+      var monikerContent = monikerPfx + escH(c.dashboard_name || c.moniker || c.chain) + netBadge(isChild ? c.network_type : null);
 
       var row = '<tr style="border-bottom:1px solid rgba(255,255,255,.04)">' +
-        '<td style="' + tdStyle + ';white-space:nowrap">' + escH(c.moniker || c.chain) + '</td>' +
-        '<td style="' + tdStyle + ';white-space:nowrap;opacity:.7;font-size:.75rem">' + escH(c.chain) + '</td>' +
+        '<td style="' + tdStyle + ';white-space:nowrap;' + indentPfx + '">' + monikerContent + '</td>' +
         '<td style="' + tdStyle + '">' + servicesPills(c.type) + '</td>' +
         '<td style="' + tdStyle + '">' + statusCell(c.node_status) + '</td>' +
         '<td style="' + tdNum  + '">' + height + '</td>';
       if (ex) {
         row += '<td style="' + tdNum + '">' + earliest + '</td>';
+        row += '<td style="' + tdStyle + ';white-space:nowrap;opacity:.65;font-size:.75rem">' + escH(c.chain_id || c.chain) + '</td>';
         row += '<td style="' + tdStyle + ';border-left:1px solid var(--vn-border)">' + activeProp + '</td>';
         row += '<td style="' + tdNum + ';font-size:.7rem">' + votingEnds + '</td>';
         row += '<td style="' + tdStyle + '">' + upg + '</td>';
@@ -490,10 +510,63 @@
         '<td style="' + tdStyle + '">' + rmBtn + '</td>' +
         '</tr>';
       return row;
+    }
+
+    // Group chains by chain_name for mainnet/testnet tree
+    var groupMap = {};
+    var groupOrder = [];
+    chains.forEach(function(c) {
+      var key = deriveChainBase(c);
+      if (!groupMap[key]) {
+        groupMap[key] = { key: key, label: c.dashboard_name || key, entries: [] };
+        groupOrder.push(key);
+      }
+      groupMap[key].entries.push(c);
+    });
+    // Sort within group: mainnet first, testnet second
+    groupOrder.forEach(function(key) {
+      groupMap[key].entries.sort(function(a, b) {
+        return (a.network_type === 'testnet' ? 1 : 0) - (b.network_type === 'testnet' ? 1 : 0);
+      });
+    });
+
+    var rows = groupOrder.map(function(key) {
+      var group   = groupMap[key];
+      var entries = group.entries;
+
+      // Single entry: flat row, no tree chrome
+      if (entries.length === 1) return buildChainRow(entries[0], false);
+
+      // Multi-network group: collapsible header + indented child rows
+      var expanded     = (chainTreeExpanded[key] !== false); // default expanded
+      var toggleIcon   = expanded ? '▼' : '▶';
+      var worstStatus  = entries.some(function(e){ return e.node_status === 'down'; })     ? 'down'
+                       : entries.some(function(e){ return e.node_status === 'syncing'; }) ? 'syncing' : 'synced';
+      var maxHeight    = Math.max.apply(null, entries.map(function(e){ return Number(e.height) || 0; }));
+      var combinedTypes = entries.map(function(e){ return e.type || ''; }).join(',');
+      var parentLabel  = entries[0].dashboard_name || group.label;
+
+      var headerRow = '<tr style="border-bottom:1px solid rgba(255,255,255,.06);cursor:pointer;background:rgba(255,255,255,.025)" onclick="toggleChainGroup(\'' + escH(key) + '\')">' +
+        '<td style="' + tdStyle + ';white-space:nowrap">' +
+          '<span style="color:rgba(255,255,255,.4);font-size:.65rem;margin-right:.3rem">' + toggleIcon + '</span>' +
+          '<span style="font-weight:600">' + escH(parentLabel) + '</span>' +
+        '</td>' +
+        '<td style="' + tdStyle + '">' + servicesPills(combinedTypes) + '</td>' +
+        '<td style="' + tdStyle + '">' + statusCell(worstStatus) + '</td>' +
+        '<td style="' + tdNum + '">' + (maxHeight > 0 ? Number(maxHeight).toLocaleString() : '—') + '</td>';
+      if (ex) {
+        headerRow += '<td style="' + tdNum + ';opacity:.3">—</td>';
+        headerRow += '<td style="' + tdStyle + ';opacity:.3">—</td>';
+        headerRow += '<td colspan="4" style="' + tdStyle + ';opacity:.3;border-left:1px solid var(--vn-border)"></td>';
+      }
+      headerRow += '<td style="' + tdStyle + ';border-left:1px solid var(--vn-border)"></td><td></td></tr>';
+
+      var childRows = expanded ? entries.map(function(c) { return buildChainRow(c, true); }).join('') : '';
+      return headerRow + childRows;
     }).join('');
 
     // Category row
-    var chainInfoCols = ex ? 6 : 5;  // Moniker, Chain, Services, Status, Height [+Earliest]
+    var chainInfoCols = ex ? 6 : 4;
     var catRow =
       '<tr>' +
       '<th colspan="' + chainInfoCols + '" style="' + catStyle + '">Services Statistics</th>';
@@ -506,12 +579,12 @@
     var colRow =
       '<tr style="font-size:.72rem;border-bottom:1px solid var(--vn-border)">' +
       '<th style="' + thStyle + '">Moniker</th>' +
-      '<th style="' + thStyle + '">Chain</th>' +
       '<th style="' + thStyle + '">Services</th>' +
       '<th style="' + thStyle + '">Status</th>' +
       '<th style="' + thStyle + '">Height</th>';
     if (ex) {
       colRow += '<th style="' + thStyle + '">Earliest</th>';
+      colRow += '<th style="' + thStyle + '">Chain-ID</th>';
       colRow += '<th style="' + thStyle + ';border-left:1px solid var(--vn-border)">Active Prop</th>';
       colRow += '<th style="' + thStyle + '">Voting Ends</th>';
       colRow += '<th style="' + thStyle + '">Upgrade</th>';

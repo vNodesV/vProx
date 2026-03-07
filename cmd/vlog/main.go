@@ -384,8 +384,9 @@ func cmdStart(f flags) int {
 	// Push module — initialize from vms.toml (legacy) and/or chain [management] sections.
 	var pushSvc *push.Service
 	{
-		vmsPath := cfg.VLog.Push.VMsPath
+		vmsPath   := cfg.VLog.Push.VMsPath
 		chainsDir := cfg.VLog.Push.ChainsDir
+		infraDir  := cfg.VLog.Push.InfraDir
 		defs := pushcfg.PushDefaults{
 			User:    cfg.VLog.Push.Defaults.User,
 			KeyPath: cfg.VLog.Push.Defaults.KeyPath,
@@ -400,7 +401,7 @@ func cmdStart(f flags) int {
 		}
 
 		if vmsExists {
-			// Legacy path: initialize from vms.toml, then merge chain management on top.
+			// Legacy path: initialize from vms.toml, then merge chain management + infra on top.
 			svc, err := push.New(vmsPath, cfg.VLog.Push.DBPath)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "vlog: push init warning: %v (push module disabled)\n", err)
@@ -412,20 +413,34 @@ func cmdStart(f flags) int {
 						fmt.Fprintf(os.Stderr, "vlog: chain management warning: %v\n", err)
 					}
 				}
+				if _, err := os.Stat(infraDir); err == nil {
+					if err := svc.AddInfraConfigs(infraDir); err != nil {
+						fmt.Fprintf(os.Stderr, "vlog: infra configs warning: %v\n", err)
+					}
+				}
 				go svc.StartPolling(context.Background(), time.Duration(cfg.VLog.Push.PollIntervalSec)*time.Second)
 				if !f.quiet {
 					fmt.Fprintf(os.Stdout, "  push:     %s (%ds poll)\n", vmsPath, cfg.VLog.Push.PollIntervalSec)
 				}
 			}
 		} else {
-			// No vms.toml — try chain management sections as sole source.
-			if _, err := os.Stat(chainsDir); err == nil {
+			// No vms.toml — try chain management + infra configs as sole source.
+			_, chainsErr := os.Stat(chainsDir)
+			_, infraErr  := os.Stat(infraDir)
+			if chainsErr == nil || infraErr == nil {
 				svc, err := push.NewEmpty(cfg.VLog.Push.DBPath)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "vlog: push db error: %v\n", err)
 				} else {
-					if err := svc.AddChainConfigs(chainsDir, defs); err != nil {
-						fmt.Fprintf(os.Stderr, "vlog: chain management warning: %v\n", err)
+					if chainsErr == nil {
+						if err := svc.AddChainConfigs(chainsDir, defs); err != nil {
+							fmt.Fprintf(os.Stderr, "vlog: chain management warning: %v\n", err)
+						}
+					}
+					if infraErr == nil {
+						if err := svc.AddInfraConfigs(infraDir); err != nil {
+							fmt.Fprintf(os.Stderr, "vlog: infra configs warning: %v\n", err)
+						}
 					}
 					if len(svc.VMs()) > 0 {
 						pushSvc = svc

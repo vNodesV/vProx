@@ -67,6 +67,23 @@ func NewEmpty(dbPath string) (*Service, error) {
 	}, nil
 }
 
+// AddInfraConfigs loads per-datacenter host files from dir (config/infra/*.toml)
+// and merges their hosts and VMs into the service config.
+// Each infra file defines one physical host ([host]) and its child VMs ([[vm]]).
+func (s *Service) AddInfraConfigs(dir string) error {
+	infraCfg, err := config.LoadFromInfraFiles(dir)
+	if err != nil {
+		return fmt.Errorf("push: load infra configs from %s: %w", dir, err)
+	}
+	if len(infraCfg.Hosts) == 0 && len(infraCfg.VMs) == 0 {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.cfg = config.MergeInfraConfig(s.cfg, infraCfg)
+	return nil
+}
+
 // AddChainConfigs merges VM entries derived from chain TOML [management] sections
 // into the service config. Chain-derived entries take precedence over vms.toml.
 // Call after New() (or NewEmpty()) when chains_dir is configured in vlog.toml.
@@ -121,6 +138,9 @@ func (s *Service) pollAll(ctx context.Context) {
 			st := status.Poll(ctx, vm.Name, vm.RPC(), vm.REST())
 			st.Type = vm.Type
 			st.Datacenter = vm.Datacenter
+			st.DashboardName = vm.DashboardName
+			st.ChainName = vm.ChainName
+			st.NetworkType = vm.NetworkType
 			st.PingCountry = vm.Ping.Country
 			st.PingProvider = vm.Ping.Provider
 			// v1.3.0: chain identity + LAN ping + governance participation
@@ -195,6 +215,9 @@ func (s *Service) AllStatuses() []*status.ChainStatus {
 
 // VMs returns the loaded VM registry.
 func (s *Service) VMs() []config.VM { return s.cfg.VMs }
+
+// Hosts returns all registered physical hosts from vms.toml and config/infra/*.toml.
+func (s *Service) Hosts() []config.Host { return s.cfg.Hosts }
 
 // Config exposes the full push configuration.
 func (s *Service) Config() *config.Config { return s.cfg }

@@ -1,125 +1,157 @@
-# vProx Chain Configuration Sample
+# vProx Chain Configuration — Merged Schema
 # rev: {{SAMPLE_REV}}
-# Copy this file and customize for each chain you want to proxy
-# Place chain configs in: $VPROX_HOME/config/chains/
+#
+# One file per chain. Place in: $VPROX_HOME/config/chains/
+# Example: config/chains/cheqd.toml
+#
+# When chain_id is set, vProx auto-fetches general metadata from:
+#   https://chains.cosmos.directory/{chain_name}
+#   https://validators.cosmos.directory/chains/{chain_name}
+# Local settings (this file) always take precedence over remote data.
 
-# Schema version for forward compatibility. Do not change unless instructed by an upgrade guide.
-schema_version = 1
+schema_version = 2
 
-chain_name     = "your_chain"
-host           = "api-link.example.com"
-ip             = "127.0.0.1"
+# ── Identity ──────────────────────────────────────────────────────────────────
+# chain_id triggers auto-import from cosmos.directory on startup/reload.
+# Use the first segment before "-" as the chain_name slug for cosmos.directory.
+chain_id       = "cheqd-mainnet-1"   # official chain-id
+chain_name     = "cheqd"             # slug used in log filenames and routes
+dashboard_name = ""                  # display name; empty = cosmos.directory pretty_name
 
-# Official chain-id (e.g. "cheqd-mainnet-1"). Used by vLog dashboard for explorer links.
-chain_id       = ""
+# Auto-filled from cosmos.directory when chain_id is set:
+network_type        = ""             # e.g. "mainnet" or "testnet"
+recommended_version = ""             # e.g. "v4.2.1"
+explorers           = []             # override cosmos.directory explorer list
 
-# Block explorer base URL. Leave empty to disable explorer links on the dashboard.
-# Examples: "ping.pub", "testnets.ping.pub", "https://testnet-explorer.cheqd.io"
-explorer_base  = ""
 
-default_ports  = false
-msg_rpc        = false   # enable rpc_msg banner on RPC index
-msg_api        = false   # enable api_msg banner on REST/swagger
+# ── vProx Proxy Config ─────────────────────────────────────────────────────────
+# These settings control how vProx routes and exposes the chain's endpoints.
 
-# Alias hostnames — only routed when expose.vhost = true
-rpc_aliases    = []      # e.g. ["rpc-alt.example.com"]
-rest_aliases   = []      # e.g. ["rest-alt.example.com"]
-api_aliases    = []      # e.g. ["api-alt.example.com"]
+host          = "cheqd.srvs.vnodesv.net"   # public service hostname (vProx serves this)
+ip            = "10.0.0.66"                # LAN IP of the node (internal routing target)
+default_ports = false
+msg_rpc       = false                      # inject rpc_msg banner on RPC index
+msg_api       = false                      # inject api_msg banner on REST/swagger
+
+rpc_aliases  = []   # extra RPC hostnames (expose.vhost must be true)
+rest_aliases = []   # extra REST/API hostnames
+api_aliases  = []   # extra /api hostnames
 
 [message]
-# Printed only when msg_rpc / msg_api are true (respectively).
-# Leave empty or omit to skip — features below work independently.
-    api_msg = ""
-    rpc_msg = ""
+api_msg = ""
+rpc_msg = ""
 
 [expose]
-    path  = true        # Enable /rpc, /rest, /websocket on base host
-    vhost = true        # Enable api.<host>, rpc.<host> subdomains
+path  = true        # enable /rpc, /rest, /websocket on base host
+vhost = true        # enable rpc.<host>, api.<host> subdomains
 
 [expose.vhost_prefix]
-    rpc  = "rpc"
-    rest = "api"
+rpc  = "rpc"
+rest = "api"
 
 [services]
-    rpc        = true
-    rest       = true
-    websocket  = true
-    grpc       = true
-    grpc_web   = true
-    api_alias  = true   # /api -> REST (port 1317)
+rpc        = true
+rest       = true
+websocket  = true
+grpc       = true
+grpc_web   = true
+api_alias  = true
 
-# [ports] is only required when default_ports = false.
-# Default values are managed in config/ports.toml.
-# Uncomment and set custom ports if this chain differs from defaults.
+# [ports] — only needed when default_ports = false
 # [ports]
-#     rpc      = 26657
-#     rest     = 1317
-#     grpc     = 9090
-#     grpc_web = 9091
-#     api      = 1317
+#   rpc      = 26657
+#   rest     = 1317
+#   grpc     = 9090
+#   grpc_web = 9091
+#   api      = 1317
 
 [ws]
-    idle_timeout_sec = 3600      # WebSocket idle timeout (default: 3600)
-    max_lifetime_sec = 0         # WebSocket max lifetime, 0 = unlimited
+idle_timeout_sec = 3600
+max_lifetime_sec = 0
 
 [features]
-    rpc_address_masking = true   # Mask local IP links (10.0.0.x/) on RPC index HTML
-    mask_rpc            = ""     # Replacement label for masked IP (empty = remove entirely)
-    swagger_masking     = false  # Rewrite Swagger Try-It base URL to public host
-    absolute_links      = "auto" # auto | always | never
+rpc_address_masking = true
+mask_rpc            = ""
+swagger_masking     = false
+absolute_links      = "auto"
 
 [logging]
-    file   = "your_chain.log"       # Per-chain log file (logs in data/logs/)
-    format = "summary"              # summary | json | raw
+file   = "cheqd.log"
+format = "summary"
 
-# ── Management (v1.3.0) ────────────────────────────────────────────────────────
-# Embeds server/VM management directly in chain.toml.
-# When managed_host = true, this replaces the [[vm]] entry in config/push/vms.toml.
+
+# ── Chain Services ─────────────────────────────────────────────────────────────
+# These sections describe what services are deployed on this chain.
+# Validator fields are auto-enriched at runtime from validators.cosmos.directory.
+# SP prefixes/suffixes are verified against the public endpoint on startup.
+# Leave a mainnet/testnet address empty ("") to hide that row in the dashboard.
+
+[chain_services.validator.mainnet]
+address = "cheqdvaloper1..."   # valoper operator address; auto-fills active/synced/jailed/missed_blocks
+
+# Auto-filled by cosmos.directory / chain RPC (do not set manually):
+# active          = false
+# synced          = false
+# jailed          = false
+# missed_blocks   = 0
+# active_proposal = ""
+# vote_by         = ""
+# upgrade         = ""         # upgrade halt height if a pending upgrade exists, else ""
+
+[chain_services.validator.testnet]
+address = ""                   # testnet valoper; empty = testnet validator row hidden in dashboard
+
+[chain_services.sp.mainnet]
+hostname = "cheqd.srvs.vnodesv.net"
+prefixes = ["api", "rest", "rpc"]   # subdomains to verify: api.<hostname>, rest.<hostname>, rpc.<hostname>
+suffixes = ["api", "rest", "rpc"]   # path suffixes to verify: <hostname>/api, /rest, /rpc
+lan_ip   = "10.0.0.66"             # internal LAN IP for direct probing via http://lan_ip:26657|1317
+ext_host = ""                       # external host/IP if node is on a different VPS (overrides lan_ip for probing)
+
+[chain_services.sp.testnet]
+hostname = "cheqd-testnet.srvs.vnodesv.net"
+prefixes = ["api", "rest", "rpc"]
+suffixes = ["api", "rest", "rpc"]
+lan_ip   = ""                       # testnet node LAN IP (empty = testnet SP row hidden)
+ext_host = ""
+
+[chain_services.relayer]
+# Reserved for future use.
+
+
+# ── Ping ───────────────────────────────────────────────────────────────────────
+# Controls the per-chain datacenter probe in the dashboard.
+# Used when no [management] section is present (non-managed chains).
+
+[chain_ping]
+country  = "CA"   # ISO 3166-1 alpha-2 code; supported: CA US FR DE NL GB FI JP SG BR IN
+provider = ""     # pin to specific check-host.net node (e.g. "ca1"); empty = random from country
+
+
+# ── Management (SSH / Push Module) ─────────────────────────────────────────────
+# managed_host: when true, this chain's node is registered in the push module —
+#   enabling SSH-based script execution, apt upgrades, and deployment dispatch.
+#   Independent from explored_services; both flags can be set freely.
 #
-# Global SSH defaults (user, key_path) are read from [vlog.push.defaults] in vlog.toml
-# and applied when the fields below are left empty ("").
+# exposed_services: when true, vLog probes via the public chain.host domain
+#   (through vProx/Apache). When false, vLog probes directly via lan_ip,
+#   bypassing the public proxy — use when vLog is on the same LAN as the node.
 #
-# Note: fields left at their default values are described in the comments.
+# SSH defaults (user, key_path) are read from [vlog.push.defaults] in vlog.toml
+# when the fields below are left empty.
+
 [management]
-# Set to true to enable push module management for this chain's node.
 managed_host     = false
-
-# LAN / SSH target IP of the node. Defaults to chain.ip when empty.
-lan_ip           = ""
-
-# Public IP (display-only, shown in the Server Status block). Optional.
-public_ip        = ""
-
-# SSH user. Empty = fall back to [vlog.push.defaults].user.
-user             = ""
-
-# Path to the SSH private key. Empty = fall back to [vlog.push.defaults].key_path.
-key_path         = ""
-
-# SSH port. 0 = default (22).
-port             = 0
-
-# Service role(s) for this node. Used for dashboard badges.
-# Values: "validator", "sp", "rpc", "relayer", "node" (list multiple roles)
-type             = ["validator"]
-
-# Validator operator address (bech32 cosmosvaloper…) for governance participation tracking.
-# When set, the Chain Services block shows voted/total proposals for this validator.
-# Leave empty for non-validator nodes.
-valoper          = ""
-
-# Datacenter / location label shown on the dashboard (e.g. "QC", "RBX", "AMS").
-datacenter       = ""
-
-# When true, vLog probes this node via the public chain.host domain (through vProx).
-# Set false if vLog is on the same LAN as the node and should probe via lan_ip directly.
+lan_ip           = ""         # SSH target IP; empty = use chain.ip above
+public_ip        = ""         # display-only in dashboard; optional
+user             = ""         # SSH user; empty = [vlog.push.defaults].user
+key_path         = ""         # SSH private key path; empty = [vlog.push.defaults].key_path
+port             = 0          # SSH port; 0 = default 22
+type             = ["validator"]  # service roles: validator | sp | rpc | relayer | node
+valoper          = ""         # validator operator address for governance participation tracking
+datacenter       = ""         # location label, e.g. "QC", "RBX", "AMS"
 exposed_services = true
 
 [management.ping]
-# ISO 3166-1 alpha-2 country code of the datacenter's country.
-# Used by the Server Status block to probe via check-host.net from a regional node.
-# Supported values: CA  US  FR  DE  NL  GB  FI  JP  SG  BR  IN
 country  = ""
-# (optional) Pin to a specific check-host.net node, e.g. "ca1", "fi1".
-# Leave empty to select randomly from the country's available nodes.
 provider = ""

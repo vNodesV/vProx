@@ -73,6 +73,65 @@ type WSConfig struct {
 	MaxLifetimeSec int `toml:"max_lifetime_sec"` // 0 = no hard cap
 }
 
+// ── Chain Services Schema (v2) ─────────────────────────────────────────────
+//
+// These types represent the [chain_services] section of chain.toml.
+// Data is loaded from the TOML file; cosmos.directory enrichment fills in
+// auto-populated fields (Active, Synced, Jailed, MissedBlocks) at runtime
+// using the validator's operator address.
+
+// ValidatorNetwork holds validator configuration for one network tier (mainnet or testnet).
+type ValidatorNetwork struct {
+	Address      string `toml:"address"`         // valoper address, e.g. "cheqdvaloper1..."
+	Active       bool   `toml:"active"`          // auto-filled: is validator in active set
+	Synced       bool   `toml:"synced"`          // auto-filled: is node synced (catching_up=false)
+	Jailed       bool   `toml:"jailed"`          // auto-filled: is validator jailed
+	MissedBlocks int    `toml:"missed_blocks"`   // auto-filled: missed blocks in last window
+	// governance fields (auto-filled from chain RPC)
+	ActiveProposal string `toml:"active_proposal"` // auto-filled: active proposal number or ""
+	VoteBy         string `toml:"vote_by"`         // auto-filled: voting end date
+	Upgrade        string `toml:"upgrade"`         // auto-filled: upgrade height if pending, else ""
+}
+
+// ValidatorConfig groups mainnet and testnet validator entries.
+type ValidatorConfig struct {
+	Mainnet ValidatorNetwork `toml:"mainnet"`
+	Testnet ValidatorNetwork `toml:"testnet"`
+}
+
+// SPNetwork holds service-provider configuration for one network tier.
+type SPNetwork struct {
+	Hostname string   `toml:"hostname"` // public service hostname, e.g. "cheqd.srvs.vnodesv.net"
+	Prefixes []string `toml:"prefixes"` // subdomain prefixes offered, e.g. ["api","rest","rpc"]
+	Suffixes []string `toml:"suffixes"` // path suffixes offered (same keys as prefixes)
+	LanIP    string   `toml:"lan_ip"`   // LAN IP for internal probing via http://lan_ip:26657|1317
+	ExtHost  string   `toml:"ext_host"` // external host/IP override when node is on a different VPS
+}
+
+// SPConfig groups mainnet and testnet service-provider entries.
+type SPConfig struct {
+	Mainnet SPNetwork `toml:"mainnet"`
+	Testnet SPNetwork `toml:"testnet"`
+}
+
+// RelayerConfig holds relayer configuration (reserved for future use).
+type RelayerConfig struct{}
+
+// ChainPingConfig holds the per-chain datacenter probe settings.
+// Mirrors ManagementPing; used when the chain has no [management] block.
+type ChainPingConfig struct {
+	Country  string `toml:"country"`  // ISO 3166-1 alpha-2, e.g. "CA"
+	Provider string `toml:"provider"` // optional: pin to specific check-host.net node, e.g. "ca1"
+}
+
+// ChainServicesConfig is the [chain_services] section of chain.toml.
+// When populated, it drives the per-chain dashboard tree (mainnet/testnet rows).
+type ChainServicesConfig struct {
+	Validator ValidatorConfig `toml:"validator"`
+	SP        SPConfig        `toml:"sp"`
+	Relayer   RelayerConfig   `toml:"relayer"`
+}
+
 // ManagementPing configures the check-host.net datacenter probe for this managed host.
 type ManagementPing struct {
 	Country  string `toml:"country"`  // ISO 3166-1 alpha-2 country code, e.g. "CA"
@@ -80,13 +139,32 @@ type ManagementPing struct {
 }
 
 // Management embeds server/VM management configuration directly in chain.toml.
-// When managed_host = true, this section provides SSH access and status polling
-// for the node, replacing the need for a separate [[vm]] entry in vms.toml.
+//
+// managed_host vs exposed_services — these are INDEPENDENT flags:
+//
+//   managed_host: SSH management gate.
+//     When true, vProx includes this node in the push module registry — enabling
+//     remote script execution, apt upgrades, and deployment dispatch via SSH.
+//     Has NO effect on probe routing or health polling.
+//
+//   exposed_services: Probe routing gate.
+//     When true, vLog probes this node via the public chain.host domain (i.e.,
+//     through vProx/Apache). When false, vLog probes directly via lan_ip, bypassing
+//     the public proxy stack (lower latency, useful when vLog is on the same LAN).
+//     Has NO effect on SSH management.
+//
+// Example combos:
+//   managed_host=true  + exposed_services=true  → SSH-manage; probe via public domain
+//   managed_host=true  + exposed_services=false → SSH-manage; probe via LAN (no proxy hop)
+//   managed_host=false + exposed_services=true  → no SSH; probe via public domain
+//   managed_host=false + exposed_services=false → monitoring only; probe via LAN
 //
 // Global defaults for user and key_path are sourced from [vlog.push.defaults]
 // in vlog.toml when the corresponding fields are empty here.
 type Management struct {
-	ManagedHost     bool           `toml:"managed_host"`      // true = include this host in the push module
+	// managed_host: when true, this node is registered in the push module (SSH management enabled).
+	// Does NOT affect probe routing — see exposed_services below.
+	ManagedHost     bool           `toml:"managed_host"`
 	LanIP           string         `toml:"lan_ip"`            // SSH target IP; empty = use chain.ip
 	PublicIP        string         `toml:"public_ip"`         // display-only; optional
 	User            string         `toml:"user"`              // SSH user; empty = [vlog.push.defaults].user
@@ -94,7 +172,10 @@ type Management struct {
 	Port            int            `toml:"port"`              // SSH port; 0 = default 22
 	Type            []string       `toml:"type"`              // service roles: validator | sp | rpc | relayer | node
 	Datacenter      string         `toml:"datacenter"`        // location label, e.g. "QC"
-	ExposedServices bool           `toml:"exposed_services"`  // true = probe via public chain.host domain
+	// exposed_services: when true, vLog probes via public chain.host domain (through vProx).
+	// When false, probes directly via lan_ip (same-LAN monitoring, no proxy hop).
+	// Independent from managed_host — controls probe routing only.
+	ExposedServices bool           `toml:"exposed_services"`
 	Valoper         string         `toml:"valoper"`           // validator operator address for governance participation
 	Ping            ManagementPing `toml:"ping"`
 }
@@ -106,9 +187,15 @@ type ChainConfig struct {
 	Host          string `toml:"host"`
 	IP            string `toml:"ip"`
 
-	// v1.3.0: chain identity and block explorer
-	ChainID      string `toml:"chain_id"`      // official chain-id, e.g. "cheqd-mainnet-1"
-	ExplorerBase string `toml:"explorer_base"` // block explorer base URL; empty = no explorer link
+	// Chain identity — v1.3.0+
+	ChainID      string `toml:"chain_id"`       // official chain-id, e.g. "cheqd-mainnet-1"
+	ExplorerBase string `toml:"explorer_base"`  // primary explorer URL; empty = use cosmos.directory first entry
+
+	// cosmos.directory metadata (auto-fetched on load when chain_id is set; can be overridden here)
+	DashboardName      string   `toml:"dashboard_name"`      // display name; empty = cosmos.directory pretty_name
+	NetworkType        string   `toml:"network_type"`        // "mainnet" | "testnet"; auto-filled
+	RecommendedVersion string   `toml:"recommended_version"` // latest recommended binary version; auto-filled
+	Explorers          []string `toml:"explorers"`           // explorer URLs; empty = use cosmos.directory list
 
 	RPCAliases  []string `toml:"rpc_aliases"`  // extra RPC hostnames; active only when expose.vhost = true
 	RESTAliases []string `toml:"rest_aliases"` // extra REST/API hostnames; active only when expose.vhost = true
@@ -124,6 +211,11 @@ type ChainConfig struct {
 
 	// v1.3.0: embedded server management (replaces [[vm]] in vms.toml)
 	Management Management `toml:"management"`
+
+	// Chain services — new schema with mainnet/testnet validator + SP + relayer entries.
+	// When non-empty, these drive the per-chain dashboard tree rows.
+	ChainServices ChainServicesConfig `toml:"chain_services"`
+	ChainPing     ChainPingConfig     `toml:"chain_ping"`
 
 	DefaultPorts bool `toml:"default_ports"`
 	MsgRPC       bool `toml:"msg_rpc"` // enable rpc_msg banner injection

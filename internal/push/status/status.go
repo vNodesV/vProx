@@ -45,8 +45,10 @@ type ChainStatus struct {
 	UpgradeProposalID string `json:"upgrade_proposal_id,omitempty"`
 
 	// Chain identity
-	ChainID     string `json:"chain_id,omitempty"`     // official chain-id from config
-	ExplorerBase string `json:"explorer_url,omitempty"` // block explorer base URL for dashboard links
+	ChainID      string `json:"chain_id,omitempty"`       // official chain-id from config
+	ChainName    string `json:"chain_name,omitempty"`     // short slug, e.g. "cheqd" — used for tree grouping
+	NetworkType  string `json:"network_type,omitempty"`   // "mainnet" or "testnet" — used for tree grouping
+	ExplorerBase string `json:"explorer_url,omitempty"`   // block explorer base URL for dashboard links
 
 	// LAN ping (vProx → node direct)
 	LanPingMs int64 `json:"lan_ping_ms"` // round-trip ms; -1=unreachable, 0=not configured
@@ -55,11 +57,12 @@ type ChainStatus struct {
 	ValParticipation string `json:"val_participation,omitempty"` // "12/15"; empty if not a validator or no valoper
 
 	// Metadata
-	Datacenter   string    `json:"datacenter,omitempty"`
-	PingCountry  string    `json:"ping_country,omitempty"`
-	PingProvider string    `json:"ping_provider,omitempty"`
-	UpdatedAt    time.Time `json:"updated_at"`
-	Error        string    `json:"error,omitempty"`
+	Datacenter    string    `json:"datacenter,omitempty"`
+	DashboardName string    `json:"dashboard_name,omitempty"` // cosmos.directory pretty_name or local override
+	PingCountry   string    `json:"ping_country,omitempty"`
+	PingProvider  string    `json:"ping_provider,omitempty"`
+	UpdatedAt     time.Time `json:"updated_at"`
+	Error         string    `json:"error,omitempty"`
 }
 
 // Poll fetches full chain status from rpcURL and restURL.

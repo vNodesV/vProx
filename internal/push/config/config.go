@@ -23,10 +23,10 @@ type VMPing struct {
 // Operators running standalone VPS (no hypervisor) can omit [[host]] sections entirely
 // and leave host_ref empty on their [[vm]] entries.
 type Host struct {
-	Name       string `toml:"name"`       // unique identifier, referenced by vm.host_ref
-	PublicIP   string `toml:"public_ip"`  // internet-facing IP of the physical host
-	LanIP      string `toml:"lan_ip"`     // LAN/management IP
-	Datacenter string `toml:"datacenter"` // datacenter/location label, e.g. "QC", "RBX"
+	Name       string `toml:"name"       json:"name"`
+	PublicIP   string `toml:"public_ip"  json:"public_ip,omitempty"`
+	LanIP      string `toml:"lan_ip"     json:"lan_ip,omitempty"`
+	Datacenter string `toml:"datacenter" json:"datacenter,omitempty"`
 }
 
 // VM describes one validator VM (or VPS) reachable via SSH.
@@ -53,9 +53,12 @@ type VM struct {
 	RESTURL    string `toml:"rest_url"` // optional override
 
 	// Chain identity and explorer (from chain.toml top-level or vms.toml)
-	ChainID  string `toml:"chain_id"` // official chain-id, e.g. "cheqd-mainnet-1"
-	Explorer string `toml:"explorer"` // block explorer base URL, e.g. "ping.pub"
-	Valoper  string `toml:"valoper"`  // validator operator address for governance participation
+	ChainID       string `toml:"chain_id"`       // official chain-id, e.g. "cheqd-mainnet-1"
+	ChainName     string `toml:"chain_name"`     // short slug, e.g. "cheqd"
+	NetworkType   string `toml:"network_type"`   // "mainnet" or "testnet"
+	DashboardName string `toml:"dashboard_name"` // display name; empty = cosmos.directory pretty_name
+	Explorer      string `toml:"explorer"`       // block explorer base URL, e.g. "ping.pub"
+	Valoper       string `toml:"valoper"`        // validator operator address for governance participation
 
 	// Ping config — selects check-host.net probe node for datacenter latency column.
 	Ping VMPing `toml:"ping"`
@@ -207,8 +210,10 @@ func LoadFromChainConfigs(dir string, defaults PushDefaults) (*Config, error) {
 			port = 22
 		}
 
-		// Derive probe URLs: if exposed_services=true use the public chain.host domain,
-		// otherwise leave empty (vm.RPC() will derive from sshHost = LAN IP).
+		// exposed_services routing: when true, probe URLs use the public chain.host domain
+		// (requests route through vProx/Apache). When false, probe directly via LAN IP —
+		// preferred when vLog is co-located on the same network as the node.
+		// This is independent of managed_host (SSH management); both can be set freely.
 		rpcURL := ""
 		restURL := ""
 		if m.ExposedServices && cc.Host != "" {
@@ -217,20 +222,23 @@ func LoadFromChainConfigs(dir string, defaults PushDefaults) (*Config, error) {
 		}
 
 		vms = append(vms, VM{
-			Name:       chainVMName(cc.ChainName, cc.Host),
-			Host:       sshHost,
-			LanIP:      sshHost,
-			PublicIP:   m.PublicIP,
-			Port:       port,
-			User:       user,
-			KeyPath:    keyPath,
-			Datacenter: m.Datacenter,
-			Type:       strings.Join(m.Type, ","),
-			RPCURL:     rpcURL,
-			RESTURL:    restURL,
-			ChainID:    cc.ChainID,
-			Explorer:   cc.ExplorerBase,
-			Valoper:    m.Valoper,
+			Name:          chainVMName(cc.ChainName, cc.Host),
+			Host:          sshHost,
+			LanIP:         sshHost,
+			PublicIP:      m.PublicIP,
+			Port:          port,
+			User:          user,
+			KeyPath:       keyPath,
+			Datacenter:    m.Datacenter,
+			Type:          strings.Join(m.Type, ","),
+			RPCURL:        rpcURL,
+			RESTURL:       restURL,
+			ChainID:       cc.ChainID,
+			ChainName:     cc.ChainName,
+			NetworkType:   cc.NetworkType,
+			DashboardName: cc.DashboardName,
+			Explorer:      cc.ExplorerBase,
+			Valoper:       m.Valoper,
 			Ping: VMPing{
 				Country:  m.Ping.Country,
 				Provider: m.Ping.Provider,
@@ -294,4 +302,108 @@ func chainVMName(chainName, host string) string {
 		return n
 	}
 	return host
+}
+
+// infraFileSchema is the TOML schema for per-datacenter host files (config/infra/*.toml).
+// Each file defines one physical host ([host]) and its VMs ([[vm]]).
+type infraFileSchema struct {
+	Host Host `toml:"host"`
+	VMs  []VM `toml:"vm"`
+}
+
+// LoadFromInfraFiles reads all *.toml files in dir, each representing one physical
+// host ([host] section) with its child VMs ([[vm]] sections).
+// VMs without an explicit host_ref inherit it from their file's [host].name.
+// Returns a merged Config containing all hosts and VMs from all infra files.
+func LoadFromInfraFiles(dir string) (*Config, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return &Config{}, nil
+		}
+		return nil, fmt.Errorf("push/config: read infra dir %s: %w", dir, err)
+	}
+
+	var hosts []Host
+	var vms []VM
+	for _, e := range entries {
+		if e.IsDir() || filepath.Ext(e.Name()) != ".toml" {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(dir, e.Name()))
+		if err != nil {
+			log.Printf("[push] warn: skip infra file %s: %v", e.Name(), err)
+			continue
+		}
+		var f infraFileSchema
+		if err := toml.Unmarshal(data, &f); err != nil {
+			log.Printf("[push] warn: parse infra file %s: %v", e.Name(), err)
+			continue
+		}
+		if f.Host.Name != "" {
+			hosts = append(hosts, f.Host)
+		}
+		for i := range f.VMs {
+			// Auto-populate host_ref from the file's [host].name when not set.
+			if f.VMs[i].HostRef == "" && f.Host.Name != "" {
+				f.VMs[i].HostRef = f.Host.Name
+			}
+			if f.VMs[i].Port == 0 {
+				f.VMs[i].Port = 22
+			}
+			vms = append(vms, f.VMs[i])
+		}
+	}
+
+	return &Config{Hosts: hosts, VMs: vms}, nil
+}
+
+// MergeInfraConfig merges infra-derived hosts and VMs into the base config.
+// Infra VMs take precedence over matching base entries by name.
+// New hosts from infra are appended if not already present by name.
+func MergeInfraConfig(base, infra *Config) *Config {
+	if base == nil {
+		if infra == nil {
+			return &Config{}
+		}
+		return infra
+	}
+	if infra == nil || (len(infra.Hosts) == 0 && len(infra.VMs) == 0) {
+		return base
+	}
+
+	// Merge hosts: append infra hosts not already in base.
+	hostSeen := make(map[string]struct{}, len(base.Hosts))
+	for _, h := range base.Hosts {
+		hostSeen[h.Name] = struct{}{}
+	}
+	hosts := append([]Host{}, base.Hosts...)
+	for _, h := range infra.Hosts {
+		if _, ok := hostSeen[h.Name]; !ok {
+			hosts = append(hosts, h)
+		}
+	}
+
+	// Merge VMs: infra entry wins when names match.
+	infraByName := make(map[string]VM, len(infra.VMs))
+	for _, v := range infra.VMs {
+		infraByName[v.Name] = v
+	}
+	vms := make([]VM, 0, len(base.VMs)+len(infra.VMs))
+	seen := make(map[string]bool, len(base.VMs))
+	for _, v := range base.VMs {
+		if iv, ok := infraByName[v.Name]; ok {
+			vms = append(vms, iv)
+		} else {
+			vms = append(vms, v)
+		}
+		seen[v.Name] = true
+	}
+	for _, v := range infra.VMs {
+		if !seen[v.Name] {
+			vms = append(vms, v)
+		}
+	}
+
+	return &Config{Hosts: hosts, VMs: vms}
 }

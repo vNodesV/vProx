@@ -28,9 +28,13 @@ func New(svc *push.Service) *Handlers { return &Handlers{svc: svc} }
 // ── GET /api/v1/push/vms/status ──────────────────────────────────────────────
 
 // HandleVMStatus polls all VMs concurrently via SSH and returns live metrics.
+// The response includes a "hosts" array for tree grouping in the dashboard.
 func (h *Handlers) HandleVMStatus(w http.ResponseWriter, r *http.Request) {
 	results := status.PollAllVMs(h.svc.Config())
-	writeJSON(w, http.StatusOK, map[string]any{"vms": results})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"vms":   results,
+		"hosts": h.svc.Hosts(),
+	})
 }
 
 // ── GET /api/v1/push/vms ─────────────────────────────────────────────────────

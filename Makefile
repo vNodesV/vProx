@@ -21,12 +21,12 @@ SERVICE_PATH := $(SERVICE_DIR)/vProx.service
 VLOG_SERVICE := $(SERVICE_DIR)/vLog.service
 GEO_DIR := $(DATA_DIR)/geolocation
 DIR_LIST := $(DATA_DIR) $(LOG_DIR) $(CFG_DIR) $(CFG_DIR)/chains $(CFG_DIR)/backup \
-            $(CFG_DIR)/push $(CFG_DIR)/vlog $(INTERNAL_DIR) $(ARCHIVE_DIR) $(SERVICE_DIR) $(GEO_DIR)
+            $(CFG_DIR)/push $(CFG_DIR)/vlog $(CFG_DIR)/infra $(INTERNAL_DIR) $(ARCHIVE_DIR) $(SERVICE_DIR) $(GEO_DIR)
 
 # Sample file revision — format: r{major}_{MMDDYY}_{seq}
 # Increment {seq} for multiple revisions on the same day; reset to 0 on new date.
 # Injected into the "# rev: {{SAMPLE_REV}}" placeholder in every .sample.toml at install/refresh time.
-SAMPLE_REV := r2_030726_0
+SAMPLE_REV := r2_030726_1
 
 # GeoLocation database — bundled in assets/geo/, extracted to user data dir
 GEO_DB_SRC := assets/geo/ip2location.mmdb.gz
@@ -209,7 +209,8 @@ samples-push:
 	_archive "$(CFG_DIR)/vlog/vlog.sample.toml";     _copy "config/vlog/vlog.sample.toml"          "$(CFG_DIR)/vlog/vlog.sample.toml"; \
 	_archive "$(CFG_DIR)/chains/chain.sample.toml";  _copy "config/chains/chain.sample.toml"       "$(CFG_DIR)/chains/chain.sample.toml"; \
 	_archive "$(CFG_DIR)/chains/ports.sample.toml";  _copy "config/chains/ports.sample.toml"       "$(CFG_DIR)/chains/ports.sample.toml"; \
-	_archive "$(CFG_DIR)/backup/backup.sample.toml"; _copy "config/backup/backup.sample.toml"      "$(CFG_DIR)/backup/backup.sample.toml"
+	_archive "$(CFG_DIR)/backup/backup.sample.toml"; _copy "config/backup/backup.sample.toml"      "$(CFG_DIR)/backup/backup.sample.toml"; \
+	_archive "$(CFG_DIR)/infra/infra.sample.toml";   _copy "config/infra/infra.sample.toml"         "$(CFG_DIR)/infra/infra.sample.toml"
 	@echo "Done. Samples refreshed with $(SAMPLE_REV)."
 
 ## Install modules registry stub

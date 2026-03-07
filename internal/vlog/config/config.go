@@ -111,6 +111,12 @@ type PushConfig struct {
 	// Default: $VPROX_HOME/config/chains
 	ChainsDir string `toml:"chains_dir"`
 
+	// InfraDir is the directory containing per-datacenter host TOML files.
+	// Each *.toml file defines one physical host ([host]) and its child VMs ([[vm]]).
+	// The vLog Server/VMs block renders these as an expandable tree.
+	// Default: $VPROX_HOME/config/infra
+	InfraDir string `toml:"infra_dir"`
+
 	// Defaults holds global SSH credential fallbacks for chain-managed hosts.
 	// Applied when [management] user or key_path are empty in a chain.toml file.
 	Defaults PushDefaults `toml:"defaults"`
@@ -233,6 +239,9 @@ func Load(path string) (Config, error) {
 	}
 	if strings.TrimSpace(cfg.VLog.Push.ChainsDir) == "" {
 		cfg.VLog.Push.ChainsDir = filepath.Join(home, "config", "chains")
+	}
+	if strings.TrimSpace(cfg.VLog.Push.InfraDir) == "" {
+		cfg.VLog.Push.InfraDir = filepath.Join(home, "config", "infra")
 	}
 	if strings.TrimSpace(cfg.VLog.Push.DBPath) == "" {
 		cfg.VLog.Push.DBPath = filepath.Join(home, "data", "push.db")
