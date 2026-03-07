@@ -839,6 +839,19 @@ summary { list-style: none; }
 .v-block.is-strip > details > summary .v-block-actions { display: none; }
 .v-block.is-strip > details > summary::before { display: none; }
 
+/* ── Block lock: locked block spans the full row, sibling gets its own row ── */
+.v-block.is-locked { grid-column: 1 / -1; }
+.v-block.is-solo   { grid-column: 1 / -1; }
+
+/* ── DnD drag-to-reorder ── */
+[data-drag-id] { cursor: default; }
+[data-drag-id].dnd-dragging { opacity: .35; pointer-events: none; }
+[data-drag-id].dnd-over     {
+  outline: 1px dashed rgba(0,255,0,.35);
+  border-radius: 7px;
+  outline-offset: 3px;
+}
+
 /* ── Service type pills ── */
 .svc-pill {
   font-size: .59rem;

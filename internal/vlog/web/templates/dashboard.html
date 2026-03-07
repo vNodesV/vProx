@@ -33,7 +33,7 @@
 </div>
 
 <div id="blocks-container">
-<article class="v-block">
+<article class="v-block" data-drag-id="analytics">
   <details open>
     <summary onclick="if(event.target.closest('select,button')){event.preventDefault()}">
       <span class="v-block-title">Traffic Analytics</span>
@@ -88,7 +88,7 @@
 </article>
 
 <!-- FLAGGED IPs -->
-<article class="v-block" data-block-id="threats">
+<article class="v-block" data-block-id="threats" data-drag-id="threats">
   <details open>
     <summary><span class="v-block-title">Flagged IPs</span></summary>
     <div class="v-block-body">
@@ -140,7 +140,7 @@
 </article>
 
 <!-- CHAIN STATUS (full width) -->
-<div class="v-blocks-row" id="chain-server-row">
+<div class="v-blocks-row" id="chain-server-row" data-drag-id="chain-row">
 
 <article id="block-chain" class="v-block">
   <details open>
@@ -156,9 +156,12 @@
           onmouseover="this.style.background='rgba(0,255,0,0.10)';this.style.borderColor='#00ff00'"
           onmouseout="this.style.background='none';this.style.borderColor='rgba(0,255,0,0.35)'">Refresh</button>
         <button id="chain-hcol-btn" onclick="toggleHcol('left')"
-          style="background:none;border:1px solid rgba(0,255,0,0.20);color:rgba(0,255,0,0.5);padding:.25rem .65rem;border-radius:4px;cursor:pointer;font-size:.75rem;font-family:Inter,sans-serif;line-height:1;transition:all 0.2s"
+          style="background:none;border:1px solid rgba(0,255,0,0.20);color:rgba(0,255,0,0.5);padding:.25rem .7rem;border-radius:4px;cursor:pointer;font-size:.8rem;font-family:Inter,sans-serif;line-height:1;transition:all 0.2s"
           onmouseover="this.style.color='#00ff00';this.style.borderColor='rgba(0,255,0,0.6)'"
           onmouseout="this.style.color='rgba(0,255,0,0.5)';this.style.borderColor='rgba(0,255,0,0.20)'">More &gt;</button>
+        <button id="chain-lock-btn" onclick="toggleLock('left')"
+          style="display:none;background:rgba(0,0,0,0.40);border:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.30);padding:.25rem .7rem;border-radius:4px;cursor:pointer;font-size:.8rem;font-family:Inter,sans-serif;transition:all 0.2s"
+          title="Lock expanded">🔓</button>
       </div>
     </summary>
     <div class="v-block-body">
@@ -173,9 +176,12 @@
       <span class="v-block-title">INFRASTRUCTURE</span>
       <div class="v-block-actions">
         <button id="server-hcol-btn" onclick="toggleHcol('right')"
-          style="background:none;border:1px solid rgba(0,255,0,0.20);color:rgba(0,255,0,0.5);padding:.25rem .65rem;border-radius:4px;cursor:pointer;font-size:.75rem;font-family:Inter,sans-serif;line-height:1;transition:all 0.2s"
+          style="background:none;border:1px solid rgba(0,255,0,0.20);color:rgba(0,255,0,0.5);padding:.25rem .7rem;border-radius:4px;cursor:pointer;font-size:.8rem;font-family:Inter,sans-serif;line-height:1;transition:all 0.2s"
           onmouseover="this.style.color='#00ff00';this.style.borderColor='rgba(0,255,0,0.6)'"
           onmouseout="this.style.color='rgba(0,255,0,0.5)';this.style.borderColor='rgba(0,255,0,0.20)'">&lt; More</button>
+        <button id="server-lock-btn" onclick="toggleLock('right')"
+          style="display:none;background:rgba(0,0,0,0.40);border:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.30);padding:.25rem .7rem;border-radius:4px;cursor:pointer;font-size:.8rem;font-family:Inter,sans-serif;transition:all 0.2s"
+          title="Lock expanded">🔓</button>
         <button id="vm-ping-btn" onclick="doVMPing()"
           style="background:none;border:1px solid rgba(0,255,0,0.35);color:#00ff00;padding:.25rem .7rem;border-radius:4px;cursor:pointer;font-size:.8rem;font-family:Inter,sans-serif;transition:all 0.2s"
           onmouseover="this.style.background='rgba(0,255,0,0.10)';this.style.borderColor='#00ff00'"
@@ -194,7 +200,7 @@
 
 </div><!-- /#chain-server-row -->
 
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:0;width:100%">
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:0;width:100%" data-drag-id="archive">
 <article class="v-block">
   <div class="v-block-header">
     <span class="v-block-title">Archive Ingestion</span>
@@ -1018,19 +1024,41 @@
 
 <script>
 (function() {
-  var row      = document.getElementById('chain-server-row');
-  var chainBlk = document.getElementById('block-chain');
-  var srvBlk   = document.getElementById('block-server');
-  var chainBtn = document.getElementById('chain-hcol-btn');
-  var srvBtn   = document.getElementById('server-hcol-btn');
+  var row          = document.getElementById('chain-server-row');
+  var chainBlk     = document.getElementById('block-chain');
+  var srvBlk       = document.getElementById('block-server');
+  var chainBtn     = document.getElementById('chain-hcol-btn');
+  var srvBtn       = document.getElementById('server-hcol-btn');
+  var chainLockBtn = document.getElementById('chain-lock-btn');
+  var srvLockBtn   = document.getElementById('server-lock-btn');
+  var lockState    = { left: false, right: false };
+
+  function setLockStyle(btn, locked) {
+    if (!btn) return;
+    if (locked) {
+      btn.style.background  = 'rgba(0,255,0,0.12)';
+      btn.style.borderColor = 'rgba(0,255,0,0.55)';
+      btn.style.color       = '#00ff00';
+      btn.textContent       = '\uD83D\uDD12'; // 🔒
+      btn.title             = 'Unlock';
+    } else {
+      btn.style.background  = 'rgba(0,0,0,0.40)';
+      btn.style.borderColor = 'rgba(255,255,255,0.15)';
+      btn.style.color       = 'rgba(255,255,255,0.30)';
+      btn.textContent       = '\uD83D\uDD13'; // 🔓
+      btn.title             = 'Lock expanded';
+    }
+  }
 
   function reset() {
     row.classList.remove('hcol-left', 'hcol-right');
-    chainBlk.classList.remove('is-strip');
-    srvBlk.classList.remove('is-strip');
+    chainBlk.classList.remove('is-strip', 'is-locked');
+    srvBlk.classList.remove('is-strip', 'is-locked', 'is-solo');
+    lockState.left = lockState.right = false;
+    if (chainLockBtn) { chainLockBtn.style.display = 'none'; setLockStyle(chainLockBtn, false); }
+    if (srvLockBtn)   { srvLockBtn.style.display   = 'none'; setLockStyle(srvLockBtn,   false); }
     if (chainBtn) chainBtn.textContent = 'More >';
     if (srvBtn)   srvBtn.textContent   = '< More';
-    // Collapse expand states when returning to 50/50
     if (window.getChainExpanded && window.getChainExpanded()) window.toggleChainExpand();
     if (window.getVMExpanded    && window.getVMExpanded())    window.toggleVMExpand();
   }
@@ -1041,15 +1069,49 @@
     if (!active) {
       row.classList.add('hcol-' + side);
       if (side === 'left') {
-        // Chain expands → server becomes strip; show chain ping cols
         srvBlk.classList.add('is-strip');
-        if (chainBtn) chainBtn.textContent = '< More';
+        if (chainBtn)     chainBtn.textContent    = '< More';
+        if (chainLockBtn) { chainLockBtn.style.display = ''; setLockStyle(chainLockBtn, false); }
         if (window.toggleChainExpand && !window.getChainExpanded()) window.toggleChainExpand();
       } else {
-        // Server expands → chain becomes strip; show SV ping cols
         chainBlk.classList.add('is-strip');
-        if (srvBtn) srvBtn.textContent = 'More >';
+        if (srvBtn)     srvBtn.textContent    = 'More >';
+        if (srvLockBtn) { srvLockBtn.style.display = ''; setLockStyle(srvLockBtn, false); }
         if (window.toggleVMExpand && !window.getVMExpanded()) window.toggleVMExpand();
+      }
+    }
+  };
+
+  window.toggleLock = function(side) {
+    var isLocked = lockState[side];
+    if (!isLocked) {
+      lockState[side] = true;
+      row.classList.remove('hcol-left', 'hcol-right');
+      if (side === 'left') {
+        srvBlk.classList.remove('is-strip');
+        srvBlk.classList.add('is-solo');
+        chainBlk.classList.add('is-locked');
+        setLockStyle(chainLockBtn, true);
+      } else {
+        chainBlk.classList.remove('is-strip');
+        chainBlk.classList.add('is-solo');
+        srvBlk.classList.add('is-locked');
+        setLockStyle(srvLockBtn, true);
+      }
+    } else {
+      lockState[side] = false;
+      if (side === 'left') {
+        chainBlk.classList.remove('is-locked');
+        srvBlk.classList.remove('is-solo');
+        row.classList.add('hcol-left');
+        srvBlk.classList.add('is-strip');
+        setLockStyle(chainLockBtn, false);
+      } else {
+        srvBlk.classList.remove('is-locked');
+        chainBlk.classList.remove('is-solo');
+        row.classList.add('hcol-right');
+        chainBlk.classList.add('is-strip');
+        setLockStyle(srvLockBtn, false);
       }
     }
   };
@@ -1061,6 +1123,88 @@
   srvBlk.addEventListener('click', function() {
     if (srvBlk.classList.contains('is-strip')) reset();
   });
+})();
+</script>
+
+<script>
+// ── DnD: drag-to-reorder top-level blocks ────────────────────────────────────
+(function() {
+  var container = document.getElementById('blocks-container');
+  if (!container) return;
+  var dragSrc = null;
+
+  function draggables() {
+    return Array.from(container.children).filter(function(el) {
+      return el.dataset.dragId;
+    });
+  }
+
+  function saveOrder() {
+    try {
+      localStorage.setItem('vprox-block-order',
+        JSON.stringify(draggables().map(function(el) { return el.dataset.dragId; })));
+    } catch(e) {}
+  }
+
+  function restoreOrder() {
+    var saved;
+    try { saved = JSON.parse(localStorage.getItem('vprox-block-order')); } catch(e) {}
+    if (!Array.isArray(saved) || !saved.length) return;
+    var map = {};
+    draggables().forEach(function(el) { map[el.dataset.dragId] = el; });
+    saved.forEach(function(id) { if (map[id]) container.appendChild(map[id]); });
+  }
+
+  function clearOver() {
+    draggables().forEach(function(el) { el.classList.remove('dnd-over'); });
+  }
+
+  draggables().forEach(function(el) {
+    el.setAttribute('draggable', 'true');
+
+    el.addEventListener('dragstart', function(e) {
+      if (e.target.closest('button,input,select,a,canvas,label')) {
+        e.preventDefault(); return;
+      }
+      dragSrc = el;
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', el.dataset.dragId);
+      setTimeout(function() { el.classList.add('dnd-dragging'); }, 0);
+    });
+
+    el.addEventListener('dragend', function() {
+      el.classList.remove('dnd-dragging');
+      clearOver();
+      dragSrc = null;
+      saveOrder();
+    });
+
+    el.addEventListener('dragover', function(e) {
+      if (!dragSrc || dragSrc === el) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      clearOver();
+      el.classList.add('dnd-over');
+    });
+
+    el.addEventListener('dragleave', function(e) {
+      if (!el.contains(e.relatedTarget)) el.classList.remove('dnd-over');
+    });
+
+    el.addEventListener('drop', function(e) {
+      if (!dragSrc || dragSrc === el) return;
+      e.preventDefault();
+      el.classList.remove('dnd-over');
+      var rect = el.getBoundingClientRect();
+      if (e.clientY < rect.top + rect.height / 2) {
+        container.insertBefore(dragSrc, el);
+      } else {
+        container.insertBefore(dragSrc, el.nextSibling);
+      }
+    });
+  });
+
+  restoreOrder();
 })();
 </script>
 {{end}}
