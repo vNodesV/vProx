@@ -44,6 +44,16 @@ type ChainStatus struct {
 	UpgradeEstUTC     string `json:"upgrade_est_utc,omitempty"`
 	UpgradeProposalID string `json:"upgrade_proposal_id,omitempty"`
 
+	// Chain identity
+	ChainID     string `json:"chain_id,omitempty"`     // official chain-id from config
+	ExplorerBase string `json:"explorer_url,omitempty"` // block explorer base URL for dashboard links
+
+	// LAN ping (vProx → node direct)
+	LanPingMs int64 `json:"lan_ping_ms"` // round-trip ms; -1=unreachable, 0=not configured
+
+	// Validator governance participation
+	ValParticipation string `json:"val_participation,omitempty"` // "12/15"; empty if not a validator or no valoper
+
 	// Metadata
 	Datacenter   string    `json:"datacenter,omitempty"`
 	PingCountry  string    `json:"ping_country,omitempty"`
@@ -331,4 +341,88 @@ func pollUpgrade(ctx context.Context, s *ChainStatus) {
 			s.UpgradeEstUTC = time.Now().UTC().Add(estDur).Format(time.RFC3339)
 		}
 	}
+}
+
+// ---- LAN ping ----
+
+// PingLanIP measures the round-trip time (ms) of a GET /health request to the
+// node's CometBFT RPC port on the LAN (zero-cost endpoint). Returns -1 when
+// unreachable, 0 when lanIP is empty (not configured).
+func PingLanIP(ctx context.Context, lanIP string) int64 {
+	if lanIP == "" {
+		return 0
+	}
+	url := "http://" + lanIP + ":26657/health"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return -1
+	}
+	start := time.Now()
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return -1
+	}
+	_, _ = io.Copy(io.Discard, resp.Body)
+	resp.Body.Close()
+	if ms := time.Since(start).Milliseconds(); ms > 0 {
+		return ms
+	}
+	return 1 // sub-ms: report 1 ms rather than 0 (0 = unconfigured)
+}
+
+// ---- Governance participation ----
+
+// paginationTotal is a minimal struct for pagination responses that carry a
+// count_total value.
+type paginationTotal struct {
+	Pagination struct {
+		Total string `json:"total"`
+	} `json:"pagination"`
+}
+
+// countGovProposals fetches the total proposal count from the Cosmos REST
+// governance endpoint. When voter is non-empty, the query is filtered to
+// proposals the address has voted on.  Returns -1 on any error.
+func countGovProposals(ctx context.Context, restURL, voter string) int64 {
+	endpoint := restURL + "/cosmos/gov/v1/proposals?pagination.count_total=true&pagination.limit=1"
+	if voter != "" {
+		endpoint += "&voter=" + voter
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return -1
+	}
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return -1
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return -1
+	}
+	var r paginationTotal
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 64*1024)).Decode(&r); err != nil {
+		return -1
+	}
+	var n int64
+	fmt.Sscanf(r.Pagination.Total, "%d", &n) //nolint:errcheck
+	return n
+}
+
+// PollValParticipation returns a "voted/total" string indicating how many
+// governance proposals the given valoper address has voted on out of the total.
+// Returns empty string when not configured or on error.
+func PollValParticipation(ctx context.Context, restURL, valoper string) string {
+	if restURL == "" || valoper == "" {
+		return ""
+	}
+	total := countGovProposals(ctx, restURL, "")
+	if total < 0 {
+		return ""
+	}
+	voted := countGovProposals(ctx, restURL, valoper)
+	if voted < 0 {
+		voted = 0
+	}
+	return fmt.Sprintf("%d/%d", voted, total)
 }

@@ -145,7 +145,7 @@
 <article id="block-chain" class="v-block">
   <details open>
     <summary onclick="if(event.target.closest('button')){event.preventDefault()}">
-      <span class="v-block-title">Chain Status</span>
+      <span class="v-block-title">Chain Services</span>
       <div class="v-block-actions">
         <button id="chain-ping-btn" onclick="doPing()"
           style="background:none;border:1px solid rgba(0,255,0,0.35);color:#00ff00;padding:.25rem .7rem;border-radius:4px;cursor:pointer;font-size:.8rem;font-family:Inter,sans-serif;transition:all 0.2s"
@@ -361,31 +361,37 @@
 
   window.loadChart = loadChart;
 
-  // ── Chain Status Table ───────────────────────────────────────────────────
+  // ── Chain Services Table ─────────────────────────────────────────────────
   var CHAIN_INTERVAL = 65;
   var chainCdSec = CHAIN_INTERVAL;
   var chainPinging = false;
   var chainExpanded = false;
   var chainCachedData = null; // {chains, registeredSet, tmap}
 
-  function probeInitCell() { return '<span class="probe-spinner"></span>'; }
   function showLoading(panelId) { window.showLoading(panelId); }
 
-  function statusTag(st) {
+  function statusCell(st) {
+    var online;
     if (st === 'synced' || st === 'syncing')
-      return '<span style="font-size:.68rem;padding:.06rem .32rem;border-radius:3px;border:1px solid rgba(0,255,0,0.5);color:#00ff00;font-weight:600">ONLINE</span>';
-    return '<span style="font-size:.68rem;padding:.06rem .32rem;border-radius:3px;border:1px solid rgba(239,83,80,0.5);color:#ef5350;font-weight:600">OFFLINE</span>';
+      online = '<span style="font-size:.68rem;padding:.06rem .32rem;border-radius:3px;border:1px solid rgba(0,255,0,0.5);color:#00ff00;font-weight:600">ONLINE</span>';
+    else
+      return '<span style="font-size:.68rem;padding:.06rem .32rem;border-radius:3px;border:1px solid rgba(239,83,80,0.5);color:#ef5350;font-weight:600">OFFLINE</span>';
+    var sync = (st === 'synced')
+      ? '<span style="font-size:.68rem;padding:.06rem .32rem;border-radius:3px;border:1px solid rgba(0,255,0,0.4);color:#00ff00;font-weight:600;margin-left:3px">SYNCED</span>'
+      : '<span style="font-size:.68rem;padding:.06rem .32rem;border-radius:3px;border:1px solid rgba(255,167,38,0.5);color:#ffa726;font-weight:600;margin-left:3px">CATCHING UP</span>';
+    return online + sync;
   }
-  function syncTag(st) {
-    if (st === 'synced')  return '<span style="font-size:.68rem;padding:.06rem .32rem;border-radius:3px;border:1px solid rgba(0,255,0,0.5);color:#00ff00;font-weight:600">YES</span>';
-    if (st === 'syncing') return '<span style="font-size:.68rem;padding:.06rem .32rem;border-radius:3px;border:1px solid rgba(255,167,38,0.5);color:#ffa726;font-weight:600">NO</span>';
-    return '<span style="opacity:.4;font-size:.72rem">—</span>';
+  function lanPingCell(ms) {
+    if (ms === undefined || ms === null || ms === 0) return '<span style="opacity:.4;font-size:.7rem">—</span>';
+    if (ms < 0) return '<span style="color:#ef5350;font-size:.68rem">✗</span>';
+    return '<span style="color:#4caf50;font-size:.68rem">' + ms + 'ms</span>';
   }
   function servicesPills(type) {
     var types = (type || '').toLowerCase().split(',').map(function(t){ return t.trim(); });
     return [
       {key:'validator', label:'VAL'},
       {key:'sp',        label:'API'},
+      {key:'rpc',       label:'RPC'},
       {key:'relayer',   label:'RLY'},
       {key:'node',      label:'NODE'}
     ].map(function(d) {
@@ -414,51 +420,6 @@
     try { return new URL(url).hostname; }
     catch(e) { return url.replace(/^https?:\/\//,'').split(/[/:?#]/)[0]; }
   }
-  function probeMs(res, label) {
-    if (!res) return '<span style="opacity:.4;font-size:.68rem">' + escH(label) + ':—</span>';
-    if (!res.ok) return '<span style="color:#ef5350;font-size:.68rem">' + escH(label) + ':✗</span>';
-    var ms = (res.latency_ms !== undefined && res.latency_ms !== null) ? res.latency_ms + 'ms' : 'ok';
-    return '<span style="color:#4caf50;font-size:.68rem">' + escH(label) + ':' + ms + '</span>';
-  }
-  function fireProbes(chains, tmap) {
-    chains.forEach(function(c, idx) {
-      var tf   = matchTraffic(tmap, c.chain);
-      var host = tf ? tf.host : '';
-      if (!host && c.rpc_url) host = extractHost(c.rpc_url);
-      if (!host) return;
-      var probeURL = BASE + '/api/v1/probe?host=' + encodeURIComponent(host);
-      if (c.ping_country)  probeURL += '&country='  + encodeURIComponent(c.ping_country);
-      if (c.ping_provider) probeURL += '&provider=' + encodeURIComponent(c.ping_provider);
-      fetch(probeURL)
-        .then(function(r){ return r.json(); })
-        .then(function(p){
-          var caLabel = c.ping_country || ((p.ca && p.ca.node) ? p.ca.node.split('.')[0].toUpperCase() : 'DC');
-          var wwLabel = (p.ww && p.ww.node) ? p.ww.node.split('.')[0].toUpperCase() : 'WW';
-          var elL  = document.getElementById('probe-local-' + idx);
-          var elCA = document.getElementById('probe-ca-'    + idx);
-          var elWW = document.getElementById('probe-ww-'    + idx);
-          if (p.error) {
-            if (elL)  elL.innerHTML  = '<span style="color:#ef5350;font-size:.68rem">L:' + escH(p.error) + '</span>';
-            if (elCA) elCA.innerHTML = '<span style="color:#ef5350;font-size:.68rem">' + caLabel + ':' + escH(p.error) + '</span>';
-            if (elWW) elWW.innerHTML = '<span style="color:#ef5350;font-size:.68rem">WW:' + escH(p.error) + '</span>';
-          } else {
-            if (elL)  elL.innerHTML  = probeMs(p.local, 'L');
-            if (elCA) elCA.innerHTML = probeMs(p.ca,    caLabel);
-            if (elWW) elWW.innerHTML = probeMs(p.ww,    wwLabel);
-          }
-        })
-        .catch(function(e){
-          var elL  = document.getElementById('probe-local-' + idx);
-          var elCA = document.getElementById('probe-ca-'    + idx);
-          var elWW = document.getElementById('probe-ww-'    + idx);
-          var caLabel = c.ping_country || 'DC';
-          if (elL)  elL.innerHTML  = '<span style="color:#ef5350;font-size:.68rem">L:net</span>';
-          if (elCA) elCA.innerHTML = '<span style="color:#ef5350;font-size:.68rem">' + caLabel + ':net</span>';
-          if (elWW) elWW.innerHTML = '<span style="color:#ef5350;font-size:.68rem">WW:net</span>';
-        });
-    });
-  }
-
   function renderChainTable(data) {
     var panel = document.getElementById('chain-status-panel');
     if (!panel) return;
@@ -487,7 +448,7 @@
         var govURL = explorerBase ? (explorerBase + '/gov') : ('https://ping.pub/' + encodeURIComponent(c.chain) + '/gov');
         activeProp = '<a href="' + govURL + '" target="_blank" rel="noopener" style="color:#ffa726;font-weight:600;text-decoration:none" title="' + c.active_proposals + ' active">' + c.active_proposals + '</a>';
       } else {
-        activeProp = '<span style="opacity:.4">NO</span>';
+        activeProp = '<span style="opacity:.4">—</span>';
       }
       var votingEnds = '<span style="opacity:.3">—</span>';
       if (c.voting_end_time) {
@@ -495,80 +456,68 @@
         if (!isNaN(d)) votingEnds = d.toISOString().replace('T',' ').slice(0,16) + ' UTC';
       }
       var upg;
-      if (c.upgrade_pending) {
+      if (c.upgrade_pending && c.upgrade_height) {
         var upgURL = (c.upgrade_proposal_id && explorerBase)
           ? explorerBase + '/gov/' + encodeURIComponent(c.upgrade_proposal_id)
           : (explorerBase ? explorerBase + '/gov' : 'https://ping.pub/' + encodeURIComponent(c.chain) + '/gov');
-        var upgTitle = c.upgrade_name ? escH(c.upgrade_name) + ' @ ' + Number(c.upgrade_height).toLocaleString() : '';
-        upg = '<a href="' + upgURL + '" target="_blank" rel="noopener" style="color:#ef5350;font-weight:600;text-decoration:none" title="' + upgTitle + '">YES</a>';
+        var upgLabel = '@' + Number(c.upgrade_height).toLocaleString();
+        upg = '<a href="' + upgURL + '" target="_blank" rel="noopener" style="color:#ef5350;font-weight:600;text-decoration:none" title="' + escH(c.upgrade_name || '') + '">' + upgLabel + '</a>';
       } else {
-        upg = '<span style="opacity:.4">NO</span>';
+        upg = '<span style="opacity:.3">—</span>';
       }
+      var participation = c.val_participation
+        ? '<span style="font-variant-numeric:tabular-nums;font-size:.72rem">' + escH(c.val_participation) + '</span>'
+        : '<span style="opacity:.3">—</span>';
       var rmBtn = registeredSet[c.chain]
         ? '<button onclick="removeChain(\'' + escH(c.chain) + '\')" style="' + rmStyle + '">remove</button>'
         : '';
 
       var row = '<tr style="border-bottom:1px solid rgba(255,255,255,.04)">' +
-        '<td style="' + tdStyle + ';white-space:nowrap">' + escH(c.chain) + '</td>' +
+        '<td style="' + tdStyle + ';white-space:nowrap">' + escH(c.moniker || c.chain) + '</td>' +
+        '<td style="' + tdStyle + ';white-space:nowrap;opacity:.7;font-size:.75rem">' + escH(c.chain) + '</td>' +
         '<td style="' + tdStyle + '">' + servicesPills(c.type) + '</td>' +
-        '<td style="' + tdStyle + '">' + statusTag(c.node_status) + '</td>' +
-        '<td style="' + tdStyle + '">' + syncTag(c.node_status) + '</td>' +
+        '<td style="' + tdStyle + '">' + statusCell(c.node_status) + '</td>' +
         '<td style="' + tdNum  + '">' + height + '</td>';
-      if (ex) row +=
-        '<td style="' + tdNum  + '">' + earliest + '</td>';
+      if (ex) row += '<td style="' + tdNum + '">' + earliest + '</td>';
+      row += '<td style="' + tdStyle + ';border-left:1px solid var(--vn-border)">' + activeProp + '</td>';
+      if (ex) row += '<td style="' + tdNum + ';font-size:.7rem">' + votingEnds + '</td>';
       row +=
-        '<td style="' + tdStyle + ';border-left:1px solid var(--vn-border)">' + activeProp + '</td>';
-      if (ex) row +=
-        '<td style="' + tdNum  + ';font-size:.7rem">' + votingEnds + '</td>';
-      row +=
-        '<td style="' + tdStyle + '">' + upg + '</td>';
-      if (ex) row +=
-        '<td style="' + tdStyle + ';opacity:.4;font-size:.7rem">—</td>'; // Part.Avg
-      if (ex) {
-        row += '<td id="probe-local-' + idx + '" style="' + tdStyle + ';border-left:1px solid var(--vn-border)">' + probeInitCell() + '</td>';
-        row += '<td id="probe-ca-'    + idx + '" style="' + tdStyle + '">' + probeInitCell() + '</td>';
-        row += '<td id="probe-ww-'    + idx + '" style="' + tdStyle + '">' + probeInitCell() + '</td>';
-      }
-      row +=
+        '<td style="' + tdStyle + '">' + upg + '</td>' +
+        '<td style="' + tdStyle + '">' + participation + '</td>' +
+        '<td style="' + tdStyle + ';border-left:1px solid var(--vn-border)">' + lanPingCell(c.lan_ping_ms) + '</td>' +
         '<td style="' + tdStyle + '">' + rmBtn + '</td>' +
         '</tr>';
       return row;
     }).join('');
 
     // Category row
-    var chainInfoCols = ex ? 6 : 5;
-    var govCols       = ex ? 4 : 2;  // when ex: Active Prop, Voting Ends, Upgrade, Part.Avg
+    var chainInfoCols = ex ? 6 : 5;  // Moniker, Chain, Services, Status, Height [+Earliest]
+    var govCols       = ex ? 4 : 3;  // Active Prop, [+Voting Ends], Upgrade, Participation
     var catRow =
       '<tr>' +
-      '<th colspan="' + chainInfoCols + '" style="' + catStyle + '">Chain Information</th>' +
-      '<th colspan="' + govCols + '" style="' + catStyle + ';border-left:1px solid var(--vn-border)">Governance</th>';
-    if (ex) catRow += '<th colspan="3" style="' + catStyle + ';border-left:1px solid var(--vn-border)">Ping</th>';
-    catRow += '<th style="' + catStyle + '"></th></tr>';
+      '<th colspan="' + chainInfoCols + '" style="' + catStyle + '">Services Statistics</th>' +
+      '<th colspan="' + govCols + '" style="' + catStyle + ';border-left:1px solid var(--vn-border)">Governance</th>' +
+      '<th style="' + catStyle + ';border-left:1px solid var(--vn-border)">Ping</th>' +
+      '<th style="' + catStyle + '"></th></tr>';
     var colRow =
       '<tr style="font-size:.72rem;border-bottom:1px solid var(--vn-border)">' +
+      '<th style="' + thStyle + '">Moniker</th>' +
       '<th style="' + thStyle + '">Chain</th>' +
       '<th style="' + thStyle + '">Services</th>' +
       '<th style="' + thStyle + '">Status</th>' +
-      '<th style="' + thStyle + '">Synced</th>' +
       '<th style="' + thStyle + '">Height</th>';
     if (ex) colRow += '<th style="' + thStyle + '">Earliest</th>';
-    colRow +=
-      '<th style="' + thStyle + ';border-left:1px solid var(--vn-border)">Active Prop</th>';
+    colRow += '<th style="' + thStyle + ';border-left:1px solid var(--vn-border)">Active Prop</th>';
     if (ex) colRow += '<th style="' + thStyle + '">Voting Ends</th>';
-    colRow += '<th style="' + thStyle + '">Upgrade</th>';
-    if (ex) colRow += '<th style="' + thStyle + '">Part.Avg</th>';
-    if (ex) {
-      colRow += '<th style="' + thStyle + ';border-left:1px solid var(--vn-border)">L</th>';
-      colRow += '<th style="' + thStyle + '">DC</th>';
-      colRow += '<th style="' + thStyle + '">WW</th>';
-    }
-    colRow += '<th style="' + thStyle + '"></th></tr>';
+    colRow +=
+      '<th style="' + thStyle + '">Upgrade</th>' +
+      '<th style="' + thStyle + '">Participation</th>' +
+      '<th style="' + thStyle + ';border-left:1px solid var(--vn-border)">Ping</th>' +
+      '<th style="' + thStyle + '"></th></tr>';
 
     panel.innerHTML = '<table style="width:100%;border-collapse:collapse"><thead>' +
       catRow + colRow + '</thead><tbody>' + rows + '</tbody></table>';
     updateCountdown();
-    // Fire probes only when expanded (ping cols exist in DOM)
-    if (ex) fireProbes(chains, tmap);
   }
 
   function loadChainStatus() {

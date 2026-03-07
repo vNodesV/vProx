@@ -123,6 +123,15 @@ func (s *Service) pollAll(ctx context.Context) {
 			st.Datacenter = vm.Datacenter
 			st.PingCountry = vm.Ping.Country
 			st.PingProvider = vm.Ping.Provider
+			// v1.3.0: chain identity + LAN ping + governance participation
+			st.ChainID = vm.ChainID
+			st.ExplorerBase = vm.Explorer
+			if vm.LanIP != "" {
+				st.LanPingMs = status.PingLanIP(ctx, vm.LanIP)
+			}
+			if vm.Valoper != "" {
+				st.ValParticipation = status.PollValParticipation(ctx, vm.REST(), vm.Valoper)
+			}
 			s.mu.Lock()
 			s.statuses[vm.Name] = st
 			s.mu.Unlock()

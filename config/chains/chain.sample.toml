@@ -100,8 +100,13 @@ key_path         = ""
 port             = 0
 
 # Service role(s) for this node. Used for dashboard badges.
-# Values: "validator", "sp", "relayer", "node" (list multiple roles)
+# Values: "validator", "sp", "rpc", "relayer", "node" (list multiple roles)
 type             = ["validator"]
+
+# Validator operator address (bech32 cosmosvaloper…) for governance participation tracking.
+# When set, the Chain Services block shows voted/total proposals for this validator.
+# Leave empty for non-validator nodes.
+valoper          = ""
 
 # Datacenter / location label shown on the dashboard (e.g. "QC", "RBX", "AMS").
 datacenter       = ""
@@ -112,8 +117,7 @@ exposed_services = true
 
 [management.ping]
 # ISO 3166-1 alpha-2 country code of the datacenter's country.
-# vLog uses check-host.net to probe from a regional node in this country,
-# populating the DC latency column on the Chain Status dashboard.
+# Used by the Server Status block to probe via check-host.net from a regional node.
 # Supported values: CA  US  FR  DE  NL  GB  FI  JP  SG  BR  IN
 country  = ""
 # (optional) Pin to a specific check-host.net node, e.g. "ca1", "fi1".

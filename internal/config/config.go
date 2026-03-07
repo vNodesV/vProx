@@ -92,9 +92,10 @@ type Management struct {
 	User            string         `toml:"user"`              // SSH user; empty = [vlog.push.defaults].user
 	KeyPath         string         `toml:"key_path"`          // SSH key path; empty = [vlog.push.defaults].key_path
 	Port            int            `toml:"port"`              // SSH port; 0 = default 22
-	Type            []string       `toml:"type"`              // service roles: validator | sp | relayer | node
+	Type            []string       `toml:"type"`              // service roles: validator | sp | rpc | relayer | node
 	Datacenter      string         `toml:"datacenter"`        // location label, e.g. "QC"
 	ExposedServices bool           `toml:"exposed_services"`  // true = probe via public chain.host domain
+	Valoper         string         `toml:"valoper"`           // validator operator address for governance participation
 	Ping            ManagementPing `toml:"ping"`
 }
 

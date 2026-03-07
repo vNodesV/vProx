@@ -35,7 +35,7 @@ type Host struct {
 //   - VM on a physical host: set host_ref to the [[host]].name; lan_ip is the VM's LAN address.
 //   - Standalone VPS: leave host_ref empty; set lan_ip and public_ip directly on the VM.
 //
-// Type classifies the chain role(s): validator | sp | relayer | node (comma-separated for multi-role).
+// Type classifies the chain role(s): validator | sp | rpc | relayer | node (comma-separated for multi-role).
 // RPCURL and RESTURL are optional; when empty they are derived from Host
 // using standard Cosmos SDK ports (26657 / 1317).
 type VM struct {
@@ -48,9 +48,14 @@ type VM struct {
 	User       string `toml:"user"`
 	KeyPath    string `toml:"key_path"`
 	Datacenter string `toml:"datacenter"`
-	Type       string `toml:"type"`     // validator | sp | relayer | node (comma-separated)
+	Type       string `toml:"type"`     // validator | sp | rpc | relayer | node (comma-separated)
 	RPCURL     string `toml:"rpc_url"`  // optional override
 	RESTURL    string `toml:"rest_url"` // optional override
+
+	// Chain identity and explorer (from chain.toml top-level or vms.toml)
+	ChainID  string `toml:"chain_id"` // official chain-id, e.g. "cheqd-mainnet-1"
+	Explorer string `toml:"explorer"` // block explorer base URL, e.g. "ping.pub"
+	Valoper  string `toml:"valoper"`  // validator operator address for governance participation
 
 	// Ping config — selects check-host.net probe node for datacenter latency column.
 	Ping VMPing `toml:"ping"`
@@ -223,6 +228,9 @@ func LoadFromChainConfigs(dir string, defaults PushDefaults) (*Config, error) {
 			Type:       strings.Join(m.Type, ","),
 			RPCURL:     rpcURL,
 			RESTURL:    restURL,
+			ChainID:    cc.ChainID,
+			Explorer:   cc.ExplorerBase,
+			Valoper:    m.Valoper,
 			Ping: VMPing{
 				Country:  m.Ping.Country,
 				Provider: m.Ping.Provider,
