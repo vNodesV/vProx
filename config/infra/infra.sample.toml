@@ -24,6 +24,17 @@ enable     = true                  # when false, the host + all its VMs are hidd
 # public_ip = "1.2.3.4"           # display-only; omit for hosts behind vProx/Apache.
 
 
+# ── vProx Agent ───────────────────────────────────────────────────────────────
+# Registers the vProx machine itself for SSH dispatch.
+# Generate key with: ssh-keygen -t ed25519 -C "vprox.agent@<lan_ip>" -f $HOME/.vprox/secret/id.agent
+# Then add the generated .pub to each VM/VPS authorized_keys.
+
+[vprox]
+name   = "vProx"
+lan_ip = "10.0.0.65"              # LAN IP of the vProx machine itself
+key    = "$HOME/.vprox/secret/id.agent"  # private key for outbound SSH dispatch ($HOME expanded)
+
+
 [[vm]]
 name       = "akash"
 # host_ref = "homelab-qc"         # auto-inferred from [host].name above; override only if needed
@@ -56,18 +67,6 @@ provider = ""
 # [vm.ping]
 # country  = "CA"
 # provider = ""
-
-
-# ── vProx Agent ───────────────────────────────────────────────────────────────
-# Registers the vProx machine for SSH dispatch.
-# Key uses $VPROX_KEY env var (default: $HOME/.vProx/secret).
-# Generate with: ssh-keygen -t ed25519 -C "vprox.agent@<lan_ip>" -f $VPROX_KEY/id.agent
-# Then add the generated .pub key to each VM/VPS authorized_keys.
-
-[vprox]
-name   = "vProx"
-lan_ip = "10.0.0.65"              # LAN IP of the vProx machine itself
-key    = "$VPROX_KEY/id.agent"    # private key for outbound SSH dispatch
 
 
 # ── VPS entries ───────────────────────────────────────────────────────────────
