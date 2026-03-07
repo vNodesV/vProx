@@ -156,9 +156,9 @@
           onmouseover="this.style.background='rgba(0,255,0,0.10)';this.style.borderColor='#00ff00'"
           onmouseout="this.style.background='none';this.style.borderColor='rgba(0,255,0,0.35)'">Refresh</button>
         <button id="chain-hcol-btn" onclick="toggleHcol('left')"
-          style="background:none;border:1px solid rgba(0,255,0,0.20);color:rgba(0,255,0,0.5);padding:.25rem .55rem;border-radius:4px;cursor:pointer;font-size:.9rem;font-family:Inter,sans-serif;line-height:1;transition:all 0.2s"
+          style="background:none;border:1px solid rgba(0,255,0,0.20);color:rgba(0,255,0,0.5);padding:.25rem .65rem;border-radius:4px;cursor:pointer;font-size:.75rem;font-family:Inter,sans-serif;line-height:1;transition:all 0.2s"
           onmouseover="this.style.color='#00ff00';this.style.borderColor='rgba(0,255,0,0.6)'"
-          onmouseout="this.style.color='rgba(0,255,0,0.5)';this.style.borderColor='rgba(0,255,0,0.20)'">›</button>
+          onmouseout="this.style.color='rgba(0,255,0,0.5)';this.style.borderColor='rgba(0,255,0,0.20)'">More &gt;</button>
       </div>
     </summary>
     <div class="v-block-body">
@@ -170,12 +170,12 @@
 <article id="block-server" class="v-block">
   <details open>
     <summary onclick="if(event.target.closest('button')){event.preventDefault()}">
-      <span class="v-block-title">Servers / VM</span>
+      <span class="v-block-title">INFRASTRUCTURE</span>
       <div class="v-block-actions">
         <button id="server-hcol-btn" onclick="toggleHcol('right')"
-          style="background:none;border:1px solid rgba(0,255,0,0.20);color:rgba(0,255,0,0.5);padding:.25rem .55rem;border-radius:4px;cursor:pointer;font-size:.9rem;font-family:Inter,sans-serif;line-height:1;transition:all 0.2s"
+          style="background:none;border:1px solid rgba(0,255,0,0.20);color:rgba(0,255,0,0.5);padding:.25rem .65rem;border-radius:4px;cursor:pointer;font-size:.75rem;font-family:Inter,sans-serif;line-height:1;transition:all 0.2s"
           onmouseover="this.style.color='#00ff00';this.style.borderColor='rgba(0,255,0,0.6)'"
-          onmouseout="this.style.color='rgba(0,255,0,0.5)';this.style.borderColor='rgba(0,255,0,0.20)'">‹</button>
+          onmouseout="this.style.color='rgba(0,255,0,0.5)';this.style.borderColor='rgba(0,255,0,0.20)'">&lt; More</button>
         <button id="vm-ping-btn" onclick="doVMPing()"
           style="background:none;border:1px solid rgba(0,255,0,0.35);color:#00ff00;padding:.25rem .7rem;border-radius:4px;cursor:pointer;font-size:.8rem;font-family:Inter,sans-serif;transition:all 0.2s"
           onmouseover="this.style.background='rgba(0,255,0,0.10)';this.style.borderColor='#00ff00'"
@@ -478,12 +478,14 @@
         '<td style="' + tdStyle + '">' + servicesPills(c.type) + '</td>' +
         '<td style="' + tdStyle + '">' + statusCell(c.node_status) + '</td>' +
         '<td style="' + tdNum  + '">' + height + '</td>';
-      if (ex) row += '<td style="' + tdNum + '">' + earliest + '</td>';
-      row += '<td style="' + tdStyle + ';border-left:1px solid var(--vn-border)">' + activeProp + '</td>';
-      if (ex) row += '<td style="' + tdNum + ';font-size:.7rem">' + votingEnds + '</td>';
+      if (ex) {
+        row += '<td style="' + tdNum + '">' + earliest + '</td>';
+        row += '<td style="' + tdStyle + ';border-left:1px solid var(--vn-border)">' + activeProp + '</td>';
+        row += '<td style="' + tdNum + ';font-size:.7rem">' + votingEnds + '</td>';
+        row += '<td style="' + tdStyle + '">' + upg + '</td>';
+        row += '<td style="' + tdStyle + '">' + participation + '</td>';
+      }
       row +=
-        '<td style="' + tdStyle + '">' + upg + '</td>' +
-        '<td style="' + tdStyle + '">' + participation + '</td>' +
         '<td style="' + tdStyle + ';border-left:1px solid var(--vn-border)">' + lanPingCell(c.lan_ping_ms) + '</td>' +
         '<td style="' + tdStyle + '">' + rmBtn + '</td>' +
         '</tr>';
@@ -492,11 +494,13 @@
 
     // Category row
     var chainInfoCols = ex ? 6 : 5;  // Moniker, Chain, Services, Status, Height [+Earliest]
-    var govCols       = ex ? 4 : 3;  // Active Prop, [+Voting Ends], Upgrade, Participation
     var catRow =
       '<tr>' +
-      '<th colspan="' + chainInfoCols + '" style="' + catStyle + '">Services Statistics</th>' +
-      '<th colspan="' + govCols + '" style="' + catStyle + ';border-left:1px solid var(--vn-border)">Governance</th>' +
+      '<th colspan="' + chainInfoCols + '" style="' + catStyle + '">Services Statistics</th>';
+    if (ex) {
+      catRow += '<th colspan="4" style="' + catStyle + ';border-left:1px solid var(--vn-border)">Governance</th>';
+    }
+    catRow +=
       '<th style="' + catStyle + ';border-left:1px solid var(--vn-border)">Ping</th>' +
       '<th style="' + catStyle + '"></th></tr>';
     var colRow =
@@ -506,12 +510,14 @@
       '<th style="' + thStyle + '">Services</th>' +
       '<th style="' + thStyle + '">Status</th>' +
       '<th style="' + thStyle + '">Height</th>';
-    if (ex) colRow += '<th style="' + thStyle + '">Earliest</th>';
-    colRow += '<th style="' + thStyle + ';border-left:1px solid var(--vn-border)">Active Prop</th>';
-    if (ex) colRow += '<th style="' + thStyle + '">Voting Ends</th>';
+    if (ex) {
+      colRow += '<th style="' + thStyle + '">Earliest</th>';
+      colRow += '<th style="' + thStyle + ';border-left:1px solid var(--vn-border)">Active Prop</th>';
+      colRow += '<th style="' + thStyle + '">Voting Ends</th>';
+      colRow += '<th style="' + thStyle + '">Upgrade</th>';
+      colRow += '<th style="' + thStyle + '">Participation</th>';
+    }
     colRow +=
-      '<th style="' + thStyle + '">Upgrade</th>' +
-      '<th style="' + thStyle + '">Participation</th>' +
       '<th style="' + thStyle + ';border-left:1px solid var(--vn-border)">Ping</th>' +
       '<th style="' + thStyle + '"></th></tr>';
 
@@ -729,7 +735,7 @@
     }).join('');
 
     var totalCols  = ex ? 11 : 6;  // 6 base + Public IP + Mem + Disk + L + DC + WW
-    var catRow = '<tr><th colspan="' + (ex ? 8 : totalCols) + '" style="' + catSt + '">Servers / VM</th>';
+    var catRow = '<tr><th colspan="' + (ex ? 8 : totalCols) + '" style="' + catSt + '">INFRASTRUCTURE</th>';
     if (ex) catRow += '<th colspan="3" style="' + catSt + ';border-left:1px solid var(--vn-border)">Ping</th>';
     catRow += '</tr>';
     var colRow = '<tr style="font-size:.72rem;border-bottom:1px solid var(--vn-border)">' +
@@ -949,8 +955,8 @@
     row.classList.remove('hcol-left', 'hcol-right');
     chainBlk.classList.remove('is-strip');
     srvBlk.classList.remove('is-strip');
-    if (chainBtn) chainBtn.textContent = '›';
-    if (srvBtn)   srvBtn.textContent   = '‹';
+    if (chainBtn) chainBtn.textContent = 'More >';
+    if (srvBtn)   srvBtn.textContent   = '< More';
     // Collapse expand states when returning to 50/50
     if (window.getChainExpanded && window.getChainExpanded()) window.toggleChainExpand();
     if (window.getVMExpanded    && window.getVMExpanded())    window.toggleVMExpand();
@@ -964,12 +970,12 @@
       if (side === 'left') {
         // Chain expands → server becomes strip; show chain ping cols
         srvBlk.classList.add('is-strip');
-        if (chainBtn) chainBtn.textContent = '‹';
+        if (chainBtn) chainBtn.textContent = '< More';
         if (window.toggleChainExpand && !window.getChainExpanded()) window.toggleChainExpand();
       } else {
         // Server expands → chain becomes strip; show SV ping cols
         chainBlk.classList.add('is-strip');
-        if (srvBtn) srvBtn.textContent = '›';
+        if (srvBtn) srvBtn.textContent = 'More >';
         if (window.toggleVMExpand && !window.getVMExpanded()) window.toggleVMExpand();
       }
     }
