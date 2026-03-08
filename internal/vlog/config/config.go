@@ -100,20 +100,13 @@ type PushDefaults struct {
 
 // PushConfig configures the integrated push validator deployment module.
 type PushConfig struct {
-	// VMsPath is the path to the VM registry TOML file.
-	// Default: $VPROX_HOME/config/push/vms.toml
-	// DEPRECATED (v1.3.0): use chain.toml [management] sections instead.
-	// vms.toml still works; chain [management] entries take precedence for matching chains.
-	VMsPath string `toml:"vms_path"`
-
 	// ChainsDir is the directory containing chain TOML files with [management] sections.
-	// When set, the push module reads managed_host=true entries in addition to vms.toml.
 	// Default: $VPROX_HOME/config/chains
 	ChainsDir string `toml:"chains_dir"`
 
 	// InfraDir is the directory containing per-datacenter host TOML files.
-	// Each *.toml file defines one physical host ([host]) and its child VMs ([[vm]]).
-	// The vLog Server/VMs block renders these as an expandable tree.
+	// Each *.toml file (qc.toml, rbx.toml, etc.) defines one physical host ([host])
+	// and its child VMs ([[vm]]). All *.toml files in the directory are scanned.
 	// Default: $VPROX_HOME/config/infra
 	InfraDir string `toml:"infra_dir"`
 
@@ -233,9 +226,6 @@ func Load(path string) (Config, error) {
 	}
 	if cfg.VLog.Push.PollIntervalSec <= 0 {
 		cfg.VLog.Push.PollIntervalSec = 60
-	}
-	if strings.TrimSpace(cfg.VLog.Push.VMsPath) == "" {
-		cfg.VLog.Push.VMsPath = filepath.Join(home, "config", "push", "vms.toml")
 	}
 	if strings.TrimSpace(cfg.VLog.Push.ChainsDir) == "" {
 		cfg.VLog.Push.ChainsDir = filepath.Join(home, "config", "chains")

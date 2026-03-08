@@ -21,7 +21,7 @@ SERVICE_PATH := $(SERVICE_DIR)/vProx.service
 VLOG_SERVICE := $(SERVICE_DIR)/vLog.service
 GEO_DIR := $(DATA_DIR)/geolocation
 DIR_LIST := $(DATA_DIR) $(LOG_DIR) $(CFG_DIR) $(CFG_DIR)/chains $(CFG_DIR)/backup \
-            $(CFG_DIR)/push $(CFG_DIR)/vlog $(CFG_DIR)/infra $(CFG_DIR)/vprox \
+            $(CFG_DIR)/vlog $(CFG_DIR)/infra $(CFG_DIR)/vprox \
             $(INTERNAL_DIR) $(ARCHIVE_DIR) $(SERVICE_DIR) $(GEO_DIR)
 
 # Sample file revision — format: r{major}_{MMDDYY}_{seq}
@@ -47,8 +47,8 @@ _TOOLCHAIN_GOROOT := $(shell find $(GOPATH)/pkg/mod/golang.org -maxdepth 1 -name
 EFFECTIVE_GOROOT  := $(if $(_TOOLCHAIN_GOROOT),$(_TOOLCHAIN_GOROOT),$(GOROOT))
 
 .PHONY: all install clean ufw help \
-        validate-go dirs geo config config-push config-vlog config-vprox config-modules \
-        build build-vlog systemd service-vlog samples-push add-push
+        validate-go dirs geo config config-vlog config-vprox config-modules \
+        build build-vlog systemd service-vlog samples-push
 
 all: help
 
@@ -60,7 +60,6 @@ help:
 	@echo ""
 	@echo "  make install          Full install: vProx + vLog, config, systemd"
 	@echo "  make add-<module>     Reinstall one module  (e.g. make add-vLog)"
-	@echo "  make add-push         Optional: set up push VM registry (config/push/vms.toml)"
 	@echo "  make clean            Remove local build artifacts"
 	@echo "  make ufw              Passwordless UFW sudoers for vLog block/unblock"
 	@echo ""
@@ -176,28 +175,6 @@ config: dirs config-modules
 		echo "✓ $(CFG_DIR)/backup/backup.toml already exists"; \
 	fi
 
-## Optional: set up push VM registry (not part of default install)
-## Activates push module in vLog — only needed when managing validator VMs via SSH.
-## Usage: make add-push
-
-add-push: dirs
-	@mkdir -p "$(CFG_DIR)/push"
-	@if [[ ! -f "$(CFG_DIR)/push/vms.toml" ]]; then \
-		if [[ -f "config/push/vms.sample" ]]; then \
-			cp "config/push/vms.sample" "$(CFG_DIR)/push/vms.toml"; \
-			echo "✓ Installed push config → $(CFG_DIR)/push/vms.toml"; \
-		else \
-			printf '# vms.toml — push VM registry\n# Add VMs with: vprox push add\n# Push module activates automatically when this file exists.\n' \
-				> "$(CFG_DIR)/push/vms.toml"; \
-			echo "✓ Created empty push config → $(CFG_DIR)/push/vms.toml"; \
-		fi \
-	else \
-		echo "✓ $(CFG_DIR)/push/vms.toml already exists"; \
-	fi
-
-## config-push is an alias kept for backward compatibility
-config-push: add-push
-
 ## Install proxy settings reference (settings.toml) — only sample, never overwrites live
 
 config-vprox: dirs
@@ -282,7 +259,7 @@ install:
 	fi
 	@echo ""
 
-## Reinstall a single module — make add-vLog | make add-vProx | make add-push
+## Reinstall a single module — make add-vLog | make add-vProx
 
 add-%: validate-go dirs
 	@case "$*" in \
@@ -298,12 +275,9 @@ add-%: validate-go dirs
 	    echo "✓ $(APP_NAME) → $(GOPATH_BIN)/$(APP_NAME)"; \
 	    $(MAKE) systemd; \
 	    ;; \
-	  push) \
-	    $(MAKE) add-push; \
-	    ;; \
 	  *) \
 	    echo "ERROR: Unknown module '$*'"; \
-	    echo "       Available: vProx  vLog  push"; \
+	    echo "       Available: vProx  vLog"; \
 	    exit 1; \
 	    ;; \
 	esac

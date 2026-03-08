@@ -15,14 +15,12 @@ import (
 
 // runPushCmd handles: vprox push <sub> [flags]
 //
-//	push hosts|vms              — list registered VMs (reads infra/*.toml + legacy vms.toml)
+//	push hosts|vms              — list registered VMs (reads config/infra/*.toml)
 //	push deploy ...             — run a script on a VM
-//	push add    --host ... --chain ...  — [DEPRECATED] add VM to legacy vms.toml
-//	push remove --host <name>   — [DEPRECATED] remove VM from legacy vms.toml
 //	push update [--host <name>] — SSH apt-get upgrade on one or all VMs
 //
-// As of v1.3.0, VM configuration is managed manually in config/infra/*.toml.
-// The push add/remove subcommands write to the legacy vms.toml and are deprecated.
+// VM configuration is managed in config/infra/*.toml (one file per datacenter).
+// Use chain.toml [management] sections for chain-specific VM metadata.
 func runPushCmd(home string, args []string) {
 	sub := ""
 	if len(args) > 0 {
@@ -35,10 +33,6 @@ func runPushCmd(home string, args []string) {
 		pushHosts(home)
 	case "deploy":
 		pushDeploy(home, args)
-	case "add":
-		pushAdd(home, args)
-	case "remove":
-		pushRemove(home, args)
 	case "update":
 		pushUpdate(home, args)
 	default:
@@ -48,32 +42,21 @@ func runPushCmd(home string, args []string) {
 		fmt.Fprintln(os.Stderr, "Subcommands:")
 		fmt.Fprintln(os.Stderr, "  hosts|vms                          list registered VMs")
 		fmt.Fprintln(os.Stderr, "  deploy --vm <n> --chain <c> --component <c> --script <s> [--dry-run]")
-		fmt.Fprintln(os.Stderr, "  add    --host <h> --user <u> --key <p> --chain <c> [--port 22] [--dc <d>]")
-		fmt.Fprintln(os.Stderr, "  remove --host <name>               remove VM from registry")
 		fmt.Fprintln(os.Stderr, "  update [--host <name>]             apt-get upgrade on VM(s)")
 		os.Exit(1)
 	}
 }
 
-func vmsCfgPath(home string) string {
-	return filepath.Join(home, "config", "push", "vms.toml")
-}
-
 // loadVMsCfg loads the merged VM registry from all available sources:
-//  1. config/push/vms.toml        — legacy; backward compat (lowest priority)
-//  2. config/chains/*.toml        — [management] sections where managed_host=true
-//  3. config/infra/*.toml         — canonical v1.3.0+ host+VM registry (highest priority)
+//  1. config/chains/*.toml   — [management] sections where managed_host=true
+//  2. config/infra/*.toml    — canonical host+VM registry; one file per datacenter (highest priority)
 //
-// Sources are merged with later entries overriding earlier ones by name.
-// Infra-sourced VMs are enriched with chain identity data (chain_id, valoper,
-// explorer) from the corresponding chains/{chain_name}.toml when present.
+// Infra files are scanned by name (qc.toml, rbx.toml, etc.) so any *.toml added to
+// config/infra/ is automatically picked up. Sources are merged with later entries
+// overriding earlier ones by name. Infra-sourced VMs are enriched with chain identity
+// data (chain_id, valoper, explorer) from the corresponding chains/{chain_name}.toml.
 func loadVMsCfg(home string) (*config.Config, error) {
-	// 1. Legacy vms.toml (ignore missing — not required in v1.3.0+).
 	merged := &config.Config{}
-	if legacyCfg, err := config.Load(vmsCfgPath(home)); err == nil {
-		merged = legacyCfg
-	}
-
 	chainsDir := filepath.Join(home, "config", "chains")
 
 	// 2. Overlay chain.toml [management] sections (medium priority).
@@ -205,106 +188,6 @@ func pushDeploy(home string, args []string) {
 	}
 }
 
-// pushAdd appends a new VM entry to vms.toml.
-func pushAdd(home string, args []string) {
-	fs := flag.NewFlagSet("push add", flag.ExitOnError)
-	name := fs.String("name", "", "chain/VM name (defaults to host)")
-	host := fs.String("host", "", "hostname or IP (required)")
-	port := fs.Int("port", 22, "SSH port")
-	user := fs.String("user", "", "SSH user (required)")
-	key := fs.String("key", "", "path to SSH private key (required)")
-	dc := fs.String("dc", "", "datacenter label")
-	vmType := fs.String("type", "validator", "chain type: validator | sp | relayer")
-	rpc := fs.String("rpc", "", "RPC URL override (default: http://host:26657)")
-	rest := fs.String("rest", "", "REST URL override (default: http://host:1317)")
-	if err := fs.Parse(args); err != nil {
-		os.Exit(1)
-	}
-	if *host == "" || *user == "" || *key == "" {
-		fmt.Fprintln(os.Stderr, "push add: --host, --user, and --key are required")
-		os.Exit(1)
-	}
-	if *name == "" {
-		*name = *host
-	}
-
-	cfgPath := vmsCfgPath(home)
-	var cfg config.Config
-
-	data, err := os.ReadFile(cfgPath)
-	if err == nil {
-		_ = toml.Unmarshal(data, &cfg)
-	}
-
-	// Guard against duplicates.
-	for _, vm := range cfg.VMs {
-		if vm.Name == *name {
-			fmt.Fprintf(os.Stderr, "push add: VM %q already exists\n", *name)
-			os.Exit(1)
-		}
-	}
-
-	vm := config.VM{
-		Name:       *name,
-		Host:       *host,
-		Port:       *port,
-		User:       *user,
-		KeyPath:    *key,
-		Datacenter: *dc,
-		Type:       *vmType,
-		RPCURL:     *rpc,
-		RESTURL:    *rest,
-	}
-	cfg.VMs = append(cfg.VMs, vm)
-
-	if err := writeVMsCfg(cfgPath, &cfg); err != nil {
-		fmt.Fprintf(os.Stderr, "push add: %v\n", err)
-		os.Exit(1)
-	}
-	fmt.Printf("Added VM %q (%s)\n", *name, *host)
-}
-
-// pushRemove removes a VM entry from vms.toml.
-func pushRemove(home string, args []string) {
-	fs := flag.NewFlagSet("push remove", flag.ExitOnError)
-	name := fs.String("host", "", "VM name to remove (required)")
-	if err := fs.Parse(args); err != nil {
-		os.Exit(1)
-	}
-	if *name == "" {
-		fmt.Fprintln(os.Stderr, "push remove: --host is required")
-		os.Exit(1)
-	}
-
-	cfgPath := vmsCfgPath(home)
-	cfg, err := loadVMsCfg(home)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "push remove: %v\n", err)
-		os.Exit(1)
-	}
-
-	found := false
-	filtered := cfg.VMs[:0]
-	for _, vm := range cfg.VMs {
-		if vm.Name == *name {
-			found = true
-			continue
-		}
-		filtered = append(filtered, vm)
-	}
-	if !found {
-		fmt.Fprintf(os.Stderr, "push remove: VM %q not found\n", *name)
-		os.Exit(1)
-	}
-	cfg.VMs = filtered
-
-	if err := writeVMsCfg(cfgPath, cfg); err != nil {
-		fmt.Fprintf(os.Stderr, "push remove: %v\n", err)
-		os.Exit(1)
-	}
-	fmt.Printf("Removed VM %q\n", *name)
-}
-
 // pushUpdate runs apt-get upgrade on one or all VMs.
 func pushUpdate(home string, args []string) {
 	fs := flag.NewFlagSet("push update", flag.ExitOnError)
@@ -347,7 +230,8 @@ func pushUpdate(home string, args []string) {
 	}
 }
 
-// writeVMsCfg serializes cfg back to path, creating parent dirs as needed.
+// writeVMsCfg serializes cfg to path, creating parent dirs as needed.
+// Used internally when persisting infra config edits.
 func writeVMsCfg(path string, cfg *config.Config) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
