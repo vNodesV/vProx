@@ -425,11 +425,12 @@ func HasChainConfigs(dir string) bool {
 }
 
 // IsChainTOML returns true only for files that are chain config TOMLs.
-// Excludes known non-chain system files and all *.sample.toml files.
+// Excludes known non-chain system files and all *.sample / *.sample.toml files.
 func IsChainTOML(name string) bool {
 	if !strings.HasSuffix(name, ".toml") {
 		return false
 	}
+	// Guard against both old *.sample.toml and new *.sample naming
 	if strings.HasSuffix(name, ".sample.toml") {
 		return false
 	}
