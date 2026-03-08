@@ -1,6 +1,9 @@
 # infra/infra.sample.toml — per-datacenter physical host + VMs
 # rev: {{SAMPLE_REV}}
 #
+# This file is the CANONICAL source for all infrastructure configuration.
+# It replaces the legacy config/push/vms.toml (deprecated since v1.3.0).
+#
 # Create ONE file per physical server (e.g. qc.toml, rbx.toml, fra.toml).
 # The [host] section defines the physical hypervisor; [[vm]] entries are the VMs on it.
 # VMs automatically inherit host_ref from [host].name when host_ref is omitted.
@@ -14,6 +17,20 @@
 # Multiple datacenters: create qc.toml, rbx.toml, fra.toml, etc.
 # Standalone VPS (no physical host): use [[vps]] at the bottom of this file.
 # The [vprox] section registers the vProx agent credentials for SSH dispatch.
+#
+# ── SSH KEY ───────────────────────────────────────────────────────────────────
+# Generate the push key (run once):
+#   ssh-keygen -t ed25519 -C "vprox-push" -f $HOME/.vprox/secret/id.push
+# Authorize it on each target VM:
+#   ssh-copy-id -i $HOME/.vprox/secret/id.push.pub <user>@<host>
+#
+# ── TYPES ────────────────────────────────────────────────────────────────────
+# type = validator | sp | relayer | node  (comma-separated for multi-role)
+# These map to the service badges on the vLog INFRASTRUCTURE dashboard.
+#
+# ── RPC / REST ────────────────────────────────────────────────────────────────
+# rpc_url / rest_url default to http://host:26657 and http://host:1317.
+# Only set them if your node uses non-standard ports.
 
 
 [host]
@@ -39,12 +56,22 @@ key    = "$HOME/.vprox/secret/id.agent"  # private key for outbound SSH dispatch
 name       = "akash"
 # host_ref = "homelab-qc"         # auto-inferred from [host].name above; override only if needed
 host       = "10.0.0.68"          # SSH target — the VM's IP or hostname
-lan_ip     = "10.0.0.68"          # LAN IP shown in Servers / VM block
+lan_ip     = "10.0.0.68"          # LAN IP shown in INFRASTRUCTURE block
 port       = 22
 user       = "jarvis"
 key_path   = "$HOME/.ssh/id_push" # PRIVATE key ($HOME expanded). Never use .pub file.
 datacenter = "QC"
 type       = "validator"          # validator | sp | relayer | node (comma-separated for multi-role)
+
+# ── Chain identity (optional — populate when this VM runs a chain node) ────────
+# chain_id       = "akash-1"               # official chain-id
+# chain_name     = "akash"                 # short slug (used as route in vProx)
+# network_type   = "mainnet"               # mainnet | testnet
+# dashboard_name = "Akash Network"         # display name; leave empty to use cosmos.directory pretty_name
+# explorer       = "https://ping.pub/akash"# block explorer base URL
+# valoper        = "akashvaloper1..."      # validator operator address
+# rpc_url        = "http://10.0.0.68:26657"# only needed for non-standard ports
+# rest_url       = "http://10.0.0.68:1317" # only needed for non-standard ports
 
 [vm.ping]
 # country: ISO 3166-1 alpha-2 code for the check-host.net probe node.
@@ -55,14 +82,20 @@ provider = ""
 
 
 # [[vm]]
-# name       = "meme-val1"
-# host       = "10.0.0.69"
-# lan_ip     = "10.0.0.69"
-# port       = 22
-# user       = "jarvis"
-# key_path   = "$HOME/.ssh/id_push"
-# datacenter = "QC"
-# type       = "validator"
+# name           = "meme-val1"
+# host           = "10.0.0.69"
+# lan_ip         = "10.0.0.69"
+# port           = 22
+# user           = "jarvis"
+# key_path       = "$HOME/.ssh/id_push"
+# datacenter     = "QC"
+# type           = "validator"
+# chain_id       = "meme-1"
+# chain_name     = "meme"
+# network_type   = "mainnet"
+# dashboard_name = "Meme Coin"
+# explorer       = ""
+# valoper        = "memevaloper1..."
 #
 # [vm.ping]
 # country  = "CA"

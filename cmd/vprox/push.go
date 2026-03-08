@@ -14,11 +14,14 @@ import (
 
 // runPushCmd handles: vprox push <sub> [flags]
 //
-//	push hosts|vms              — list registered VMs
+//	push hosts|vms              — list registered VMs (reads infra/*.toml + legacy vms.toml)
 //	push deploy ...             — run a script on a VM
-//	push add    --host ... --chain ...  — add VM to vms.toml
-//	push remove --host <name>   — remove VM from vms.toml
+//	push add    --host ... --chain ...  — [DEPRECATED] add VM to legacy vms.toml
+//	push remove --host <name>   — [DEPRECATED] remove VM from legacy vms.toml
 //	push update [--host <name>] — SSH apt-get upgrade on one or all VMs
+//
+// As of v1.3.0, VM configuration is managed manually in config/infra/*.toml.
+// The push add/remove subcommands write to the legacy vms.toml and are deprecated.
 func runPushCmd(home string, args []string) {
 	sub := ""
 	if len(args) > 0 {

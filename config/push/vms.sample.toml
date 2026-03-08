@@ -1,17 +1,30 @@
 # vms.toml — push VM registry
 # rev: {{SAMPLE_REV}}
 #
-# ── DEPRECATION NOTICE (v1.3.0) ────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════
+# DEPRECATED — this file is NO LONGER the canonical VM registry.
 #
-# vms.toml is DEPRECATED in favour of [management] sections in chain.toml.
+# As of v1.3.0, all infrastructure configuration (hosts, VMs, SSH
+# credentials, chain identity) lives in config/infra/*.toml.
 #
-# Migration: add a [management] block to each chain's TOML file in
-# $VPROX_HOME/config/chains/ and set managed_host = true.  See
-# config/chains/chain.sample.toml for the complete field reference.
+# Migration: copy your [[vm]] entries to a file in config/infra/
+# (e.g. qc.toml, rbx.toml) and add the optional chain identity fields:
 #
-# Backward compatibility: vms.toml continues to work. When both exist,
-# chain.toml [management] entries take precedence for matching chains.
+#   [[vm]]
+#   name         = "akash"
+#   host         = "10.0.0.68"
+#   ...
+#   chain_id     = "akash-1"
+#   chain_name   = "akash"
+#   network_type = "mainnet"
+#   valoper      = "akashvaloper1..."
+#
+# See config/infra/infra.sample.toml for the full field reference.
+#
+# Backward compatibility: vms.toml continues to be loaded if present.
+# When both exist, infra/*.toml entries win for matching VM names.
 # This file will be removed in a future major release.
+# ══════════════════════════════════════════════════════════════════════
 #
 # ── TOPOLOGY ────────────────────────────────────────────────────────────────────
 #

@@ -1,4 +1,6 @@
-// Package config loads and validates the push VM registry (vms.toml).
+// Package config loads and validates the push VM registry.
+// As of v1.3.0, the canonical source is config/infra/*.toml (one file per datacenter).
+// Legacy vms.toml is still accepted for backward compatibility when present.
 package config
 
 import (
@@ -64,7 +66,8 @@ type VM struct {
 	Ping VMPing `toml:"ping"`
 }
 
-// Config is the top-level push configuration parsed from vms.toml.
+// Config is the top-level push configuration.
+// Loaded from config/infra/*.toml (canonical) or legacy vms.toml.
 type Config struct {
 	Hosts []Host `toml:"host"`
 	VMs   []VM   `toml:"vm"`
