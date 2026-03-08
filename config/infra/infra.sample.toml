@@ -20,17 +20,23 @@
 #
 # ── SSH KEY ───────────────────────────────────────────────────────────────────
 # Generate the push key (run once):
-#   ssh-keygen -t ed25519 -C "vprox-push" -f $HOME/.vprox/secret/id.push
+#   ssh-keygen -t ed25519 -C "vprox-push" -f $HOME/.ssh/id_push
 # Authorize it on each target VM:
-#   ssh-copy-id -i $HOME/.vprox/secret/id.push.pub <user>@<host>
+#   ssh-copy-id -i $HOME/.ssh/id_push.pub <user>@<host>
 #
+# Set [vprox].ssh_key_path once per file — all [[vm]] entries inherit it.
+# Override with key_path on an individual [[vm]] when that VM uses a different key.
+#
+# ── CHAIN BINDING ─────────────────────────────────────────────────────────────
+# Use chain_name on [[vm]] to link the VM to a chain config file.
+# Example: chain_name = "akash" → reads config/chains/akash.toml for
+# chain_id, valoper, rpc_url, rest_url, explorer, network_type, etc.
+# Chain details stay in chains/*.toml; infra.toml is infrastructure-only.
+
+
 # ── TYPES ────────────────────────────────────────────────────────────────────
 # type = validator | sp | relayer | node  (comma-separated for multi-role)
 # These map to the service badges on the vLog INFRASTRUCTURE dashboard.
-#
-# ── RPC / REST ────────────────────────────────────────────────────────────────
-# rpc_url / rest_url default to http://host:26657 and http://host:1317.
-# Only set them if your node uses non-standard ports.
 
 
 [host]
@@ -47,9 +53,11 @@ enable     = true                  # when false, the host + all its VMs are hidd
 # Then add the generated .pub to each VM/VPS authorized_keys.
 
 [vprox]
-name   = "vProx"
-lan_ip = "10.0.0.65"              # LAN IP of the vProx machine itself
-key    = "$HOME/.vprox/secret/id.agent"  # private key for outbound SSH dispatch ($HOME expanded)
+name         = "vProx"
+lan_ip       = "10.0.0.65"              # LAN IP of the vProx machine itself
+key          = "$HOME/.vprox/secret/id.agent"  # private key for outbound SSH dispatch ($HOME expanded)
+ssh_key_path = "$HOME/.ssh/id_push"     # default SSH key for all [[vm]] entries in this file ($HOME expanded)
+                                         # individual [[vm]] entries can override with their own key_path
 
 
 [[vm]]
@@ -59,19 +67,10 @@ host       = "10.0.0.68"          # SSH target — the VM's IP or hostname
 lan_ip     = "10.0.0.68"          # LAN IP shown in INFRASTRUCTURE block
 port       = 22
 user       = "jarvis"
-key_path   = "$HOME/.ssh/id_push" # PRIVATE key ($HOME expanded). Never use .pub file.
+# key_path = "$HOME/.ssh/id_push" # override only if this VM uses a different key than [vprox].ssh_key_path
 datacenter = "QC"
 type       = "validator"          # validator | sp | relayer | node (comma-separated for multi-role)
-
-# ── Chain identity (optional — populate when this VM runs a chain node) ────────
-# chain_id       = "akash-1"               # official chain-id
-# chain_name     = "akash"                 # short slug (used as route in vProx)
-# network_type   = "mainnet"               # mainnet | testnet
-# dashboard_name = "Akash Network"         # display name; leave empty to use cosmos.directory pretty_name
-# explorer       = "https://ping.pub/akash"# block explorer base URL
-# valoper        = "akashvaloper1..."      # validator operator address
-# rpc_url        = "http://10.0.0.68:26657"# only needed for non-standard ports
-# rest_url       = "http://10.0.0.68:1317" # only needed for non-standard ports
+chain_name = "akash"              # links to config/chains/akash.toml (chain_id, valoper, rpc_url, etc.)
 
 [vm.ping]
 # country: ISO 3166-1 alpha-2 code for the check-host.net probe node.
@@ -82,20 +81,14 @@ provider = ""
 
 
 # [[vm]]
-# name           = "meme-val1"
-# host           = "10.0.0.69"
-# lan_ip         = "10.0.0.69"
-# port           = 22
-# user           = "jarvis"
-# key_path       = "$HOME/.ssh/id_push"
-# datacenter     = "QC"
-# type           = "validator"
-# chain_id       = "meme-1"
-# chain_name     = "meme"
-# network_type   = "mainnet"
-# dashboard_name = "Meme Coin"
-# explorer       = ""
-# valoper        = "memevaloper1..."
+# name       = "meme-val1"
+# host       = "10.0.0.69"
+# lan_ip     = "10.0.0.69"
+# port       = 22
+# user       = "jarvis"
+# datacenter = "QC"
+# type       = "validator"
+# chain_name = "meme"             # links to config/chains/meme.toml
 #
 # [vm.ping]
 # country  = "CA"

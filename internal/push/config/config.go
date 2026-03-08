@@ -307,16 +307,26 @@ func chainVMName(chainName, host string) string {
 	return host
 }
 
+// infraVproxSchema holds the [vprox] section from a per-datacenter infra file.
+// ssh_key_path is applied as the default key for all [[vm]] entries in the same file
+// that do not set their own key_path.
+type infraVproxSchema struct {
+	SSHKeyPath string `toml:"ssh_key_path"`
+}
+
 // infraFileSchema is the TOML schema for per-datacenter host files (config/infra/*.toml).
-// Each file defines one physical host ([host]) and its VMs ([[vm]]).
+// Each file defines one physical host ([host]), optional vProx agent credentials ([vprox]),
+// and the VMs on that host ([[vm]]).
 type infraFileSchema struct {
-	Host Host `toml:"host"`
-	VMs  []VM `toml:"vm"`
+	Host  Host             `toml:"host"`
+	Vprox infraVproxSchema `toml:"vprox"`
+	VMs   []VM             `toml:"vm"`
 }
 
 // LoadFromInfraFiles reads all *.toml files in dir, each representing one physical
 // host ([host] section) with its child VMs ([[vm]] sections).
 // VMs without an explicit host_ref inherit it from their file's [host].name.
+// VMs without an explicit key_path inherit it from [vprox].ssh_key_path.
 // Returns a merged Config containing all hosts and VMs from all infra files.
 func LoadFromInfraFiles(dir string) (*Config, error) {
 	entries, err := os.ReadDir(dir)
@@ -353,6 +363,10 @@ func LoadFromInfraFiles(dir string) (*Config, error) {
 			}
 			if f.VMs[i].Port == 0 {
 				f.VMs[i].Port = 22
+			}
+			// Apply [vprox].ssh_key_path as default when the VM has no explicit key.
+			if f.VMs[i].KeyPath == "" && f.Vprox.SSHKeyPath != "" {
+				f.VMs[i].KeyPath = f.Vprox.SSHKeyPath
 			}
 			vms = append(vms, f.VMs[i])
 		}
