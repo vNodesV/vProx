@@ -5,12 +5,10 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
 	"text/tabwriter"
 	"time"
 
 	"github.com/vNodesV/vProx/internal/chain/upgrade"
-	pushcfg "github.com/vNodesV/vProx/internal/push/config"
 	"github.com/vNodesV/vProx/internal/push/status"
 )
 
@@ -53,10 +51,9 @@ func runChainStatus(home string, args []string) {
 		os.Exit(1)
 	}
 
-	cfgPath := filepath.Join(home, "config", "push", "vms.toml")
-	cfg, err := pushcfg.Load(cfgPath)
+	cfg, err := loadVMsCfg(home)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "chain status: load vms.toml: %v\n", err)
+		fmt.Fprintf(os.Stderr, "chain status: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -84,7 +81,7 @@ func runChainStatus(home string, args []string) {
 		if *chainFilter != "" {
 			fmt.Fprintf(os.Stderr, "chain status: no VMs registered for chain %q\n", *chainFilter)
 		} else {
-			fmt.Fprintln(os.Stderr, "chain status: no chains registered in vms.toml")
+			fmt.Fprintln(os.Stderr, "chain status: no chains registered — add entries to config/infra/*.toml")
 		}
 		os.Exit(1)
 	}

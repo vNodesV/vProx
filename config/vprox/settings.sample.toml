@@ -1,0 +1,65 @@
+# vProx Proxy Settings — copy to config/vprox/settings.toml and edit.
+# rev: {{SAMPLE_REV}}
+#
+# Controls global reverse proxy behavior: rate limiting, auto-quarantine,
+# and trusted upstream proxies.
+#
+# Priority: settings.toml values → environment variables → compiled defaults.
+# All keys are optional — omit a section to keep the built-in default.
+
+
+# ── Rate Limiting ─────────────────────────────────────────────────────────────
+# Applied globally across all proxied chains.
+# Per-IP counters; sliding window token-bucket algorithm.
+[rate_limit]
+# Maximum sustained requests per second allowed per IP (default: 25).
+# Env override: VPROX_RPS
+rps = 25
+
+# Maximum burst size above rps before throttling begins (default: 100).
+# Env override: VPROX_BURST
+burst = 100
+
+
+# ── Auto-Quarantine ───────────────────────────────────────────────────────────
+# Automatically penalises IPs that exceed a request-rate threshold within
+# a rolling time window. Quarantined IPs are rate-limited to penalty_rps/burst
+# for the duration of ttl_sec before being restored to normal limits.
+[auto_quarantine]
+# Enable or disable the auto-quarantine system (default: true).
+# Env override: VPROX_AUTO_ENABLED
+enabled = true
+
+# Number of requests within window_sec that triggers quarantine (default: 120).
+# Env override: VPROX_AUTO_THRESHOLD
+threshold = 120
+
+# Rolling time window in seconds used to count requests (default: 10).
+# Env override: VPROX_AUTO_WINDOW_SEC
+window_sec = 10
+
+# Penalty RPS applied to quarantined IPs (default: 1.0).
+# Env override: VPROX_AUTO_RPS
+penalty_rps = 1.0
+
+# Penalty burst for quarantined IPs (default: 1).
+# Env override: VPROX_AUTO_BURST
+penalty_burst = 1
+
+# Duration in seconds a quarantine lasts before the IP is restored (default: 900).
+# Env override: VPROX_AUTO_TTL_SEC
+ttl_sec = 900
+
+
+# ── Debug ─────────────────────────────────────────────────────────────────────
+# Enable the pprof profiling endpoint on a separate debug port.
+# WARNING: Never expose the debug port publicly. Bind to loopback only.
+# Equivalent to setting VPROX_DEBUG=1 and VPROX_DEBUG_PORT.
+[debug]
+# Set to true to start the pprof HTTP server (default: false).
+# Env override: VPROX_DEBUG=1
+enabled = false
+
+# Port for the pprof endpoint (default: 6060).
+# Env override: VPROX_DEBUG_PORT
+port = 6060

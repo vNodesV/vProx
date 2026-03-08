@@ -564,6 +564,39 @@ func runServiceCommand(action string) error {
 	return cmd.Run()
 }
 
+// proxySettings holds values loaded from config/vprox/settings.toml.
+// All fields are optional; zero/false means "use built-in default".
+type proxySettings struct {
+	RateLimit struct {
+		RPS   float64 `toml:"rps"`
+		Burst int     `toml:"burst"`
+	} `toml:"rate_limit"`
+	AutoQuarantine struct {
+		Enabled      *bool   `toml:"enabled"`
+		Threshold    int     `toml:"threshold"`
+		WindowSec    int     `toml:"window_sec"`
+		PenaltyRPS   float64 `toml:"penalty_rps"`
+		PenaltyBurst int     `toml:"penalty_burst"`
+		TTLSec       int     `toml:"ttl_sec"`
+	} `toml:"auto_quarantine"`
+	Debug struct {
+		Enabled bool `toml:"enabled"`
+		Port    int  `toml:"port"`
+	} `toml:"debug"`
+}
+
+// loadProxySettings reads config/vprox/settings.toml when present.
+// Returns zero-value struct (all defaults apply) if the file is absent or unparseable.
+func loadProxySettings(configDir string) proxySettings {
+	var s proxySettings
+	data, err := os.ReadFile(filepath.Join(configDir, "vprox", "settings.toml"))
+	if err != nil {
+		return s
+	}
+	_ = toml.Unmarshal(data, &s)
+	return s
+}
+
 // resolveBackupConfigPath returns the effective path for backup.toml.
 // Checks $configDir/backup/backup.toml (new layout) first, then
 // $configDir/backup.toml (backward compat).
@@ -1337,9 +1370,13 @@ func main() {
 		}); err != nil {
 			log.Fatalf("Backup failed: %v", err)
 		}
-		// Notify vLog (non-fatal). Prefer ports.toml vlog_url (chains/ then config/), fall back to env.
+		// Notify vLog (non-fatal). Prefer services.toml/ports.toml vlog_url, fall back to env.
 		vlogURL := os.Getenv("VLOG_URL")
-		for _, p := range []string{filepath.Join(chainsConfigDir, "ports.toml"), filepath.Join(configDir, "ports.toml")} {
+		for _, p := range []string{
+			filepath.Join(chainsConfigDir, "services.toml"),
+			filepath.Join(chainsConfigDir, "ports.toml"),
+			filepath.Join(configDir, "ports.toml"),
+		} {
 			if pp, err := config.LoadPorts(p); err == nil && pp.VLogURL != "" {
 				vlogURL = pp.VLogURL
 				break
@@ -1355,14 +1392,21 @@ func main() {
 	stopCounterTicker := counter.StartTicker(accessCountsPath)
 
 	// Load configs (TOML only)
-	// Canonical: config/chains/ports.toml; backward compat: config/ports.toml
+	// Search order: config/chains/services.toml → config/chains/ports.toml → config/ports.toml
 	var loadErr error
-	portsPath := filepath.Join(chainsConfigDir, "ports.toml")
-	if _, err := os.Stat(portsPath); err != nil {
-		portsPath = filepath.Join(configDir, "ports.toml")
-		if _, err2 := os.Stat(portsPath); err2 != nil {
-			log.Fatalf("ports config missing: expected %s or %s", filepath.Join(chainsConfigDir, "ports.toml"), portsPath)
+	portsPath := ""
+	for _, candidate := range []string{
+		filepath.Join(chainsConfigDir, "services.toml"),
+		filepath.Join(chainsConfigDir, "ports.toml"),
+		filepath.Join(configDir, "ports.toml"),
+	} {
+		if _, err := os.Stat(candidate); err == nil {
+			portsPath = candidate
+			break
 		}
+	}
+	if portsPath == "" {
+		log.Fatalf("ports config missing: expected config/chains/services.toml, config/chains/ports.toml, or config/ports.toml")
 	}
 	defaultPorts, loadErr = config.LoadPorts(portsPath)
 	if loadErr != nil {
@@ -1440,14 +1484,50 @@ func main() {
 	}
 
 	// --- Limiter: defaults ok, overrides limited, 429 blocked
-	defaultRPS := envFloat("VPROX_RPS", 25)
-	defaultBurst := envInt("VPROX_BURST", 100)
-	autoEnabled := envBoolDefault("VPROX_AUTO_ENABLED", true)
-	autoThreshold := envInt("VPROX_AUTO_THRESHOLD", 120)
-	autoWindowSec := envInt("VPROX_AUTO_WINDOW_SEC", 10)
-	autoPenaltyRPS := envFloat("VPROX_AUTO_RPS", 1)
-	autoPenaltyBurst := envInt("VPROX_AUTO_BURST", 1)
-	autoTTL := envInt("VPROX_AUTO_TTL_SEC", 900)
+	// Priority: compiled default → settings.toml → env var → CLI flag
+	proxyCfg := loadProxySettings(configDir)
+
+	settingsRPS := 25.0
+	if proxyCfg.RateLimit.RPS > 0 {
+		settingsRPS = proxyCfg.RateLimit.RPS
+	}
+	settingsBurst := 100
+	if proxyCfg.RateLimit.Burst > 0 {
+		settingsBurst = proxyCfg.RateLimit.Burst
+	}
+	settingsAutoEnabled := true
+	if proxyCfg.AutoQuarantine.Enabled != nil {
+		settingsAutoEnabled = *proxyCfg.AutoQuarantine.Enabled
+	}
+	settingsThreshold := 120
+	if proxyCfg.AutoQuarantine.Threshold > 0 {
+		settingsThreshold = proxyCfg.AutoQuarantine.Threshold
+	}
+	settingsWindowSec := 10
+	if proxyCfg.AutoQuarantine.WindowSec > 0 {
+		settingsWindowSec = proxyCfg.AutoQuarantine.WindowSec
+	}
+	settingsPenaltyRPS := 1.0
+	if proxyCfg.AutoQuarantine.PenaltyRPS > 0 {
+		settingsPenaltyRPS = proxyCfg.AutoQuarantine.PenaltyRPS
+	}
+	settingsPenaltyBurst := 1
+	if proxyCfg.AutoQuarantine.PenaltyBurst > 0 {
+		settingsPenaltyBurst = proxyCfg.AutoQuarantine.PenaltyBurst
+	}
+	settingsTTL := 900
+	if proxyCfg.AutoQuarantine.TTLSec > 0 {
+		settingsTTL = proxyCfg.AutoQuarantine.TTLSec
+	}
+
+	defaultRPS := envFloat("VPROX_RPS", settingsRPS)
+	defaultBurst := envInt("VPROX_BURST", settingsBurst)
+	autoEnabled := envBoolDefault("VPROX_AUTO_ENABLED", settingsAutoEnabled)
+	autoThreshold := envInt("VPROX_AUTO_THRESHOLD", settingsThreshold)
+	autoWindowSec := envInt("VPROX_AUTO_WINDOW_SEC", settingsWindowSec)
+	autoPenaltyRPS := envFloat("VPROX_AUTO_RPS", settingsPenaltyRPS)
+	autoPenaltyBurst := envInt("VPROX_AUTO_BURST", settingsPenaltyBurst)
+	autoTTL := envInt("VPROX_AUTO_TTL_SEC", settingsTTL)
 
 	// Apply CLI overrides for rate limiting
 	if *rpsFlag > 0 {

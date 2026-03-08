@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/pelletier/go-toml/v2"
+	chainconfig "github.com/vNodesV/vProx/internal/config"
 	"github.com/vNodesV/vProx/internal/push/config"
 	pushssh "github.com/vNodesV/vProx/internal/push/ssh"
 )
@@ -58,8 +59,80 @@ func vmsCfgPath(home string) string {
 	return filepath.Join(home, "config", "push", "vms.toml")
 }
 
+// loadVMsCfg loads the merged VM registry from all available sources:
+//  1. config/push/vms.toml        — legacy; backward compat (lowest priority)
+//  2. config/chains/*.toml        — [management] sections where managed_host=true
+//  3. config/infra/*.toml         — canonical v1.3.0+ host+VM registry (highest priority)
+//
+// Sources are merged with later entries overriding earlier ones by name.
+// Infra-sourced VMs are enriched with chain identity data (chain_id, valoper,
+// explorer) from the corresponding chains/{chain_name}.toml when present.
 func loadVMsCfg(home string) (*config.Config, error) {
-	return config.Load(vmsCfgPath(home))
+	// 1. Legacy vms.toml (ignore missing — not required in v1.3.0+).
+	merged := &config.Config{}
+	if legacyCfg, err := config.Load(vmsCfgPath(home)); err == nil {
+		merged = legacyCfg
+	}
+
+	chainsDir := filepath.Join(home, "config", "chains")
+
+	// 2. Overlay chain.toml [management] sections (medium priority).
+	if chainCfg, err := config.LoadFromChainConfigs(chainsDir, config.PushDefaults{}); err == nil && len(chainCfg.VMs) > 0 {
+		merged = config.MergeConfigs(merged, chainCfg)
+	}
+
+	// 3. Overlay infra/*.toml (highest priority).
+	infraDir := filepath.Join(home, "config", "infra")
+	if infraCfg, err := config.LoadFromInfraFiles(infraDir); err == nil && (len(infraCfg.VMs) > 0 || len(infraCfg.Hosts) > 0) {
+		merged = config.MergeInfraConfig(merged, infraCfg)
+	}
+
+	// Enrich infra-sourced VMs with chain identity from chains/{chain_name}.toml.
+	enrichVMsFromChains(merged.VMs, chainsDir)
+
+	if len(merged.VMs) == 0 && len(merged.Hosts) == 0 {
+		return nil, fmt.Errorf("no VMs registered — add entries to config/infra/*.toml or set managed_host=true in config/chains/*.toml")
+	}
+	return merged, nil
+}
+
+// enrichVMsFromChains populates missing chain identity fields (chain_id, valoper,
+// dashboard_name, network_type, explorer) on VMs that carry a chain_name reference
+// but lack those fields. This wires the infra→chain join for infra-sourced VMs.
+func enrichVMsFromChains(vms []config.VM, chainsDir string) {
+	cache := make(map[string]*chainconfig.ChainConfig)
+	for i := range vms {
+		if vms[i].ChainName == "" || vms[i].ChainID != "" {
+			continue
+		}
+		cc, seen := cache[vms[i].ChainName]
+		if !seen {
+			data, err := os.ReadFile(filepath.Join(chainsDir, vms[i].ChainName+".toml"))
+			if err == nil {
+				var c chainconfig.ChainConfig
+				if toml.Unmarshal(data, &c) == nil {
+					cc = &c
+				}
+			}
+			cache[vms[i].ChainName] = cc // nil on error — skip silently
+		}
+		if cc == nil {
+			continue
+		}
+		vms[i].ChainID = cc.ChainID
+		if vms[i].DashboardName == "" {
+			vms[i].DashboardName = cc.DashboardName
+		}
+		if vms[i].NetworkType == "" {
+			vms[i].NetworkType = cc.NetworkType
+		}
+		if vms[i].Explorer == "" {
+			vms[i].Explorer = cc.ExplorerBase
+		}
+		if vms[i].Valoper == "" {
+			vms[i].Valoper = cc.ChainServices.Validator.Mainnet.Address
+		}
+	}
 }
 
 // pushHosts prints the VM registry as a text table.

@@ -1,0 +1,96 @@
+# services.toml — Cosmos SDK service catalog + global proxy settings.
+# rev: {{SAMPLE_REV}}
+#
+# This file supersedes ports.toml (v1.3.0+). Copy to config/chains/services.toml.
+# vProx reads services.toml first; falls back to ports.toml if absent.
+#
+# Two responsibilities:
+#   1. Global port defaults — applied to any chain with default_ports = true
+#   2. Service catalog     — canonical definitions for Cosmos SDK service types
+#                            (port, expose path, vhost prefix, description)
+#
+# Chain configs (config/chains/*.toml) reference services by type name.
+# Infrastructure VMs (config/infra/*.toml) may list services = ["rpc","rest"]
+# to declare which catalog entries apply to that node (v1.4.0 resolver).
+
+
+# ── Global Port Defaults ──────────────────────────────────────────────────────
+# Applied to chains where default_ports = true (or [ports] is omitted).
+# These are the Cosmos SDK / CometBFT standard ports.
+rpc      = 26657
+rest     = 1317
+grpc     = 9090
+grpc_web = 9091
+api      = 1317
+
+# vLog notification URL — vProx POSTs here after --new-backup (optional).
+# vlog_url = "http://127.0.0.1:8889/api/v1/ingest"
+
+# trusted_proxies — CIDRs whose X-Forwarded-For / CF-Connecting-IP headers
+# are trusted for real-IP extraction by the rate limiter.
+# When running behind Apache or nginx on the same host, set to loopback only.
+# Leave empty (or omit) to trust all proxy headers (backward compat; warns at startup).
+trusted_proxies = ["127.0.0.1/32", "::1/128"]
+
+
+# ── Service Catalog ───────────────────────────────────────────────────────────
+# Defines each named service type: its default port, the path vProx exposes
+# it under (path mode), and the subdomain prefix (vhost mode).
+#
+# Chain configs can override any of these per-chain via [ports] and
+# [expose.vhost_prefix]. This catalog is the shared default.
+#
+# name       = service type key (used in vm.services = ["rpc","rest",...])
+# port       = default TCP port on the target node
+# path       = path suffix served by vProx (expose.path mode)
+# vhost      = subdomain prefix for vhost mode (e.g. "rpc" → rpc.<chain.host>)
+# description = human-readable label shown in dashboard / docs
+
+[[service]]
+name        = "rpc"
+port        = 26657
+path        = "/rpc"
+vhost       = "rpc"
+description = "CometBFT RPC — block queries, tx broadcast, status, health"
+
+[[service]]
+name        = "rest"
+port        = 1317
+path        = "/rest"
+vhost       = "api"
+description = "Cosmos SDK REST (LCD) — bank, gov, staking, IBC queries"
+
+[[service]]
+name        = "websocket"
+port        = 26657
+path        = "/websocket"
+vhost       = ""          # WebSocket tunnels through the RPC vhost; no separate subdomain
+description = "CometBFT WebSocket — event subscriptions, live tx streaming"
+
+[[service]]
+name        = "grpc"
+port        = 9090
+path        = "/grpc"
+vhost       = "grpc"
+description = "Cosmos SDK gRPC — high-performance query interface"
+
+[[service]]
+name        = "grpc-web"
+port        = 9091
+path        = "/grpc-web"
+vhost       = "grpc-web"
+description = "gRPC-Web bridge — browser-compatible gRPC (Envoy protocol)"
+
+[[service]]
+name        = "validator"
+port        = 26656
+path        = ""          # p2p port — not proxied via HTTP; used for status tracking only
+vhost       = ""
+description = "CometBFT P2P — validator peer port (monitoring reference only)"
+
+[[service]]
+name        = "api"
+port        = 1317
+path        = "/api"
+vhost       = "api"
+description = "Cosmos SDK REST alias — same as rest; chain-specific naming preference"
