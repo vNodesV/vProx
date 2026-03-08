@@ -433,7 +433,7 @@ func IsChainTOML(name string) bool {
 	if strings.HasSuffix(name, ".sample.toml") {
 		return false
 	}
-	skip := []string{"ports.toml", "backup.toml", "modules.toml", "vlog.toml", "webservice.toml"}
+	skip := []string{"ports.toml", "services.toml", "backup.toml", "modules.toml", "vlog.toml", "webservice.toml"}
 	for _, s := range skip {
 		if strings.EqualFold(name, s) {
 			return false

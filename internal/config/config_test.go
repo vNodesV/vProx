@@ -483,11 +483,13 @@ func TestIsChainTOML(t *testing.T) {
 		{"cosmos.toml", true},
 		{"osmosis.toml", true},
 		{"ports.toml", false},
+		{"services.toml", false},
 		{"backup.toml", false},
 		{"cosmos.sample.toml", false},
 		{"readme.txt", false},
 		{"nottoml", false},
-		{"Ports.TOML", false}, // case-insensitive skip
+		{"Ports.TOML", false},    // case-insensitive skip
+		{"Services.TOML", false}, // case-insensitive skip
 		{"Backup.Toml", false},
 	}
 	for _, tt := range tests {
