@@ -21,12 +21,13 @@ SERVICE_PATH := $(SERVICE_DIR)/vProx.service
 VLOG_SERVICE := $(SERVICE_DIR)/vLog.service
 GEO_DIR := $(DATA_DIR)/geolocation
 DIR_LIST := $(DATA_DIR) $(LOG_DIR) $(CFG_DIR) $(CFG_DIR)/chains $(CFG_DIR)/backup \
-            $(CFG_DIR)/push $(CFG_DIR)/vlog $(CFG_DIR)/infra $(INTERNAL_DIR) $(ARCHIVE_DIR) $(SERVICE_DIR) $(GEO_DIR)
+            $(CFG_DIR)/push $(CFG_DIR)/vlog $(CFG_DIR)/infra $(CFG_DIR)/vprox \
+            $(INTERNAL_DIR) $(ARCHIVE_DIR) $(SERVICE_DIR) $(GEO_DIR)
 
 # Sample file revision — format: r{major}_{MMDDYY}_{seq}
 # Increment {seq} for multiple revisions on the same day; reset to 0 on new date.
 # Injected into the "# rev: {{SAMPLE_REV}}" placeholder in every .sample.toml at install/refresh time.
-SAMPLE_REV := r2_030726_2
+SAMPLE_REV := r3_030826_0
 
 # GeoLocation database — bundled in assets/geo/, extracted to user data dir
 GEO_DB_SRC := assets/geo/ip2location.mmdb.gz
@@ -46,7 +47,7 @@ _TOOLCHAIN_GOROOT := $(shell find $(GOPATH)/pkg/mod/golang.org -maxdepth 1 -name
 EFFECTIVE_GOROOT  := $(if $(_TOOLCHAIN_GOROOT),$(_TOOLCHAIN_GOROOT),$(GOROOT))
 
 .PHONY: all install clean ufw help \
-        validate-go dirs geo config config-push config-vlog config-modules \
+        validate-go dirs geo config config-push config-vlog config-vprox config-modules \
         build build-vlog systemd service-vlog samples-push
 
 all: help
@@ -63,7 +64,7 @@ help:
 	@echo "  make ufw              Passwordless UFW sudoers for vLog block/unblock"
 	@echo ""
 
-install: validate-go dirs geo config config-vlog config-push config-modules env samples-push
+install: validate-go dirs geo config config-vlog config-push config-vprox config-modules env samples-push
 
 ## Validate Go environment
 
@@ -138,14 +139,17 @@ env:
 		echo "✓ $(ENV_FILE) already exists"; \
 	fi
 
-## Install live config defaults (ports.toml, backup.toml) — samples handled by samples-push
+## Install live config defaults (services.toml → ports.toml fallback, backup.toml) — samples handled by samples-push
 
 config: dirs config-push config-modules
-	@if [[ ! -f "$(CFG_DIR)/ports.toml" ]]; then \
-		echo "Creating default ports.toml..."; \
-		if [[ -f "config/chains/ports.sample.toml" ]]; then \
-			sed "s/{{SAMPLE_REV}}/$(SAMPLE_REV)/" "config/chains/ports.sample.toml" > "$(CFG_DIR)/ports.toml"; \
-			echo "✓ Installed ports.toml → $(CFG_DIR)/ports.toml"; \
+	@if [[ ! -f "$(CFG_DIR)/chains/services.toml" && ! -f "$(CFG_DIR)/chains/ports.toml" && ! -f "$(CFG_DIR)/ports.toml" ]]; then \
+		echo "Creating default services.toml..."; \
+		if [[ -f "config/chains/services.sample.toml" ]]; then \
+			sed "s/{{SAMPLE_REV}}/$(SAMPLE_REV)/" "config/chains/services.sample.toml" > "$(CFG_DIR)/chains/services.toml"; \
+			echo "✓ Installed services.toml → $(CFG_DIR)/chains/services.toml"; \
+		elif [[ -f "config/chains/ports.sample.toml" ]]; then \
+			sed "s/{{SAMPLE_REV}}/$(SAMPLE_REV)/" "config/chains/ports.sample.toml" > "$(CFG_DIR)/chains/ports.toml"; \
+			echo "✓ Installed ports.toml → $(CFG_DIR)/chains/ports.toml (legacy fallback)"; \
 		else \
 			{ \
 				echo "# Default ports for all chains (override per-chain with default_ports = false)"; \
@@ -154,11 +158,11 @@ config: dirs config-push config-modules
 				echo "grpc     = 9090"; \
 				echo "grpc_web = 9091"; \
 				echo "api      = 1317"; \
-			} > "$(CFG_DIR)/ports.toml"; \
-			echo "✓ Created $(CFG_DIR)/ports.toml (minimal fallback)"; \
+			} > "$(CFG_DIR)/chains/ports.toml"; \
+			echo "✓ Created $(CFG_DIR)/chains/ports.toml (minimal fallback)"; \
 		fi \
 	else \
-		echo "✓ $(CFG_DIR)/ports.toml already exists"; \
+		echo "✓ Port/service config already exists (services.toml or ports.toml)"; \
 	fi
 	@if [[ ! -f "$(CFG_DIR)/backup/backup.toml" ]]; then \
 		if [[ -f "config/backup/backup.sample.toml" ]]; then \
@@ -188,10 +192,26 @@ config-push:
 		echo "✓ $(CFG_DIR)/push/vms.toml already exists"; \
 	fi
 
+## Install proxy settings reference (settings.toml) — only sample, never overwrites live
+
+config-vprox: dirs
+	@mkdir -p "$(CFG_DIR)/vprox"
+	@if [[ -f "config/vprox/settings.sample.toml" ]]; then \
+		sed "s/{{SAMPLE_REV}}/$(SAMPLE_REV)/" "config/vprox/settings.sample.toml" > "$(CFG_DIR)/vprox/settings.sample.toml"; \
+		echo "✓ Installed proxy settings sample → $(CFG_DIR)/vprox/settings.sample.toml"; \
+		if [[ ! -f "$(CFG_DIR)/vprox/settings.toml" ]]; then \
+			echo "  Copy to activate: cp $(CFG_DIR)/vprox/settings.sample.toml $(CFG_DIR)/vprox/settings.toml"; \
+		else \
+			echo "✓ $(CFG_DIR)/vprox/settings.toml already exists"; \
+		fi \
+	else \
+		echo "NOTE: config/vprox/settings.sample.toml not found in repo; skipping"; \
+	fi
+
 ## Overwrite ALL sample files in CFG_DIR — safe to run anytime; never touches live config files.
 ## Archives the existing sample before overwriting: *.sample.toml → archives/*.sample.toml.{old_rev}
 samples-push:
-	@mkdir -p "$(CFG_DIR)/push" "$(CFG_DIR)/vlog" "$(CFG_DIR)/chains" "$(CFG_DIR)/backup"
+	@mkdir -p "$(CFG_DIR)/push" "$(CFG_DIR)/vlog" "$(CFG_DIR)/chains" "$(CFG_DIR)/backup" "$(CFG_DIR)/vprox" "$(CFG_DIR)/infra"
 	@_rev="$(SAMPLE_REV)"; \
 	_archive() { \
 		local dst="$$1" adir old_rev; \
@@ -205,12 +225,14 @@ samples-push:
 		fi; \
 	}; \
 	_copy() { sed "s/{{SAMPLE_REV}}/$$_rev/" "$$1" > "$$2" && echo "✓ $$2 [$$_rev]"; }; \
-	_archive "$(CFG_DIR)/push/vms.sample.toml";      _copy "config/push/vms.sample.toml"           "$(CFG_DIR)/push/vms.sample.toml"; \
-	_archive "$(CFG_DIR)/vlog/vlog.sample.toml";     _copy "config/vlog/vlog.sample.toml"          "$(CFG_DIR)/vlog/vlog.sample.toml"; \
-	_archive "$(CFG_DIR)/chains/chain.sample.toml";  _copy "config/chains/chain.sample.toml"       "$(CFG_DIR)/chains/chain.sample.toml"; \
-	_archive "$(CFG_DIR)/chains/ports.sample.toml";  _copy "config/chains/ports.sample.toml"       "$(CFG_DIR)/chains/ports.sample.toml"; \
-	_archive "$(CFG_DIR)/backup/backup.sample.toml"; _copy "config/backup/backup.sample.toml"      "$(CFG_DIR)/backup/backup.sample.toml"; \
-	_archive "$(CFG_DIR)/infra/infra.sample.toml";   _copy "config/infra/infra.sample.toml"         "$(CFG_DIR)/infra/infra.sample.toml"
+	_archive "$(CFG_DIR)/push/vms.sample.toml";           _copy "config/push/vms.sample.toml"           "$(CFG_DIR)/push/vms.sample.toml"; \
+	_archive "$(CFG_DIR)/vlog/vlog.sample.toml";          _copy "config/vlog/vlog.sample.toml"          "$(CFG_DIR)/vlog/vlog.sample.toml"; \
+	_archive "$(CFG_DIR)/chains/chain.sample.toml";       _copy "config/chains/chain.sample.toml"       "$(CFG_DIR)/chains/chain.sample.toml"; \
+	_archive "$(CFG_DIR)/chains/ports.sample.toml";       _copy "config/chains/ports.sample.toml"       "$(CFG_DIR)/chains/ports.sample.toml"; \
+	_archive "$(CFG_DIR)/chains/services.sample.toml";    _copy "config/chains/services.sample.toml"    "$(CFG_DIR)/chains/services.sample.toml"; \
+	_archive "$(CFG_DIR)/backup/backup.sample.toml";      _copy "config/backup/backup.sample.toml"      "$(CFG_DIR)/backup/backup.sample.toml"; \
+	_archive "$(CFG_DIR)/infra/infra.sample.toml";        _copy "config/infra/infra.sample.toml"        "$(CFG_DIR)/infra/infra.sample.toml"; \
+	_archive "$(CFG_DIR)/vprox/settings.sample.toml";     _copy "config/vprox/settings.sample.toml"     "$(CFG_DIR)/vprox/settings.sample.toml"
 	@echo "Done. Samples refreshed with $(SAMPLE_REV)."
 
 ## Install modules registry stub
