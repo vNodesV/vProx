@@ -138,6 +138,34 @@ func (c *Config) FindVM(name string) *VM {
 	return nil
 }
 
+// FindVMForChain returns the VM that manages the given chain slug.
+// Checks exact vm.Name match, exact vm.ChainName match, and base-slug match
+// (e.g. "cheqd-testnet" → base "cheqd" matches a VM with ChainName "cheqd").
+func (c *Config) FindVMForChain(chainSlug string) *VM {
+	base := chainBaseSlug(chainSlug)
+	for i := range c.VMs {
+		if c.VMs[i].Name == chainSlug || c.VMs[i].ChainName == chainSlug {
+			return &c.VMs[i]
+		}
+		if base != "" && (chainBaseSlug(c.VMs[i].ChainName) == base || chainBaseSlug(c.VMs[i].Name) == base) {
+			return &c.VMs[i]
+		}
+	}
+	return nil
+}
+
+// chainBaseSlug extracts the leading word from a chain slug (letters + digits
+// before the first hyphen or underscore). Used for fuzzy chain matching.
+// e.g. "cheqd-testnet-6" → "cheqd", "osmosis-1" → "osmosis"
+func chainBaseSlug(s string) string {
+	for i, r := range s {
+		if i > 0 && (r == '-' || r == '_') {
+			return strings.ToLower(s[:i])
+		}
+	}
+	return strings.ToLower(s)
+}
+
 // AllChains returns a deduplicated list of all chain names (one per VM).
 func (c *Config) AllChains() []string {
 	seen := make(map[string]struct{})

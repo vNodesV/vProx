@@ -634,7 +634,8 @@
 
   function removeChain(chain) {
     if (!confirm('Remove "'+chain+'" from monitoring?')) return;
-    fetch(BASE + '/api/v1/fleet/chains/registered/' + encodeURIComponent(chain), {method:'DELETE'})
+    // Use POST alias: Apache proxies often block DELETE pass-through.
+    fetch(BASE + '/api/v1/fleet/chains/registered/' + encodeURIComponent(chain), {method:'POST'})
       .then(function(r){
         if (!r.ok) { alert('Remove failed (HTTP '+r.status+').'); return; }
         loadChainStatus();

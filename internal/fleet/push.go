@@ -164,8 +164,9 @@ func (s *Service) pollAll(ctx context.Context) {
 		log.Printf("[fleet] list registered chains: %v", err)
 	} else {
 		for _, rc := range registered {
-			// Skip if a VM already covers this chain name.
-			if s.cfg.FindVM(rc.Chain) != nil {
+			// Skip if a VM already covers this chain (exact name or base-slug match).
+			// e.g. registered "cheqd-testnet" is skipped when VM "cheqd" (ChainName="cheqd") exists.
+			if s.cfg.FindVMForChain(rc.Chain) != nil {
 				continue
 			}
 			rc := rc
