@@ -1,0 +1,199 @@
+# vProx — Local-only / Ignored File Inventory
+# Generated: 2026-02-22
+#
+# This file documents everything that is local-only, not cloneable,
+# and not visible to "regular" users (people who clone the public repo).
+#
+# This file itself is local-only: matched by .gitignore rule:
+#   agents/*.*  →  agents/ignored.list
+#
+# SECTIONS
+# ────────
+# 1. GITIGNORE PATTERN RULES         — what .gitignore declares as ignored
+# 2. CURRENTLY PRESENT + IGNORED     — files on this machine that are ignored right now
+# 3. TRACKED DESPITE IGNORE RULES    — files that match .gitignore patterns but are
+#                                      force-tracked (policy gap; visible on remote)
+# 4. LOCAL-ONLY BY CONVENTION        — no matching gitignore rule, but kept local
+# 5. PUBLICLY TRACKED (REFERENCE)    — summary of what regular users DO see
+#
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 1. GITIGNORE PATTERN RULES
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#
+# ── macOS artifacts ─────────────────────────────────────────────────────────────
+  .DS_Store
+  .AppleDouble
+  .LSOverride
+  Icon
+  ._*
+  .DocumentRevisions-V100
+  .fseventsd
+  .Spotlight-V100
+  .TemporaryItems
+  .Trashes
+  .VolumeIcon.icns
+  .com.apple.timemachine.donotpresent
+  .AppleDB
+  .AppleDesktop
+  Network Trash Folder/
+  Temporary Items/
+  .apdisk
+#
+# ── Go binaries / build output ──────────────────────────────────────────────────
+  *.exe
+  *.exe~
+  *.dll
+  *.so
+  *.dylib
+  vProx                          # root-level compiled binary
+  .build/                        # output of `make build`
+  *.test                         # `go test -c` output
+  *.out
+  coverage.*
+  vendor/
+  go.work
+  go.work.sum
+#
+# ── Log and temporary files ─────────────────────────────────────────────────────
+  logs/
+  *.log
+  tmp/
+#
+# ── Environment / secrets ───────────────────────────────────────────────────────
+  .env                           # runtime secrets + paths (example: .env.example IS tracked)
+#
+# ── IDE and editor state ────────────────────────────────────────────────────────
+  .vscode/
+  .idea/
+  *.swp
+  *.swo
+  *~
+#
+# ── Agent and collaboration artifacts (all local-only) ──────────────────────────
+  agents/*.*                     # all files in agents/ (base, state, router files)
+  agents/projects/*.*            # all project-scoped memory dumps
+  docs/*.*                       # top-level files under docs/ (not subdirs)
+  .github/agents/*.*             # Copilot agent manifests + config
+#
+# ── GitHub config hidden from regular cloners ───────────────────────────────────
+  .github/CODEOWNERS
+  .github/dependabot.yml
+#
+# ── Root-level local-only files ─────────────────────────────────────────────────
+  AGENT_DIRECTIVE.md             # operational directives for this machine
+  doc.go                         # package-level doc file (not part of public API surface)
+  scripts/*.*                    # all scripts in scripts/
+#
+#
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 2. CURRENTLY PRESENT + IGNORED (on this machine, as of 2026-02-22)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#
+# These files exist locally and are fully hidden from git (not tracked, not pushable).
+#
+  .DS_Store                                      # macOS folder metadata — root
+  .github/.DS_Store                              # macOS folder metadata — .github/
+  internal/.DS_Store                             # macOS folder metadata — internal/
+  .vscode/                                       # VSCode workspace settings
+  .vscode/settings.json                          #   └─ editor + language server config
+  agents/jarvis4.0_vscode_state.md               # VSCode agent router (this machine)
+  agents/projects/vprox.vscode.state.md          # vProx project memory — VSCode variant
+  agents/ignored.list                            # this file
+#
+#
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 3. TRACKED DESPITE IGNORE RULES  (policy gap)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#
+# These files MATCH a .gitignore rule but were committed before or alongside the rule.
+# Git tracks already-committed files regardless of .gitignore.
+# They ARE visible in the remote repo. They are NOT private by enforcement.
+#
+# If any of these should be truly private, run:
+#   git rm --cached <file> && git commit -m "chore: untrack <file>"
+#
+  AGENT_DIRECTIVE.md             # rule: AGENT_DIRECTIVE.md (line 73)
+  doc.go                         # rule: doc.go (line 74)
+  agents/base.agent.md           # rule: agents/*.* (line 67)
+  agents/jarvis4.0_state.md      # rule: agents/*.* (line 67)
+  agents/projects/_template.state.md   # rule: agents/projects/*.* (line 68)
+  agents/projects/vprox.state.md       # rule: agents/projects/*.* (line 68)
+  scripts/harden_repo_settings.sh      # rule: scripts/*.* (line 75)
+  scripts/minimal-runtime.lst          # rule: scripts/*.* (line 75)
+  scripts/set_required_checks.sh       # rule: scripts/*.* (line 75)
+  docs/checkpoints/2026-02-19-request-id-correlation.md  # rule: docs/*.* (line 69)
+                                 #   ↑ note: docs/*/* (nested) NOT matched by docs/*.*
+  .github/agents/assignments.yml        # rule: .github/agents/*.* (line 70)
+  .github/agents/jarvis4.0.agent.md     # rule: .github/agents/*.* (line 70)
+  .github/agents/jarvis4.0_vscode.agent.md  # rule: .github/agents/*.* (line 70)
+  .github/agents/reviewer.agent.md      # rule: .github/agents/*.* (line 70)
+  .github/agents/USERS.md               # rule: .github/agents/*.* (line 70)
+  .github/CODEOWNERS                    # rule: .github/CODEOWNERS (line 71)
+  .github/dependabot.yml                # rule: .github/dependabot.yml (line 72)
+  internal/backup/cfg/config.json       # no matching rule — fully tracked
+  internal/backup/cfg/config.toml       # no matching rule — fully tracked
+  ip2l/ip2location.mmdb                 # no matching rule — binary DB tracked intentionally
+#
+#
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 4. LOCAL-ONLY BY CONVENTION (no gitignore rule, kept local)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#
+# Files on this machine that have no gitignore rule AND are not tracked.
+# If ever staged accidentally, they would be committed. Consider adding rules.
+#
+  (none currently — this machine is clean)
+#
+#
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 5. PUBLICLY TRACKED (what regular users see on clone)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#
+# These are the files a `git clone` delivers to any user.
+#
+  .env.example                           # env variable reference (no secrets)
+  .gitignore
+  .github/workflows/ci.yml
+  .github/workflows/codeql.yml
+  .github/workflows/dependency-review.yml
+  .github/workflows/jb-auto-approve.yml
+  .github/workflows/required-reviewer.yml
+  chains/chain.sample.toml
+  cmd/vprox/main.go
+  internal/backup/backup.go
+  internal/backup/cfg/config.json        # ← also tracked (see section 3)
+  internal/backup/cfg/config.toml        # ← also tracked (see section 3)
+  internal/geo/geo.go
+  internal/limit/limiter.go
+  internal/logging/logging.go
+  internal/ws/ws.go
+  ip2l/ip2location.mmdb                  # binary GeoIP DB (tracked intentionally)
+  go.mod
+  go.sum
+  LICENSE
+  Makefile
+  README.md
+  CLI_FLAGS_GUIDE.md
+  FLAGS.md
+  MIGRATION.md
+  MODULES.md
+  vprox.service.template
+#
+# ── Tracked but should be reviewed for untracking (see section 3) ───────────────
+  AGENT_DIRECTIVE.md
+  doc.go
+  agents/base.agent.md
+  agents/jarvis4.0_state.md
+  agents/projects/_template.state.md
+  agents/projects/vprox.state.md
+  scripts/harden_repo_settings.sh
+  scripts/minimal-runtime.lst
+  scripts/set_required_checks.sh
+  docs/checkpoints/2026-02-19-request-id-correlation.md
+  .github/agents/assignments.yml
+  .github/agents/jarvis4.0.agent.md
+  .github/agents/jarvis4.0_vscode.agent.md
+  .github/agents/reviewer.agent.md
+  .github/agents/USERS.md
+  .github/CODEOWNERS
+  .github/dependabot.yml

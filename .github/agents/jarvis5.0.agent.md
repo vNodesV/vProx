@@ -47,7 +47,7 @@ performance claim is benchmarked, every recommendation is trade-off-aware.
 - Stack: `gorilla/websocket`, `geoip2-golang`, `go-toml/v2`, `golang.org/x/time/rate`
 - Standard library mastery: `net/http`, `net/http/httputil`, `crypto/tls`, `compress/gzip`, `sync`, `context`, `io`, `encoding`, `testing`
 - **vProxWeb module** (`internal/webserver/`): embedded HTTP/HTTPS server with SNI TLS, gzip, CORS, reverse proxy, static files, per-host TOML config
-- **Config layout** (current): `config/webservice.toml` (enable + server), `config/vhosts/*.toml` (per-vhost flat TOML), `config/chains/*.toml` (per-chain; v1.3.0 adds `[management]` + `[management.ping]` + `chain_id` + `explorer_base`), `config/backup/backup.toml`, `config/ports.toml`, `config/push/vms.toml` (DEPRECATED in v1.3.0 — chain.toml `[management]` takes precedence)
+- **Config layout** (v1.3.0): `config/webservice.toml` (enable + server), `config/vhosts/*.toml` (per-vhost flat TOML), `config/chains/*.toml` (per-chain; `[management]` + `[management.ping]` + `chain_id` + `explorer_base`), `config/backup/backup.toml`, `config/ports.toml`, `config/infra/<datacenter>.toml` (VM inventory, all `*.toml` scanned), `config/fleet/settings.toml` (SSH defaults + poll interval — replaces deprecated `config/push/vms.toml`)
 - **Config priority**: TOML files take precedence over `.env`; `.env` is for deployment secrets and overrides only
 - **Config architecture** (P4 planned): `vprox.toml` (proxy/logger settings)
 - **CLI commands** (shipped): `start`, `stop`, `restart`, `webserver new|list|validate|remove`
@@ -57,15 +57,17 @@ performance claim is benchmarked, every recommendation is trade-off-aware.
 - **Web GUI** (P4 planned): embedded admin dashboard via `html/template` + `go:embed` + htmx; single-binary, zero JS framework
 - **vProxWeb expansion** (next): replace Apache/nginx with embedded Go webserver — HTTP listener, TLS cert management, reverse proxy, static file serving
 
-### push module (`internal/push/` — shipped on `vLog/v1.2.0` branch)
+### fleet module (`internal/fleet/` — v1.3.0, renamed from `push`)
 - **Purpose**: centralized control plane — vProx SSHes to validator VMs to execute bash scripts
 - **Architecture**: vApp cut; scripts migrated to `vProx/scripts/chains/{chain}/{component}/{script}.sh`
-- **Packages**: `config/` (vms.toml loader), `ssh/` (dispatcher, `x/crypto/ssh`), `runner/` (remote bash via SSH), `state/` (SQLite: deployments + registered_chains), `status/` (Cosmos RPC poller: height, gov, upgrade plan), `api/` (HTTP handlers)
-- **VM registry**: `config/push/vms.toml` — per-VM: name, host, port, user, key_path, datacenter, type, chain_id, explorer; `[vm.ping]` subtable: `VMPing{Country string, Provider string}` → datacenter probe country for vLog Chain Status; wired as `ChainStatus.PingCountry`/`.PingProvider`
-- **SSH key**: dedicated push→VM key (separate from `id.file`); sudoers NOPASSWD on VMs for script execution
+- **Packages**: `config/` (infra loader), `ssh/` (dispatcher, `x/crypto/ssh`), `runner/` (remote bash via SSH), `state/` (SQLite: deployments + registered_chains), `status/` (Cosmos RPC poller: height, gov, upgrade plan), `api/` (HTTP handlers)
+- **VM registry**: `config/infra/<datacenter>.toml` — all `*.toml` files scanned; `config/fleet/settings.toml` for SSH defaults + poll interval; `[vm.ping]` subtable: `VMPing{Country string, Provider string}` → datacenter probe country for vLog Chain Status; wired as `ChainStatus.PingCountry`/`.PingProvider`
+- **SSH key**: dedicated fleet→VM key; `key_path` in `config/fleet/settings.toml [ssh]` section; sudoers NOPASSWD on VMs for script execution
 - **Script path**: `~/vProx/scripts/chains/{chain}/{component}/{script}.sh` (VMs clone vProx)
-- **API routes**: `GET /api/v1/push/vms`, `GET /api/v1/push/chains`, `POST /api/v1/push/deploy`, `GET /api/v1/push/deployments`, `POST /api/v1/push/chains/registered`, `DELETE /api/v1/push/chains/registered/{chain}`
-- **Dashboard**: Phase B deployed (Deploy Wizard + Chain Status Table panels on vLog dashboard)
+- **API routes**: `GET /api/v1/fleet/vms`, `GET /api/v1/fleet/chains`, `POST /api/v1/fleet/deploy`, `GET /api/v1/fleet/deployments`, `POST /api/v1/fleet/chains/registered`, `DELETE /api/v1/fleet/chains/registered/{chain}`
+- **CLI**: `vprox fleet [hosts|vms|deploy|update]`
+- **Config structs**: `FleetConfig` (was `PushConfig`), `FleetDefaults` (was `PushDefaults`) in `internal/vlog/config/config.go`
+- **Dashboard**: Deploy Wizard + Chain Status Table panels on vLog dashboard
 
 ### vLog (module — `vLog1.3.0` branch, active)
 - **Binary**: standalone `vLog` — mirrors vProx architecture (single binary, embedded HTTP server, Apache-proxied)
@@ -126,8 +128,8 @@ All CRITICAL/HIGH findings from the 2026-03-01 audit applied in `70a46db` + `a1e
 
 ### Phase E CLI commands (shipped, `vLog/v1.2.0` branch)
 - **`vProx mod [list|add|update|remove] --name mod@version`**: `internal/modules/` package + `config/modules.toml` state; `mod add vLog@v1.2.0` → git fetch + build + install binary + systemd service
-- **`vProx push [hosts|vms|add|update|remove]`**: CLI layer over `internal/push/`; `push add --chain akash --type validator --host qc-vm-01 --mainnet`; `push update [--host]` → SSH apt upgrade
-- **`vProx chain [status|upgrade --prop N]`**: `internal/chain/upgrade/` package; fetches proposal via REST → name/halt-height/binary URL; manages binary swap at halt; tracks in push SQLite
+- **`vProx fleet [hosts|vms|deploy|update]`**: CLI layer over `internal/fleet/`; `fleet update [--host]` → SSH apt upgrade; VM registry from `config/infra/` + chain `[management]` sections
+- **`vProx chain [status|upgrade --prop N]`**: `internal/chain/upgrade/` package; fetches proposal via REST → name/halt-height/binary URL; manages binary swap at halt; tracks in fleet SQLite
 
 ### Cosmos SDK hidden gems (proxy intelligence — researched 2026-03-03)
 Key patterns for proxy-level intelligence:
@@ -325,7 +327,7 @@ Optimized for GitHub Copilot CLI agent runtime with:
 | Server | Install | Use for vProx/vLog |
 |--------|---------|-------------------|
 | `@modelcontextprotocol/server-filesystem` | `npx @modelcontextprotocol/server-filesystem /path` | Direct file ops on config/templates without shell |
-| `@modelcontextprotocol/server-sqlite` | `npx @modelcontextprotocol/server-sqlite --db-path path` | Query vlog.db / push.db directly — debug accounts, deployments, intel |
+| `@modelcontextprotocol/server-sqlite` | `npx @modelcontextprotocol/server-sqlite --db-path path` | Query vlog.db / fleet.db directly — debug accounts, deployments, intel |
 | `@modelcontextprotocol/server-memory` | `npx @modelcontextprotocol/server-memory` | Persistent knowledge graph across sessions |
 | `@modelcontextprotocol/server-sequentialthinking` | `npx @modelcontextprotocol/server-sequentialthinking` | Structured multi-step reasoning for complex refactors |
 | `mcp-server-git` | `npx @modelcontextprotocol/server-git --repository /path` | Git ops beyond gh CLI — diff, history, branch mgmt |

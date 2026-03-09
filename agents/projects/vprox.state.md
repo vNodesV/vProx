@@ -1675,3 +1675,70 @@ provider = ""
 | host-traffic-table | Add host_traffic pre-aggregated table | pending | Efficient per-chain request count |
 | gov-v1-fix | Fix governance API: v1 with v1beta1 fallback | pending | Newer chains use v1 |
 | v1.4.0-plan | Binary consolidation planning | deferred | After v1.3.0 ships |
+
+---
+
+## Session: 2026-03-09 — vLog1.3.0 fleet rename + config/push removal
+
+### Active Branch
+`vLog_v1.3.0` — HEAD: `9167847`
+
+### Recent Commits
+```
+9167847  refactor(fleet): rename push module to fleet across codebase
+9939e83  docs(makefile): clarify push module is auto-installed; add infra/chains config hints
+22bf6cc  refactor(push): remove config/push + legacy vms.toml; wire to infra/ only
+009edab  refactor(config): rename *.sample.toml → *.sample + push opt-in only
+83f8e30  fix(config): exclude services.toml from chain config scanner
+```
+
+### Completed This Session
+
+#### Track A — Remove config/push/ (commit `22bf6cc`)
+- `config/push/vms.sample` — deleted via `git rm`
+- `Makefile` — removed `$(CFG_DIR)/push` from `DIR_LIST`; removed `add-push`, `config-push` targets; removed `push)` case from `add-%`; removed stale help text
+- `cmd/vprox/push.go` — removed `vmsCfgPath()`, `pushAdd()`, `pushRemove()`, legacy `vms.toml` load from `loadVMsCfg()`; CLI now: hosts, vms, deploy, update only
+- `internal/vlog/config/config.go` — removed `VMsPath` field from `PushConfig`; updated `InfraDir` doc
+- `cmd/vlog/main.go` — collapsed dual `vmsExists` branch → single `push.NewEmpty()` path
+
+#### Track B — Rename push → fleet (commit `9167847`)
+- `internal/push/` → `internal/fleet/` — 8 Go files moved; `package push` → `package fleet`
+- `cmd/vprox/push.go` → `cmd/vprox/fleet.go` — all function names; CLI: `vprox push` → `vprox fleet`
+- `cmd/vprox/main.go` — `case "push"` → `case "fleet"`; help text updated
+- `cmd/vlog/main.go` — import + all `push.*` → `fleet.*`
+- `internal/vlog/config/config.go` — `PushConfig` → `FleetConfig`, `PushDefaults` → `FleetDefaults`
+- `internal/vlog/web/server.go` — routes `/api/v1/push/*` → `/api/v1/fleet/*`
+- `internal/vlog/web/handlers.go` — `pushHostSet` → `fleetHostSet`
+- `internal/vlog/web/templates/dashboard.html` — 12 fetch URLs updated
+- `Makefile` — `samples-push` → `samples-fleet`; `$(CFG_DIR)/fleet` added to `DIR_LIST`
+- **NEW**: `config/fleet/settings.sample` — SSH defaults (`[ssh]`: user, key_path, port) + `[poll]` interval + `[defaults]`
+
+#### Track C — Makefile help text (commit `9939e83`)
+- Clarified `make install` covers SSH control plane automatically
+- Added infra/chains config hint lines to `make help` output
+
+### Config Architecture (Final v1.3.0)
+```
+config/infra/<datacenter>.toml   ← VM inventories (per-datacenter, all *.toml scanned)
+config/fleet/settings.toml       ← Fleet-wide SSH defaults + poll interval
+config/chains/<chain>.toml       ← Chain configs with [management] sections
+config/vprox/settings.toml       ← vProx reverse proxy settings
+config/dash/dashboard.toml       ← Dashboard config
+```
+
+### API Routes (current)
+- Fleet API: `GET /api/v1/fleet/vms`, `GET /api/v1/fleet/chains`, `POST /api/v1/fleet/deploy`, etc.
+- (formerly `/api/v1/push/*`)
+
+### Patterns Established
+- **config/push/ fully removed**: VM inventories → `config/infra/`; fleet-wide settings → `config/fleet/settings.toml`
+- **`*.sample` naming** (no `.toml` extension): prevents TOML scanner from loading samples accidentally; operators `cp *.sample <name>.toml` to activate
+- **`LoadFromInfraFiles(dir)`**: scans ALL `*.toml` in directory — supports `qc.toml`, `rbx.toml`, `nyc.toml` etc. No hardcoded names.
+- **`IsChainTOML()` skip list**: any non-chain TOML added to `config/chains/` must be added to this skip list (`internal/config/config.go:~436`)
+
+### Open v1.3.0 Todos
+- `chain-toml-redesign` — Redesign `chain.sample` with cosmos.directory schema
+- `cosmos-dir-client` — cosmos.directory auto-import client
+- `infra-toml-update` — Add `[[vps]]` sections to `infra.sample`
+- `vm-build-verify` — End-to-end build + deploy verify
+- `sample-rev-bump` — Bump SAMPLE_REV after all redesigns complete
