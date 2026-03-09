@@ -442,7 +442,6 @@
     var panel = document.getElementById('chain-status-panel');
     if (!panel) return;
     var chains        = data.chains;
-    var registeredSet = data.registeredSet;
     var ex            = chainExpanded;
 
     if (!chains || chains.length === 0) {
@@ -454,7 +453,6 @@
     var tdStyle  = 'text-align:left;padding:.22rem .35rem;vertical-align:middle';
     var tdNum    = 'text-align:left;font-variant-numeric:tabular-nums;padding:.22rem .35rem;vertical-align:middle;white-space:nowrap';
     var catStyle = 'text-align:left;padding:.2rem .35rem;font-size:.68rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase;opacity:.45;border-bottom:1px solid var(--vn-border)';
-    var rmStyle  = 'background:none;border:1px solid rgba(239,83,80,0.4);color:#ef5350;padding:.06rem .38rem;border-radius:3px;cursor:pointer;font-size:.7rem;transition:all 0.2s';
 
     function netBadge(nt) {
       if (!nt) return '';
@@ -491,9 +489,6 @@
       var participation = c.val_participation
         ? '<span style="font-variant-numeric:tabular-nums;font-size:.72rem">' + escH(c.val_participation) + '</span>'
         : '<span style="opacity:.3">—</span>';
-      var rmBtn = registeredSet[c.chain]
-        ? '<button onclick="removeChain(\'' + escH(c.chain) + '\')" style="' + rmStyle + '">remove</button>'
-        : '';
       var indentPfx = isChild ? 'padding-left:.9rem;' : '';
       var monikerPfx = isChild ? '<span style="opacity:.3;font-size:.65rem;margin-right:.25rem">└</span>' : '';
       var monikerContent = monikerPfx + escH(c.dashboard_name || c.moniker || c.chain) + netBadge(isChild ? c.network_type : null);
@@ -513,7 +508,6 @@
       }
       row +=
         '<td style="' + tdStyle + ';border-left:1px solid var(--vn-border)">' + lanPingCell(c.lan_ping_ms) + '</td>' +
-        '<td style="' + tdStyle + '">' + rmBtn + '</td>' +
         '</tr>';
       return row;
     }
@@ -565,7 +559,7 @@
         headerRow += '<td style="' + tdStyle + ';opacity:.3">—</td>';
         headerRow += '<td colspan="4" style="' + tdStyle + ';opacity:.3;border-left:1px solid var(--vn-border)"></td>';
       }
-      headerRow += '<td style="' + tdStyle + ';border-left:1px solid var(--vn-border)"></td><td></td></tr>';
+      headerRow += '<td style="' + tdStyle + ';border-left:1px solid var(--vn-border)"></td></tr>';
 
       var childRows = expanded ? entries.map(function(c) { return buildChainRow(c, true); }).join('') : '';
       return headerRow + childRows;
@@ -580,8 +574,7 @@
       catRow += '<th colspan="4" style="' + catStyle + ';border-left:1px solid var(--vn-border)">Governance</th>';
     }
     catRow +=
-      '<th style="' + catStyle + ';border-left:1px solid var(--vn-border)">Ping</th>' +
-      '<th style="' + catStyle + '"></th></tr>';
+      '<th style="' + catStyle + ';border-left:1px solid var(--vn-border)">Ping</th></tr>';
     var colRow =
       '<tr style="font-size:.72rem;border-bottom:1px solid var(--vn-border)">' +
       '<th style="' + thStyle + '">Moniker</th>' +
@@ -597,8 +590,7 @@
       colRow += '<th style="' + thStyle + '">Participation</th>';
     }
     colRow +=
-      '<th style="' + thStyle + ';border-left:1px solid var(--vn-border)">Ping</th>' +
-      '<th style="' + thStyle + '"></th></tr>';
+      '<th style="' + thStyle + ';border-left:1px solid var(--vn-border)">Ping</th></tr>';
 
     panel.innerHTML = '<table style="width:100%;border-collapse:collapse"><thead>' +
       catRow + colRow + '</thead><tbody>' + rows + '</tbody></table>';
@@ -611,16 +603,12 @@
     if (!chainCachedData) showLoading('chain-status-panel');
     Promise.all([
       fetch(BASE + '/api/v1/fleet/chains').then(function(r){ return r.json(); }),
-      fetch(BASE + '/api/v1/fleet/chains/registered').then(function(r){ return r.json(); }).catch(function(){ return {registered_chains:[]}; }),
       fetch(BASE + '/api/v1/fleet/chains/traffic').then(function(r){ return r.json(); }).catch(function(){ return {traffic:[]}; })
     ]).then(function(results) {
       var chains   = results[0].chains || [];
-      var regList  = (results[1].registered_chains) || [];
-      var tmap     = buildTrafficMap((results[2].traffic) || []);
-      var regSet   = {};
-      regList.forEach(function(rc){ regSet[rc.chain] = true; });
+      var tmap     = buildTrafficMap((results[1].traffic) || []);
       chains.sort(function(a,b){ return a.chain.localeCompare(b.chain); });
-      chainCachedData = {chains: chains, registeredSet: regSet, tmap: tmap};
+      chainCachedData = {chains: chains, tmap: tmap};
       renderChainTable(chainCachedData);
     }).catch(function() {
       if (panel) panel.innerHTML = '<p style="padding:.4rem;color:#ef4444;font-size:.78rem">fleet module not configured or unreachable.</p>';
@@ -632,16 +620,17 @@
     if (chainCachedData) renderChainTable(chainCachedData);
   }
 
-  function removeChain(chain) {
+  // removeChain — reserved for the Settings page (not exposed on dashboard).
+  // Use: vprox fleet unregister <chain>  to remove a registered chain from the CLI.
+  /* function removeChain(chain) {
     if (!confirm('Remove "'+chain+'" from monitoring?')) return;
-    // Use POST alias: Apache proxies often block DELETE pass-through.
     fetch(BASE + '/api/v1/fleet/chains/registered/' + encodeURIComponent(chain), {method:'POST'})
       .then(function(r){
         if (!r.ok) { alert('Remove failed (HTTP '+r.status+').'); return; }
         loadChainStatus();
       })
       .catch(function(){ alert('Failed to remove '+chain); });
-  }
+  } */
 
   function doPing() {
     var btn = document.getElementById('chain-ping-btn');
@@ -666,7 +655,6 @@
   window.loadChainStatus   = loadChainStatus;
   window.toggleChainExpand = toggleChainExpand;
   window.getChainExpanded  = function() { return chainExpanded; };
-  window.removeChain       = removeChain;
   window.doPing            = doPing;
   window.doRefresh         = doRefresh;
 

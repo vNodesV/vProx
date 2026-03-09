@@ -11,11 +11,14 @@ import (
 	chainconfig "github.com/vNodesV/vProx/internal/config"
 	"github.com/vNodesV/vProx/internal/fleet/config"
 	fleetssh "github.com/vNodesV/vProx/internal/fleet/ssh"
+	"github.com/vNodesV/vProx/internal/fleet/state"
 )
 
 // runFleetCmd handles: vprox fleet <sub> [flags]
 //
 //	fleet hosts|vms              — list registered VMs (reads config/infra/*.toml)
+//	fleet chains                 — list externally-registered chains (DB)
+//	fleet unregister <chain>     — remove a registered chain from the DB
 //	fleet deploy ...             — run a script on a VM
 //	fleet update [--host <name>] — SSH apt-get upgrade on one or all VMs
 //
@@ -31,6 +34,10 @@ func runFleetCmd(home string, args []string) {
 	switch sub {
 	case "hosts", "vms":
 		fleetHosts(home)
+	case "chains":
+		fleetChains(home)
+	case "unregister":
+		fleetUnregister(home, args)
 	case "deploy":
 		fleetDeploy(home, args)
 	case "update":
@@ -41,6 +48,8 @@ func runFleetCmd(home string, args []string) {
 		fmt.Fprintln(os.Stderr, "")
 		fmt.Fprintln(os.Stderr, "Subcommands:")
 		fmt.Fprintln(os.Stderr, "  hosts|vms                          list registered VMs")
+		fmt.Fprintln(os.Stderr, "  chains                             list externally-registered chains")
+		fmt.Fprintln(os.Stderr, "  unregister <chain>                 remove a registered chain from monitoring")
 		fmt.Fprintln(os.Stderr, "  deploy --vm <n> --chain <c> --component <c> --script <s> [--dry-run]")
 		fmt.Fprintln(os.Stderr, "  update [--host <name>]             apt-get upgrade on VM(s)")
 		os.Exit(1)
@@ -137,7 +146,64 @@ func fleetHosts(home string) {
 	}
 }
 
-// fleetDeploy runs a script on a VM.
+// fleetChains lists all externally-registered chains from the fleet DB.
+func fleetChains(home string) {
+	db, err := openFleetDB(home)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fleet chains: %v\n", err)
+		os.Exit(1)
+	}
+	defer db.Close()
+
+	chains, err := db.ListRegisteredChains()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fleet chains: query: %v\n", err)
+		os.Exit(1)
+	}
+	if len(chains) == 0 {
+		fmt.Println("No registered chains.")
+		return
+	}
+	fmt.Printf("%-24s %-40s %-40s %s\n", "CHAIN", "RPC URL", "REST URL", "ADDED AT")
+	fmt.Println(strings.Repeat("─", 120))
+	for _, c := range chains {
+		fmt.Printf("%-24s %-40s %-40s %s\n",
+			c.Chain, c.RPCURL, c.RESTURL, c.AddedAt.Format("2006-01-02 15:04"))
+	}
+}
+
+// fleetUnregister removes a registered chain from the fleet DB.
+func fleetUnregister(home string, args []string) {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "fleet unregister: chain name required")
+		fmt.Fprintln(os.Stderr, "Usage: vprox fleet unregister <chain>")
+		fmt.Fprintln(os.Stderr, "       vprox fleet chains   (to list registered chains)")
+		os.Exit(1)
+	}
+	chain := args[0]
+
+	db, err := openFleetDB(home)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fleet unregister: %v\n", err)
+		os.Exit(1)
+	}
+	defer db.Close()
+
+	if err := db.RemoveRegisteredChain(chain); err != nil {
+		fmt.Fprintf(os.Stderr, "fleet unregister: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf("Removed %q from registered chains.\n", chain)
+}
+
+// openFleetDB opens the fleet SQLite state DB from the standard path under home.
+func openFleetDB(home string) (*state.DB, error) {
+	// DB path mirrors the default in internal/vlog/config (push.db for compat).
+	path := filepath.Join(home, "data", "push.db")
+	return state.Open(path)
+}
+
+
 func fleetDeploy(home string, args []string) {
 	fs := flag.NewFlagSet("fleet deploy", flag.ExitOnError)
 	vmName := fs.String("vm", "", "VM name (required)")
