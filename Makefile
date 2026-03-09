@@ -58,10 +58,14 @@ help:
 	@echo ""
 	@echo "  vProx / vLog — available targets"
 	@echo ""
-	@echo "  make install          Full install: vProx + vLog, config, systemd"
+	@echo "  make install          Full install: vProx + vLog + SSH control plane, config, systemd"
 	@echo "  make add-<module>     Reinstall one module  (e.g. make add-vLog)"
 	@echo "  make clean            Remove local build artifacts"
 	@echo "  make ufw              Passwordless UFW sudoers for vLog block/unblock"
+	@echo ""
+	@echo "  SSH control plane (push module) is installed automatically."
+	@echo "  Add VM hosts to: ~/.vProx/config/infra/{datacenter}.toml (e.g. qc.toml, rbx.toml)"
+	@echo "  Add chains to:   ~/.vProx/config/chains/{chain}.toml with [management] section"
 	@echo ""
 
 install: validate-go dirs geo config config-vlog config-vprox config-modules env samples-push
