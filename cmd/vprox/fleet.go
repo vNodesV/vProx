@@ -9,19 +9,19 @@ import (
 
 	"github.com/pelletier/go-toml/v2"
 	chainconfig "github.com/vNodesV/vProx/internal/config"
-	"github.com/vNodesV/vProx/internal/push/config"
-	pushssh "github.com/vNodesV/vProx/internal/push/ssh"
+	"github.com/vNodesV/vProx/internal/fleet/config"
+	fleetssh "github.com/vNodesV/vProx/internal/fleet/ssh"
 )
 
-// runPushCmd handles: vprox push <sub> [flags]
+// runFleetCmd handles: vprox fleet <sub> [flags]
 //
-//	push hosts|vms              — list registered VMs (reads config/infra/*.toml)
-//	push deploy ...             — run a script on a VM
-//	push update [--host <name>] — SSH apt-get upgrade on one or all VMs
+//	fleet hosts|vms              — list registered VMs (reads config/infra/*.toml)
+//	fleet deploy ...             — run a script on a VM
+//	fleet update [--host <name>] — SSH apt-get upgrade on one or all VMs
 //
 // VM configuration is managed in config/infra/*.toml (one file per datacenter).
 // Use chain.toml [management] sections for chain-specific VM metadata.
-func runPushCmd(home string, args []string) {
+func runFleetCmd(home string, args []string) {
 	sub := ""
 	if len(args) > 0 {
 		sub = args[0]
@@ -30,14 +30,14 @@ func runPushCmd(home string, args []string) {
 
 	switch sub {
 	case "hosts", "vms":
-		pushHosts(home)
+		fleetHosts(home)
 	case "deploy":
-		pushDeploy(home, args)
+		fleetDeploy(home, args)
 	case "update":
-		pushUpdate(home, args)
+		fleetUpdate(home, args)
 	default:
-		fmt.Fprintf(os.Stderr, "vprox push: unknown subcommand %q\n\n", sub)
-		fmt.Fprintln(os.Stderr, "Usage: vprox push <subcommand> [flags]")
+		fmt.Fprintf(os.Stderr, "vprox fleet: unknown subcommand %q\n\n", sub)
+		fmt.Fprintln(os.Stderr, "Usage: vprox fleet <subcommand> [flags]")
 		fmt.Fprintln(os.Stderr, "")
 		fmt.Fprintln(os.Stderr, "Subcommands:")
 		fmt.Fprintln(os.Stderr, "  hosts|vms                          list registered VMs")
@@ -47,7 +47,7 @@ func runPushCmd(home string, args []string) {
 	}
 }
 
-// loadVMsCfg loads the merged VM registry from all available sources:
+// loadFleetVMsCfg loads the merged VM registry from all available sources:
 //  1. config/chains/*.toml   — [management] sections where managed_host=true
 //  2. config/infra/*.toml    — canonical host+VM registry; one file per datacenter (highest priority)
 //
@@ -55,12 +55,12 @@ func runPushCmd(home string, args []string) {
 // config/infra/ is automatically picked up. Sources are merged with later entries
 // overriding earlier ones by name. Infra-sourced VMs are enriched with chain identity
 // data (chain_id, valoper, explorer) from the corresponding chains/{chain_name}.toml.
-func loadVMsCfg(home string) (*config.Config, error) {
+func loadFleetVMsCfg(home string) (*config.Config, error) {
 	merged := &config.Config{}
 	chainsDir := filepath.Join(home, "config", "chains")
 
 	// 2. Overlay chain.toml [management] sections (medium priority).
-	if chainCfg, err := config.LoadFromChainConfigs(chainsDir, config.PushDefaults{}); err == nil && len(chainCfg.VMs) > 0 {
+	if chainCfg, err := config.LoadFromChainConfigs(chainsDir, config.FleetDefaults{}); err == nil && len(chainCfg.VMs) > 0 {
 		merged = config.MergeConfigs(merged, chainCfg)
 	}
 
@@ -118,11 +118,11 @@ func enrichVMsFromChains(vms []config.VM, chainsDir string) {
 	}
 }
 
-// pushHosts prints the VM registry as a text table.
-func pushHosts(home string) {
-	cfg, err := loadVMsCfg(home)
+// fleetHosts prints the VM registry as a text table.
+func fleetHosts(home string) {
+	cfg, err := loadFleetVMsCfg(home)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "push hosts: %v\n", err)
+		fmt.Fprintf(os.Stderr, "fleet hosts: %v\n", err)
 		os.Exit(1)
 	}
 	if len(cfg.VMs) == 0 {
@@ -137,9 +137,9 @@ func pushHosts(home string) {
 	}
 }
 
-// pushDeploy runs a script on a VM.
-func pushDeploy(home string, args []string) {
-	fs := flag.NewFlagSet("push deploy", flag.ExitOnError)
+// fleetDeploy runs a script on a VM.
+func fleetDeploy(home string, args []string) {
+	fs := flag.NewFlagSet("fleet deploy", flag.ExitOnError)
 	vmName := fs.String("vm", "", "VM name (required)")
 	chain := fs.String("chain", "", "chain name (required)")
 	component := fs.String("component", "", "component: node|validator|provider|relayer")
@@ -149,18 +149,18 @@ func pushDeploy(home string, args []string) {
 		os.Exit(1)
 	}
 	if *vmName == "" || *chain == "" || *component == "" || *script == "" {
-		fmt.Fprintln(os.Stderr, "push deploy: --vm, --chain, --component, and --script are required")
+		fmt.Fprintln(os.Stderr, "fleet deploy: --vm, --chain, --component, and --script are required")
 		os.Exit(1)
 	}
 
-	cfg, err := loadVMsCfg(home)
+	cfg, err := loadFleetVMsCfg(home)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "push deploy: %v\n", err)
+		fmt.Fprintf(os.Stderr, "fleet deploy: %v\n", err)
 		os.Exit(1)
 	}
 	vm := cfg.FindVM(*vmName)
 	if vm == nil {
-		fmt.Fprintf(os.Stderr, "push deploy: VM %q not found\n", *vmName)
+		fmt.Fprintf(os.Stderr, "fleet deploy: VM %q not found\n", *vmName)
 		os.Exit(1)
 	}
 
@@ -173,9 +173,9 @@ func pushDeploy(home string, args []string) {
 
 	fmt.Printf("→ %s@%s:%d  %s\n", vm.User, vm.Host, vm.Port, cmd)
 
-	conn, err := pushssh.Dial(vm.Host, vm.Port, vm.User, vm.KeyPath)
+	conn, err := fleetssh.Dial(vm.Host, vm.Port, vm.User, vm.KeyPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "push deploy: ssh: %v\n", err)
+		fmt.Fprintf(os.Stderr, "fleet deploy: ssh: %v\n", err)
 		os.Exit(1)
 	}
 	defer conn.Close()
@@ -183,22 +183,22 @@ func pushDeploy(home string, args []string) {
 	out, err := conn.Run(cmd)
 	fmt.Print(out)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "push deploy: script error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "fleet deploy: script error: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-// pushUpdate runs apt-get upgrade on one or all VMs.
-func pushUpdate(home string, args []string) {
-	fs := flag.NewFlagSet("push update", flag.ExitOnError)
+// fleetUpdate runs apt-get upgrade on one or all VMs.
+func fleetUpdate(home string, args []string) {
+	fs := flag.NewFlagSet("fleet update", flag.ExitOnError)
 	name := fs.String("host", "", "target VM name (all VMs if omitted)")
 	if err := fs.Parse(args); err != nil {
 		os.Exit(1)
 	}
 
-	cfg, err := loadVMsCfg(home)
+	cfg, err := loadFleetVMsCfg(home)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "push update: %v\n", err)
+		fmt.Fprintf(os.Stderr, "fleet update: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -206,7 +206,7 @@ func pushUpdate(home string, args []string) {
 	if *name != "" {
 		vm := cfg.FindVM(*name)
 		if vm == nil {
-			fmt.Fprintf(os.Stderr, "push update: VM %q not found\n", *name)
+			fmt.Fprintf(os.Stderr, "fleet update: VM %q not found\n", *name)
 			os.Exit(1)
 		}
 		vms = []config.VM{*vm}
@@ -215,7 +215,7 @@ func pushUpdate(home string, args []string) {
 	const upgradeCmd = "sudo apt-get update -qq && sudo apt-get upgrade -y"
 	for _, vm := range vms {
 		fmt.Printf("→ %s (%s) ... ", vm.Name, vm.Host)
-		conn, err := pushssh.Dial(vm.Host, vm.Port, vm.User, vm.KeyPath)
+		conn, err := fleetssh.Dial(vm.Host, vm.Port, vm.User, vm.KeyPath)
 		if err != nil {
 			fmt.Printf("FAIL: %v\n", err)
 			continue

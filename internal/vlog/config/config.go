@@ -46,8 +46,8 @@ type VLogSection struct {
 	// WatchIntervalSec is the poll interval (seconds) for new archives.
 	WatchIntervalSec int `toml:"watch_interval_sec"`
 
-	// Push holds configuration for the integrated push validator deployment module.
-	Push PushConfig `toml:"push"`
+	// Push holds configuration for the integrated fleet validator deployment module.
+	Push FleetConfig `toml:"push"`
 
 	// Intel holds IP intelligence enrichment settings.
 	Intel IntelConfig `toml:"intel"`
@@ -89,17 +89,17 @@ type IntelKeys struct {
 	Shodan     string `toml:"shodan"`
 }
 
-// PushDefaults holds global SSH credential defaults for chain-managed hosts.
+// FleetDefaults holds global SSH credential defaults for chain-managed hosts.
 // Applied when [management] user or key_path are empty in chain.toml.
-type PushDefaults struct {
+type FleetDefaults struct {
 	// User is the default SSH username for chain-managed hosts.
 	User string `toml:"user"`
 	// KeyPath is the default SSH private key path for chain-managed hosts.
 	KeyPath string `toml:"key_path"`
 }
 
-// PushConfig configures the integrated push validator deployment module.
-type PushConfig struct {
+// FleetConfig configures the integrated fleet validator deployment module.
+type FleetConfig struct {
 	// ChainsDir is the directory containing chain TOML files with [management] sections.
 	// Default: $VPROX_HOME/config/chains
 	ChainsDir string `toml:"chains_dir"`
@@ -112,9 +112,9 @@ type PushConfig struct {
 
 	// Defaults holds global SSH credential fallbacks for chain-managed hosts.
 	// Applied when [management] user or key_path are empty in a chain.toml file.
-	Defaults PushDefaults `toml:"defaults"`
+	Defaults FleetDefaults `toml:"defaults"`
 
-	// DBPath is the path to the push SQLite state database.
+	// DBPath is the path to the fleet SQLite state database.
 	// Default: $VPROX_HOME/data/push.db
 	DBPath string `toml:"db_path"`
 
@@ -165,7 +165,7 @@ func DefaultConfig(home string) Config {
 			Auth: AuthConfig{
 				Username: "admin",
 			},
-			Push: PushConfig{
+			Push: FleetConfig{
 				PollIntervalSec: 60,
 			},
 		},

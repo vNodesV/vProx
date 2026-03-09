@@ -58,10 +58,10 @@ type rawCodebase struct {
 }
 
 type rawChain struct {
-	ChainID     string      `json:"chain_id"`
-	PrettyName  string      `json:"pretty_name"`
-	NetworkType string      `json:"network_type"`
-	Codebase    rawCodebase `json:"codebase"`
+	ChainID     string        `json:"chain_id"`
+	PrettyName  string        `json:"pretty_name"`
+	NetworkType string        `json:"network_type"`
+	Codebase    rawCodebase   `json:"codebase"`
 	Explorers   []rawExplorer `json:"explorers"`
 }
 
@@ -119,7 +119,7 @@ func Fetch(chainName string) (*ChainDirectoryEntry, error) {
 
 // Enrich fills display-only fields from cosmos.directory into the provided pointers.
 // Only fields that are currently empty/nil are updated — local config always wins.
-// Called in a background goroutine from the push config loader; errors are logged only.
+// Called in a background goroutine from the fleet config loader; errors are logged only.
 func Enrich(chainName string, dashboardName, networkType, recommendedVersion *string, explorers *[]string) {
 	entry, err := Fetch(chainName)
 	if err != nil {

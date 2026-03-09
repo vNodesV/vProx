@@ -1,4 +1,4 @@
-// Package state manages push module persistence via SQLite.
+// Package state manages fleet module persistence via SQLite.
 // Schema: deployments (history) + registered_chains (external chain monitoring).
 package state
 
@@ -12,10 +12,10 @@ import (
 	_ "modernc.org/sqlite" // CGO-free SQLite driver
 )
 
-// DB wraps *sql.DB with push-specific queries.
+// DB wraps *sql.DB with fleet-specific queries.
 type DB struct{ *sql.DB }
 
-// Deployment records one push operation (deploy run).
+// Deployment records one fleet operation (deploy run).
 type Deployment struct {
 	ID        int64
 	Chain     string
@@ -27,7 +27,7 @@ type Deployment struct {
 	UpdatedAt time.Time
 }
 
-// RegisteredChain is an externally-monitored chain (not managed by push scripts).
+// RegisteredChain is an externally-monitored chain (not managed by fleet scripts).
 type RegisteredChain struct {
 	Chain   string    `json:"chain"`
 	RPCURL  string    `json:"rpc_url"`
@@ -36,17 +36,17 @@ type RegisteredChain struct {
 	AddedAt time.Time `json:"added_at"`
 }
 
-// Open creates or opens the push SQLite database at path.
+// Open creates or opens the fleet SQLite database at path.
 // Applies WAL mode and runs schema migration.
 func Open(path string) (*DB, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return nil, fmt.Errorf("push/state: mkdir %s: %w", filepath.Dir(path), err)
+		return nil, fmt.Errorf("fleet/state: mkdir %s: %w", filepath.Dir(path), err)
 	}
 
 	dsn := path + "?_journal_mode=WAL&_busy_timeout=5000&_synchronous=NORMAL&_foreign_keys=on"
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
-		return nil, fmt.Errorf("push/state: open %s: %w", path, err)
+		return nil, fmt.Errorf("fleet/state: open %s: %w", path, err)
 	}
 	db.SetMaxOpenConns(1) // SQLite is single-writer
 

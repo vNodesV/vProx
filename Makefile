@@ -21,7 +21,7 @@ SERVICE_PATH := $(SERVICE_DIR)/vProx.service
 VLOG_SERVICE := $(SERVICE_DIR)/vLog.service
 GEO_DIR := $(DATA_DIR)/geolocation
 DIR_LIST := $(DATA_DIR) $(LOG_DIR) $(CFG_DIR) $(CFG_DIR)/chains $(CFG_DIR)/backup \
-            $(CFG_DIR)/vlog $(CFG_DIR)/infra $(CFG_DIR)/vprox \
+            $(CFG_DIR)/vlog $(CFG_DIR)/infra $(CFG_DIR)/vprox $(CFG_DIR)/fleet \
             $(INTERNAL_DIR) $(ARCHIVE_DIR) $(SERVICE_DIR) $(GEO_DIR)
 
 # Sample file revision — format: r{major}_{MMDDYY}_{seq}
@@ -48,7 +48,7 @@ EFFECTIVE_GOROOT  := $(if $(_TOOLCHAIN_GOROOT),$(_TOOLCHAIN_GOROOT),$(GOROOT))
 
 .PHONY: all install clean ufw help \
         validate-go dirs geo config config-vlog config-vprox config-modules \
-        build build-vlog systemd service-vlog samples-push
+        build build-vlog systemd service-vlog samples-fleet
 
 all: help
 
@@ -63,12 +63,12 @@ help:
 	@echo "  make clean            Remove local build artifacts"
 	@echo "  make ufw              Passwordless UFW sudoers for vLog block/unblock"
 	@echo ""
-	@echo "  SSH control plane (push module) is installed automatically."
+	@echo "  SSH control plane (fleet module) is installed automatically."
 	@echo "  Add VM hosts to: ~/.vProx/config/infra/{datacenter}.toml (e.g. qc.toml, rbx.toml)"
 	@echo "  Add chains to:   ~/.vProx/config/chains/{chain}.toml with [management] section"
 	@echo ""
 
-install: validate-go dirs geo config config-vlog config-vprox config-modules env samples-push
+install: validate-go dirs geo config config-vlog config-vprox config-modules env samples-fleet
 
 ## Validate Go environment
 
@@ -143,7 +143,7 @@ env:
 		echo "✓ $(ENV_FILE) already exists"; \
 	fi
 
-## Install live config defaults (services.toml → ports.toml fallback, backup.toml) — samples handled by samples-push
+## Install live config defaults (services.toml → ports.toml fallback, backup.toml) — samples handled by samples-fleet
 
 config: dirs config-modules
 	@if [[ ! -f "$(CFG_DIR)/chains/services.toml" && ! -f "$(CFG_DIR)/chains/ports.toml" && ! -f "$(CFG_DIR)/ports.toml" ]]; then \
@@ -197,8 +197,8 @@ config-vprox: dirs
 
 ## Overwrite ALL sample files in CFG_DIR — safe to run anytime; never touches live config files.
 ## Archives the existing sample before overwriting: *.sample → archives/*.sample.{old_rev}
-samples-push:
-	@mkdir -p "$(CFG_DIR)/vlog" "$(CFG_DIR)/chains" "$(CFG_DIR)/backup" "$(CFG_DIR)/vprox" "$(CFG_DIR)/infra"
+samples-fleet:
+	@mkdir -p "$(CFG_DIR)/vlog" "$(CFG_DIR)/chains" "$(CFG_DIR)/backup" "$(CFG_DIR)/vprox" "$(CFG_DIR)/infra" "$(CFG_DIR)/fleet"
 	@_rev="$(SAMPLE_REV)"; \
 	_archive() { \
 		local dst="$$1" adir old_rev; \
@@ -218,7 +218,8 @@ samples-push:
 	_archive "$(CFG_DIR)/chains/services.sample";    _copy "config/chains/services.sample"    "$(CFG_DIR)/chains/services.sample"; \
 	_archive "$(CFG_DIR)/backup/backup.sample";      _copy "config/backup/backup.sample"      "$(CFG_DIR)/backup/backup.sample"; \
 	_archive "$(CFG_DIR)/infra/infra.sample";        _copy "config/infra/infra.sample"        "$(CFG_DIR)/infra/infra.sample"; \
-	_archive "$(CFG_DIR)/vprox/settings.sample";     _copy "config/vprox/settings.sample"     "$(CFG_DIR)/vprox/settings.sample"
+	_archive "$(CFG_DIR)/vprox/settings.sample";     _copy "config/vprox/settings.sample"     "$(CFG_DIR)/vprox/settings.sample"; \
+	_archive "$(CFG_DIR)/fleet/settings.sample";     _copy "config/fleet/settings.sample"     "$(CFG_DIR)/fleet/settings.sample"
 	@echo "Done. Samples refreshed with $(SAMPLE_REV)."
 
 ## Install modules registry stub
@@ -271,7 +272,7 @@ add-%: validate-go dirs
 	    GOROOT="$(EFFECTIVE_GOROOT)" go build -o "$(GOPATH_BIN)/$(VLOG_NAME)" "$(VLOG_SRC)"; \
 	    echo "✓ $(VLOG_NAME) → $(GOPATH_BIN)/$(VLOG_NAME)"; \
 	    $(MAKE) config-vlog; \
-	    $(MAKE) samples-push; \
+	    $(MAKE) samples-fleet; \
 	    $(MAKE) service-vlog; \
 	    ;; \
 	  vProx|vprox) \

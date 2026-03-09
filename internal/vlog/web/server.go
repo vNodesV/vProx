@@ -22,8 +22,8 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/vNodesV/vProx/internal/push"
-	"github.com/vNodesV/vProx/internal/push/api"
+	"github.com/vNodesV/vProx/internal/fleet"
+	"github.com/vNodesV/vProx/internal/fleet/api"
 	"github.com/vNodesV/vProx/internal/vlog/config"
 	"github.com/vNodesV/vProx/internal/vlog/db"
 	"github.com/vNodesV/vProx/internal/vlog/ingest"
@@ -61,7 +61,7 @@ type Server struct {
 	cfg      config.Config
 	httpSrv  *http.Server
 	pages    map[string]*template.Template
-	push     *api.Handlers // nil when push module is not configured
+	fleet    *api.Handlers // nil when fleet module is not configured
 
 	// Session state for dashboard login.
 	sessions   map[string]time.Time // token → expiry
@@ -71,8 +71,8 @@ type Server struct {
 
 // New creates a Server, parses embedded templates, registers all routes,
 // and returns a server ready to Start().
-// pushSvc is optional — pass nil to disable the push module routes.
-func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg config.Config, pushSvc *push.Service) (*Server, error) {
+// fleetSvc is optional — pass nil to disable the fleet module routes.
+func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg config.Config, fleetSvc *fleet.Service) (*Server, error) {
 	// Each page template is parsed together with the base layout so
 	// that block overrides (title, content) are scoped per page.
 	pageFiles := []string{"dashboard.html", "accounts.html", "account.html"}
@@ -109,8 +109,8 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 		sessions:   make(map[string]time.Time),
 		sessionKey: sessionKey,
 	}
-	if pushSvc != nil {
-		s.push = api.New(pushSvc)
+	if fleetSvc != nil {
+		s.fleet = api.New(fleetSvc)
 	}
 
 	mux := http.NewServeMux()
@@ -148,33 +148,33 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 	mux.Handle("GET /api/v1/stats", s.requireSession(http.HandlerFunc(s.handleAPIStats)))
 	mux.Handle("GET /api/v1/chart", s.requireSession(http.HandlerFunc(s.handleAPIChart)))
 	mux.Handle("GET /api/v1/probe", s.requireSession(http.HandlerFunc(s.handleAPIProbe)))
-	mux.Handle("GET /api/v1/push/chains/traffic", s.requireSession(http.HandlerFunc(s.handleAPIChainTraffic)))
+	mux.Handle("GET /api/v1/fleet/chains/traffic", s.requireSession(http.HandlerFunc(s.handleAPIChainTraffic)))
 
-	// Push module routes — only registered when push is configured.
-	if s.push != nil {
-		mux.Handle("GET /api/v1/push/vms",
-			s.requireSession(http.HandlerFunc(s.push.HandleVMs)))
-		mux.Handle("GET /api/v1/push/vms/status",
-			s.requireSession(http.HandlerFunc(s.push.HandleVMStatus)))
-		mux.Handle("GET /api/v1/push/chains",
-			s.requireSession(http.HandlerFunc(s.push.HandleChains)))
-		mux.Handle("GET /api/v1/push/chains/{chain}",
-			s.requireSession(http.HandlerFunc(s.push.HandleChainStatus)))
-		mux.Handle("GET /api/v1/push/deployments",
-			s.requireSession(http.HandlerFunc(s.push.HandleDeployments)))
-		mux.Handle("POST /api/v1/push/deploy",
-			s.requireSession(http.HandlerFunc(s.push.HandleDeploy)))
-		mux.Handle("GET /api/v1/push/chains/registered",
-			s.requireSession(http.HandlerFunc(s.push.HandleRegisteredChains)))
-		mux.Handle("POST /api/v1/push/chains/registered",
-			s.requireSession(http.HandlerFunc(s.push.HandleRegisteredChains)))
-		mux.Handle("DELETE /api/v1/push/chains/registered/{chain}",
-			s.requireSession(http.HandlerFunc(s.push.HandleRegisteredChainDelete)))
+	// Fleet module routes — only registered when fleet is configured.
+	if s.fleet != nil {
+		mux.Handle("GET /api/v1/fleet/vms",
+			s.requireSession(http.HandlerFunc(s.fleet.HandleVMs)))
+		mux.Handle("GET /api/v1/fleet/vms/status",
+			s.requireSession(http.HandlerFunc(s.fleet.HandleVMStatus)))
+		mux.Handle("GET /api/v1/fleet/chains",
+			s.requireSession(http.HandlerFunc(s.fleet.HandleChains)))
+		mux.Handle("GET /api/v1/fleet/chains/{chain}",
+			s.requireSession(http.HandlerFunc(s.fleet.HandleChainStatus)))
+		mux.Handle("GET /api/v1/fleet/deployments",
+			s.requireSession(http.HandlerFunc(s.fleet.HandleDeployments)))
+		mux.Handle("POST /api/v1/fleet/deploy",
+			s.requireSession(http.HandlerFunc(s.fleet.HandleDeploy)))
+		mux.Handle("GET /api/v1/fleet/chains/registered",
+			s.requireSession(http.HandlerFunc(s.fleet.HandleRegisteredChains)))
+		mux.Handle("POST /api/v1/fleet/chains/registered",
+			s.requireSession(http.HandlerFunc(s.fleet.HandleRegisteredChains)))
+		mux.Handle("DELETE /api/v1/fleet/chains/registered/{chain}",
+			s.requireSession(http.HandlerFunc(s.fleet.HandleRegisteredChainDelete)))
 		// POST alias for Apache environments that block DELETE method pass-through.
-		mux.Handle("POST /api/v1/push/chains/registered/{chain}",
-			s.requireSession(http.HandlerFunc(s.push.HandleRegisteredChainDelete)))
-		mux.Handle("POST /api/v1/push/poll",
-			s.requireSession(http.HandlerFunc(s.push.HandlePoll)))
+		mux.Handle("POST /api/v1/fleet/chains/registered/{chain}",
+			s.requireSession(http.HandlerFunc(s.fleet.HandleRegisteredChainDelete)))
+		mux.Handle("POST /api/v1/fleet/poll",
+			s.requireSession(http.HandlerFunc(s.fleet.HandlePoll)))
 	}
 
 	readTimeout := time.Duration(cfg.VLog.Server.ReadTimeoutSec) * time.Second

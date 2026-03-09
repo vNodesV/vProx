@@ -1,4 +1,4 @@
-// Package config loads and validates the push VM registry.
+// Package config loads and validates the fleet VM registry.
 // As of v1.3.0, the canonical source is config/infra/*.toml (one file per datacenter).
 // Legacy vms.toml is still accepted for backward compatibility when present.
 package config
@@ -66,7 +66,7 @@ type VM struct {
 	Ping VMPing `toml:"ping"`
 }
 
-// Config is the top-level push configuration.
+// Config is the top-level fleet configuration.
 // Loaded from config/infra/*.toml (canonical) or legacy vms.toml.
 type Config struct {
 	Hosts []Host `toml:"host"`
@@ -111,12 +111,12 @@ func (c *Config) FindHost(name string) *Host {
 func Load(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("push/config: read %s: %w", path, err)
+		return nil, fmt.Errorf("fleet/config: read %s: %w", path, err)
 	}
 
 	var cfg Config
 	if err := toml.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("push/config: parse %s: %w", path, err)
+		return nil, fmt.Errorf("fleet/config: parse %s: %w", path, err)
 	}
 
 	for i := range cfg.VMs {
@@ -151,10 +151,10 @@ func (c *Config) AllChains() []string {
 	return chains
 }
 
-// PushDefaults holds global SSH credential defaults for chain-managed hosts.
+// FleetDefaults holds global SSH credential defaults for chain-managed hosts.
 // Applied when [management] user or key_path are empty in chain.toml.
 // Sourced from [vlog.push.defaults] in vlog.toml.
-type PushDefaults struct {
+type FleetDefaults struct {
 	User    string
 	KeyPath string
 }
@@ -163,13 +163,13 @@ type PushDefaults struct {
 // [management] sections with managed_host = true as VM entries.
 // Per-chain management config takes precedence over vms.toml when merged.
 // Returns a Config with only chain-derived VMs (no Hosts).
-func LoadFromChainConfigs(dir string, defaults PushDefaults) (*Config, error) {
+func LoadFromChainConfigs(dir string, defaults FleetDefaults) (*Config, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return &Config{}, nil
 		}
-		return nil, fmt.Errorf("push/config: read chains dir %s: %w", dir, err)
+		return nil, fmt.Errorf("fleet/config: read chains dir %s: %w", dir, err)
 	}
 
 	var vms []VM
@@ -179,12 +179,12 @@ func LoadFromChainConfigs(dir string, defaults PushDefaults) (*Config, error) {
 		}
 		data, err := os.ReadFile(filepath.Join(dir, e.Name()))
 		if err != nil {
-			log.Printf("[push] warn: skip chain file %s: %v", e.Name(), err)
+			log.Printf("[fleet] warn: skip chain file %s: %v", e.Name(), err)
 			continue
 		}
 		var cc chainconfig.ChainConfig
 		if err := toml.Unmarshal(data, &cc); err != nil {
-			log.Printf("[push] warn: parse chain file %s: %v", e.Name(), err)
+			log.Printf("[fleet] warn: parse chain file %s: %v", e.Name(), err)
 			continue
 		}
 		if !cc.Management.ManagedHost {
@@ -334,7 +334,7 @@ func LoadFromInfraFiles(dir string) (*Config, error) {
 		if os.IsNotExist(err) {
 			return &Config{}, nil
 		}
-		return nil, fmt.Errorf("push/config: read infra dir %s: %w", dir, err)
+		return nil, fmt.Errorf("fleet/config: read infra dir %s: %w", dir, err)
 	}
 
 	var hosts []Host
@@ -345,12 +345,12 @@ func LoadFromInfraFiles(dir string) (*Config, error) {
 		}
 		data, err := os.ReadFile(filepath.Join(dir, e.Name()))
 		if err != nil {
-			log.Printf("[push] warn: skip infra file %s: %v", e.Name(), err)
+			log.Printf("[fleet] warn: skip infra file %s: %v", e.Name(), err)
 			continue
 		}
 		var f infraFileSchema
 		if err := toml.Unmarshal(data, &f); err != nil {
-			log.Printf("[push] warn: parse infra file %s: %v", e.Name(), err)
+			log.Printf("[fleet] warn: parse infra file %s: %v", e.Name(), err)
 			continue
 		}
 		if f.Host.Name != "" {

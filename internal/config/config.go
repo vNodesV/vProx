@@ -82,11 +82,11 @@ type WSConfig struct {
 
 // ValidatorNetwork holds validator configuration for one network tier (mainnet or testnet).
 type ValidatorNetwork struct {
-	Address      string `toml:"address"`         // valoper address, e.g. "cheqdvaloper1..."
-	Active       bool   `toml:"active"`          // auto-filled: is validator in active set
-	Synced       bool   `toml:"synced"`          // auto-filled: is node synced (catching_up=false)
-	Jailed       bool   `toml:"jailed"`          // auto-filled: is validator jailed
-	MissedBlocks int    `toml:"missed_blocks"`   // auto-filled: missed blocks in last window
+	Address      string `toml:"address"`       // valoper address, e.g. "cheqdvaloper1..."
+	Active       bool   `toml:"active"`        // auto-filled: is validator in active set
+	Synced       bool   `toml:"synced"`        // auto-filled: is node synced (catching_up=false)
+	Jailed       bool   `toml:"jailed"`        // auto-filled: is validator jailed
+	MissedBlocks int    `toml:"missed_blocks"` // auto-filled: missed blocks in last window
 	// governance fields (auto-filled from chain RPC)
 	ActiveProposal string `toml:"active_proposal"` // auto-filled: active proposal number or ""
 	VoteBy         string `toml:"vote_by"`         // auto-filled: voting end date
@@ -142,41 +142,42 @@ type ManagementPing struct {
 //
 // managed_host vs exposed_services — these are INDEPENDENT flags:
 //
-//   managed_host: SSH management gate.
-//     When true, vProx includes this node in the push module registry — enabling
-//     remote script execution, apt upgrades, and deployment dispatch via SSH.
-//     Has NO effect on probe routing or health polling.
+//	managed_host: SSH management gate.
+//	  When true, vProx includes this node in the fleet module registry — enabling
+//	  remote script execution, apt upgrades, and deployment dispatch via SSH.
+//	  Has NO effect on probe routing or health polling.
 //
-//   exposed_services: Probe routing gate.
-//     When true, vLog probes this node via the public chain.host domain (i.e.,
-//     through vProx/Apache). When false, vLog probes directly via lan_ip, bypassing
-//     the public proxy stack (lower latency, useful when vLog is on the same LAN).
-//     Has NO effect on SSH management.
+//	exposed_services: Probe routing gate.
+//	  When true, vLog probes this node via the public chain.host domain (i.e.,
+//	  through vProx/Apache). When false, vLog probes directly via lan_ip, bypassing
+//	  the public proxy stack (lower latency, useful when vLog is on the same LAN).
+//	  Has NO effect on SSH management.
 //
 // Example combos:
-//   managed_host=true  + exposed_services=true  → SSH-manage; probe via public domain
-//   managed_host=true  + exposed_services=false → SSH-manage; probe via LAN (no proxy hop)
-//   managed_host=false + exposed_services=true  → no SSH; probe via public domain
-//   managed_host=false + exposed_services=false → monitoring only; probe via LAN
+//
+//	managed_host=true  + exposed_services=true  → SSH-manage; probe via public domain
+//	managed_host=true  + exposed_services=false → SSH-manage; probe via LAN (no proxy hop)
+//	managed_host=false + exposed_services=true  → no SSH; probe via public domain
+//	managed_host=false + exposed_services=false → monitoring only; probe via LAN
 //
 // Global defaults for user and key_path are sourced from [vlog.push.defaults]
 // in vlog.toml when the corresponding fields are empty here.
 type Management struct {
-	// managed_host: when true, this node is registered in the push module (SSH management enabled).
+	// managed_host: when true, this node is registered in the fleet module (SSH management enabled).
 	// Does NOT affect probe routing — see exposed_services below.
-	ManagedHost     bool           `toml:"managed_host"`
-	LanIP           string         `toml:"lan_ip"`            // SSH target IP; empty = use chain.ip
-	PublicIP        string         `toml:"public_ip"`         // display-only; optional
-	User            string         `toml:"user"`              // SSH user; empty = [vlog.push.defaults].user
-	KeyPath         string         `toml:"key_path"`          // SSH key path; empty = [vlog.push.defaults].key_path
-	Port            int            `toml:"port"`              // SSH port; 0 = default 22
-	Type            []string       `toml:"type"`              // service roles: validator | sp | rpc | relayer | node
-	Datacenter      string         `toml:"datacenter"`        // location label, e.g. "QC"
+	ManagedHost bool     `toml:"managed_host"`
+	LanIP       string   `toml:"lan_ip"`     // SSH target IP; empty = use chain.ip
+	PublicIP    string   `toml:"public_ip"`  // display-only; optional
+	User        string   `toml:"user"`       // SSH user; empty = [vlog.push.defaults].user
+	KeyPath     string   `toml:"key_path"`   // SSH key path; empty = [vlog.push.defaults].key_path
+	Port        int      `toml:"port"`       // SSH port; 0 = default 22
+	Type        []string `toml:"type"`       // service roles: validator | sp | rpc | relayer | node
+	Datacenter  string   `toml:"datacenter"` // location label, e.g. "QC"
 	// exposed_services: when true, vLog probes via public chain.host domain (through vProx).
 	// When false, probes directly via lan_ip (same-LAN monitoring, no proxy hop).
 	// Independent from managed_host — controls probe routing only.
 	ExposedServices bool           `toml:"exposed_services"`
-	Valoper         string         `toml:"valoper"`           // validator operator address for governance participation
+	Valoper         string         `toml:"valoper"` // validator operator address for governance participation
 	Ping            ManagementPing `toml:"ping"`
 }
 
@@ -188,8 +189,8 @@ type ChainConfig struct {
 	IP            string `toml:"ip"`
 
 	// Chain identity — v1.3.0+
-	ChainID      string `toml:"chain_id"`       // official chain-id, e.g. "cheqd-mainnet-1"
-	ExplorerBase string `toml:"explorer_base"`  // primary explorer URL; empty = use cosmos.directory first entry
+	ChainID      string `toml:"chain_id"`      // official chain-id, e.g. "cheqd-mainnet-1"
+	ExplorerBase string `toml:"explorer_base"` // primary explorer URL; empty = use cosmos.directory first entry
 
 	// cosmos.directory metadata (auto-fetched on load when chain_id is set; can be overridden here)
 	DashboardName      string   `toml:"dashboard_name"`      // display name; empty = cosmos.directory pretty_name

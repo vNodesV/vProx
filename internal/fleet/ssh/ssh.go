@@ -1,4 +1,4 @@
-// Package ssh provides a lightweight SSH client for the push module.
+// Package ssh provides a lightweight SSH client for the fleet module.
 // It opens one session per command; callers are responsible for closing
 // the Client when done.
 package ssh
@@ -33,12 +33,12 @@ func Dial(host string, port int, user, keyPath string) (*Client, error) {
 
 	keyBytes, err := os.ReadFile(keyPath)
 	if err != nil {
-		return nil, fmt.Errorf("push/ssh: read key %s: %w", keyPath, err)
+		return nil, fmt.Errorf("fleet/ssh: read key %s: %w", keyPath, err)
 	}
 
 	signer, err := ssh.ParsePrivateKey(keyBytes)
 	if err != nil {
-		return nil, fmt.Errorf("push/ssh: parse key: %w", err)
+		return nil, fmt.Errorf("fleet/ssh: parse key: %w", err)
 	}
 
 	cfg := &ssh.ClientConfig{
@@ -51,7 +51,7 @@ func Dial(host string, port int, user, keyPath string) (*Client, error) {
 	addr := fmt.Sprintf("%s:%d", host, port)
 	c, err := ssh.Dial("tcp", addr, cfg)
 	if err != nil {
-		return nil, fmt.Errorf("push/ssh: dial %s: %w", addr, err)
+		return nil, fmt.Errorf("fleet/ssh: dial %s: %w", addr, err)
 	}
 
 	return &Client{c: c}, nil
@@ -62,7 +62,7 @@ func Dial(host string, port int, user, keyPath string) (*Client, error) {
 func (c *Client) Run(cmd string) (string, error) {
 	sess, err := c.c.NewSession()
 	if err != nil {
-		return "", fmt.Errorf("push/ssh: new session: %w", err)
+		return "", fmt.Errorf("fleet/ssh: new session: %w", err)
 	}
 	defer sess.Close()
 

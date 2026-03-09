@@ -1,11 +1,11 @@
-// Package push is the vProx validator deployment control plane.
+// Package fleet is the vProx validator deployment control plane.
 //
 // It provides:
 //   - SSH-based deployment of chain scripts to remote VMs
 //   - Cosmos node status polling (height, governance, upgrade plan)
 //   - SQLite-backed deployment history and registered-chain registry
 //   - HTTP API handlers wired into the vLog web server
-package push
+package fleet
 
 import (
 	"context"
@@ -14,13 +14,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/vNodesV/vProx/internal/push/config"
-	"github.com/vNodesV/vProx/internal/push/runner"
-	"github.com/vNodesV/vProx/internal/push/state"
-	"github.com/vNodesV/vProx/internal/push/status"
+	"github.com/vNodesV/vProx/internal/fleet/config"
+	"github.com/vNodesV/vProx/internal/fleet/runner"
+	"github.com/vNodesV/vProx/internal/fleet/state"
+	"github.com/vNodesV/vProx/internal/fleet/status"
 )
 
-// Service is the top-level push control plane.
+// Service is the top-level fleet control plane.
 // Inject into the vLog web server for direct-call API handlers.
 type Service struct {
 	cfg    *config.Config
@@ -35,12 +35,12 @@ type Service struct {
 func New(vmsCfgPath, dbPath string) (*Service, error) {
 	cfg, err := config.Load(vmsCfgPath)
 	if err != nil {
-		return nil, fmt.Errorf("push: load config: %w", err)
+		return nil, fmt.Errorf("fleet: load config: %w", err)
 	}
 
 	db, err := state.Open(dbPath)
 	if err != nil {
-		return nil, fmt.Errorf("push: open state db: %w", err)
+		return nil, fmt.Errorf("fleet: open state db: %w", err)
 	}
 
 	return &Service{
@@ -53,11 +53,11 @@ func New(vmsCfgPath, dbPath string) (*Service, error) {
 
 // NewEmpty creates a Service with an empty VM registry and opens the SQLite database.
 // Use when no vms.toml exists but chain management sections will be loaded via
-// AddChainConfigs. The push module starts managing VMs after AddChainConfigs is called.
+// AddChainConfigs. The fleet module starts managing VMs after AddChainConfigs is called.
 func NewEmpty(dbPath string) (*Service, error) {
 	db, err := state.Open(dbPath)
 	if err != nil {
-		return nil, fmt.Errorf("push: open state db: %w", err)
+		return nil, fmt.Errorf("fleet: open state db: %w", err)
 	}
 	return &Service{
 		cfg:      &config.Config{},
@@ -73,7 +73,7 @@ func NewEmpty(dbPath string) (*Service, error) {
 func (s *Service) AddInfraConfigs(dir string) error {
 	infraCfg, err := config.LoadFromInfraFiles(dir)
 	if err != nil {
-		return fmt.Errorf("push: load infra configs from %s: %w", dir, err)
+		return fmt.Errorf("fleet: load infra configs from %s: %w", dir, err)
 	}
 	if len(infraCfg.Hosts) == 0 && len(infraCfg.VMs) == 0 {
 		return nil
@@ -87,10 +87,10 @@ func (s *Service) AddInfraConfigs(dir string) error {
 // AddChainConfigs merges VM entries derived from chain TOML [management] sections
 // into the service config. Chain-derived entries take precedence over vms.toml.
 // Call after New() (or NewEmpty()) when chains_dir is configured in vlog.toml.
-func (s *Service) AddChainConfigs(chainsDir string, defaults config.PushDefaults) error {
+func (s *Service) AddChainConfigs(chainsDir string, defaults config.FleetDefaults) error {
 	chainCfg, err := config.LoadFromChainConfigs(chainsDir, defaults)
 	if err != nil {
-		return fmt.Errorf("push: load chain configs from %s: %w", chainsDir, err)
+		return fmt.Errorf("fleet: load chain configs from %s: %w", chainsDir, err)
 	}
 	if len(chainCfg.VMs) == 0 {
 		return nil
@@ -161,7 +161,7 @@ func (s *Service) pollAll(ctx context.Context) {
 	// Also poll registered (external) chains.
 	registered, err := s.db.ListRegisteredChains()
 	if err != nil {
-		log.Printf("[push] list registered chains: %v", err)
+		log.Printf("[fleet] list registered chains: %v", err)
 	} else {
 		for _, rc := range registered {
 			// Skip if a VM already covers this chain name.
@@ -219,7 +219,7 @@ func (s *Service) VMs() []config.VM { return s.cfg.VMs }
 // Hosts returns all registered physical hosts from vms.toml and config/infra/*.toml.
 func (s *Service) Hosts() []config.Host { return s.cfg.Hosts }
 
-// Config exposes the full push configuration.
+// Config exposes the full fleet configuration.
 func (s *Service) Config() *config.Config { return s.cfg }
 
 // DB exposes the state database for use by API handlers.

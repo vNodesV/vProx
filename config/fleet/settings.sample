@@ -1,0 +1,21 @@
+# vProx Fleet Control Settings
+# Copy to settings.toml and configure before using the fleet module.
+# rev: r3_030826_0
+
+# ── SSH defaults ──────────────────────────────────────────────────────────────
+# These apply to all VMs unless overridden in config/infra/<datacenter>.toml
+
+[ssh]
+user     = "ubuntu"          # SSH login user
+key_path = "~/.ssh/vprox_fleet"  # Path to SSH private key (no passphrase)
+port     = 22                # SSH port
+
+# ── Polling ───────────────────────────────────────────────────────────────────
+
+[poll]
+interval_sec = 60            # How often to poll each VM (seconds, min 10)
+
+# ── Defaults ──────────────────────────────────────────────────────────────────
+
+[defaults]
+datacenter = ""              # Label applied to VMs with no datacenter set

@@ -861,8 +861,8 @@ func (s *Server) handleAPIProbe(w http.ResponseWriter, r *http.Request) {
 			hostSet[h] = struct{}{}
 		}
 	}
-	pushHosts := s.pushHostSet()
-	for h := range pushHosts {
+	fleetHosts := s.fleetHostSet()
+	for h := range fleetHosts {
 		hostSet[h] = struct{}{}
 	}
 	if hostKey == "" {
@@ -875,9 +875,9 @@ func (s *Server) handleAPIProbe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Additional SSRF layer: reject literal private/loopback IPs that are not
-	// part of the configured push hosts.
+	// part of the configured fleet hosts.
 	if ip := net.ParseIP(host); ip != nil && isPrivateIP(host) {
-		if _, ok := pushHosts[hostKey]; !ok {
+		if _, ok := fleetHosts[hostKey]; !ok {
 			writeJSON(w, http.StatusForbidden, map[string]string{"error": "private address not allowed"})
 			return
 		}
@@ -1146,11 +1146,11 @@ func normalizeProbeHost(raw string) string {
 	return strings.ToLower(raw)
 }
 
-func (s *Server) pushHostSet() map[string]struct{} {
-	if s.push == nil {
+func (s *Server) fleetHostSet() map[string]struct{} {
+	if s.fleet == nil {
 		return nil
 	}
-	return s.push.ProbeHostMap()
+	return s.fleet.ProbeHostMap()
 }
 
 func queryInt(r *http.Request, key string, fallback int) int {

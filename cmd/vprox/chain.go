@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/vNodesV/vProx/internal/chain/upgrade"
-	"github.com/vNodesV/vProx/internal/push/status"
+	"github.com/vNodesV/vProx/internal/fleet/status"
 )
 
 // runChainCmd handles: vprox chain <sub> [flags]
@@ -51,7 +51,7 @@ func runChainStatus(home string, args []string) {
 		os.Exit(1)
 	}
 
-	cfg, err := loadVMsCfg(home)
+	cfg, err := loadFleetVMsCfg(home)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "chain status: %v\n", err)
 		os.Exit(1)

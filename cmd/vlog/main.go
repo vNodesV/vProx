@@ -15,8 +15,8 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/vNodesV/vProx/internal/push"
-	pushcfg "github.com/vNodesV/vProx/internal/push/config"
+	"github.com/vNodesV/vProx/internal/fleet"
+	fleetcfg "github.com/vNodesV/vProx/internal/fleet/config"
 	"github.com/vNodesV/vProx/internal/vlog/config"
 	"github.com/vNodesV/vProx/internal/vlog/db"
 	"github.com/vNodesV/vProx/internal/vlog/ingest"
@@ -381,24 +381,24 @@ func cmdStart(f flags) int {
 		watcher.Start()
 	}
 
-	// Push module — initialize from config/infra/*.toml and chain [management] sections.
+	// Fleet module — initialize from config/infra/*.toml and chain [management] sections.
 	// VM registry is sourced from config/infra/{datacenter}.toml files (qc.toml, rbx.toml, etc.)
 	// All *.toml files in infra/ are scanned automatically.
-	var pushSvc *push.Service
+	var fleetSvc *fleet.Service
 	{
 		chainsDir := cfg.VLog.Push.ChainsDir
-		infraDir  := cfg.VLog.Push.InfraDir
-		defs := pushcfg.PushDefaults{
+		infraDir := cfg.VLog.Push.InfraDir
+		defs := fleetcfg.FleetDefaults{
 			User:    cfg.VLog.Push.Defaults.User,
 			KeyPath: cfg.VLog.Push.Defaults.KeyPath,
 		}
 
 		_, chainsErr := os.Stat(chainsDir)
-		_, infraErr  := os.Stat(infraDir)
+		_, infraErr := os.Stat(infraDir)
 		if chainsErr == nil || infraErr == nil {
-			svc, err := push.NewEmpty(cfg.VLog.Push.DBPath)
+			svc, err := fleet.NewEmpty(cfg.VLog.Push.DBPath)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "vlog: push db error: %v\n", err)
+				fmt.Fprintf(os.Stderr, "vlog: fleet db error: %v\n", err)
 			} else {
 				if chainsErr == nil {
 					if err := svc.AddChainConfigs(chainsDir, defs); err != nil {
@@ -411,11 +411,11 @@ func cmdStart(f flags) int {
 					}
 				}
 				if len(svc.VMs()) > 0 {
-					pushSvc = svc
+					fleetSvc = svc
 					defer svc.Close()
 					go svc.StartPolling(context.Background(), time.Duration(cfg.VLog.Push.PollIntervalSec)*time.Second)
 					if !f.quiet {
-						fmt.Fprintf(os.Stdout, "  push:     chain management (%ds poll)\n", cfg.VLog.Push.PollIntervalSec)
+						fmt.Fprintf(os.Stdout, "  fleet:    chain management (%ds poll)\n", cfg.VLog.Push.PollIntervalSec)
 					}
 				} else {
 					svc.Close()
@@ -424,7 +424,7 @@ func cmdStart(f flags) int {
 		}
 	}
 
-	server, err := web.New(database, enricher, ingester, cfg, pushSvc)
+	server, err := web.New(database, enricher, ingester, cfg, fleetSvc)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "vlog: web server error: %v\n", err)
 		return 1

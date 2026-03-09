@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/vNodesV/vProx/internal/push/config"
-	pushssh "github.com/vNodesV/vProx/internal/push/ssh"
+	"github.com/vNodesV/vProx/internal/fleet/config"
+	fleetssh "github.com/vNodesV/vProx/internal/fleet/ssh"
 )
 
 // VMStatus holds live system metrics for one VM, collected via SSH.
@@ -31,15 +31,15 @@ type VMStatus struct {
 
 	// Live metrics (empty/zero when SSH fails)
 	Online     bool    `json:"online"`
-	CPUPct     float64 `json:"cpu_pct"`      // 1-minute CPU usage %
-	MemPct     float64 `json:"mem_pct"`      // RAM used %
-	StoragePct float64 `json:"storage_pct"`  // root partition used %
-	LoadAvg    string  `json:"load_avg"`     // "1.23 0.98 0.75" (1/5/15 min)
-	AptCount   int     `json:"apt_count"`    // pending apt upgrades
+	CPUPct     float64 `json:"cpu_pct"`     // 1-minute CPU usage %
+	MemPct     float64 `json:"mem_pct"`     // RAM used %
+	StoragePct float64 `json:"storage_pct"` // root partition used %
+	LoadAvg    string  `json:"load_avg"`    // "1.23 0.98 0.75" (1/5/15 min)
+	AptCount   int     `json:"apt_count"`   // pending apt upgrades
 
 	// Error from last SSH poll (empty on success)
-	Error     string    `json:"error,omitempty"`
-	PolledAt  time.Time `json:"polled_at"`
+	Error    string    `json:"error,omitempty"`
+	PolledAt time.Time `json:"polled_at"`
 }
 
 const vmSSHTimeout = 10 * time.Second
@@ -77,7 +77,7 @@ func pollVM(vm config.VM, cfg *config.Config) VMStatus {
 		PolledAt:     time.Now(),
 	}
 
-	client, err := pushssh.Dial(vm.Host, vm.Port, vm.User, vm.KeyPath)
+	client, err := fleetssh.Dial(vm.Host, vm.Port, vm.User, vm.KeyPath)
 	if err != nil {
 		st.Online = false
 		st.Error = fmt.Sprintf("ssh: %v", err)

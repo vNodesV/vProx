@@ -1118,7 +1118,7 @@ func main() {
 		fmt.Fprintln(out, "  start                   run in foreground, emit logs to stdout (journalctl friendly)")
 		fmt.Fprintln(out, "  stop                    stop the vProx.service daemon")
 		fmt.Fprintln(out, "  restart                 restart the vProx.service daemon")
-		fmt.Fprintln(out, "  push  <sub> [flags]     manage remote VMs and deployments")
+		fmt.Fprintln(out, "  fleet <sub> [flags]     manage remote VMs and deployments")
 		fmt.Fprintln(out, "  mod   <sub> [flags]     manage vProx ecosystem modules")
 		fmt.Fprintln(out, "  chain <sub> [flags]     chain node status and upgrade tracking")
 		fmt.Fprintln(out, "")
@@ -1167,8 +1167,8 @@ func main() {
 	case "stop":
 		stopSubcmd = true
 		rawArgs = rawArgs[1:]
-	case "push":
-		runPushCmd(resolveHome(rawArgs[1:]), rawArgs[1:])
+	case "fleet":
+		runFleetCmd(resolveHome(rawArgs[1:]), rawArgs[1:])
 		os.Exit(0)
 	case "mod":
 		runModCmd(resolveHome(rawArgs[1:]), rawArgs[1:])

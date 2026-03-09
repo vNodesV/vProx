@@ -610,9 +610,9 @@
     if (!panel) return;
     if (!chainCachedData) showLoading('chain-status-panel');
     Promise.all([
-      fetch(BASE + '/api/v1/push/chains').then(function(r){ return r.json(); }),
-      fetch(BASE + '/api/v1/push/chains/registered').then(function(r){ return r.json(); }).catch(function(){ return {registered_chains:[]}; }),
-      fetch(BASE + '/api/v1/push/chains/traffic').then(function(r){ return r.json(); }).catch(function(){ return {traffic:[]}; })
+      fetch(BASE + '/api/v1/fleet/chains').then(function(r){ return r.json(); }),
+      fetch(BASE + '/api/v1/fleet/chains/registered').then(function(r){ return r.json(); }).catch(function(){ return {registered_chains:[]}; }),
+      fetch(BASE + '/api/v1/fleet/chains/traffic').then(function(r){ return r.json(); }).catch(function(){ return {traffic:[]}; })
     ]).then(function(results) {
       var chains   = results[0].chains || [];
       var regList  = (results[1].registered_chains) || [];
@@ -623,7 +623,7 @@
       chainCachedData = {chains: chains, registeredSet: regSet, tmap: tmap};
       renderChainTable(chainCachedData);
     }).catch(function() {
-      if (panel) panel.innerHTML = '<p style="padding:.4rem;color:#ef4444;font-size:.78rem">push module not configured or unreachable.</p>';
+      if (panel) panel.innerHTML = '<p style="padding:.4rem;color:#ef4444;font-size:.78rem">fleet module not configured or unreachable.</p>';
     });
   }
 
@@ -634,7 +634,7 @@
 
   function removeChain(chain) {
     if (!confirm('Remove "'+chain+'" from monitoring?')) return;
-    fetch(BASE + '/api/v1/push/chains/registered/' + encodeURIComponent(chain), {method:'DELETE'})
+    fetch(BASE + '/api/v1/fleet/chains/registered/' + encodeURIComponent(chain), {method:'DELETE'})
       .then(function(r){
         if (!r.ok) { alert('Remove failed (HTTP '+r.status+').'); return; }
         loadChainStatus();
@@ -647,7 +647,7 @@
     if (chainPinging) return;
     if (btn) { btn.disabled=true; btn.textContent='…'; }
     chainPinging=true; chainCdSec=CHAIN_INTERVAL; updateCountdown();
-    fetch(BASE + '/api/v1/push/poll', {method:'POST'})
+    fetch(BASE + '/api/v1/fleet/poll', {method:'POST'})
       .then(function(){ chainPinging=false; if(btn){btn.disabled=false;btn.textContent='Ping';} updateCountdown(); loadChainStatus(); })
       .catch(function(){ chainPinging=false; if(btn){btn.disabled=false;btn.textContent='Ping';} updateCountdown(); loadChainStatus(); });
   }
@@ -657,7 +657,7 @@
     if (chainPinging) return;
     if (btn) { btn.disabled=true; btn.textContent='…'; }
     chainPinging=true; chainCdSec=CHAIN_INTERVAL;
-    fetch(BASE + '/api/v1/push/poll', {method:'POST'})
+    fetch(BASE + '/api/v1/fleet/poll', {method:'POST'})
       .then(function(){ chainPinging=false; if(btn) btn.disabled=false; updateCountdown(); loadChainStatus(); })
       .catch(function(){ chainPinging=false; if(btn) btn.disabled=false; updateCountdown(); loadChainStatus(); });
   }
@@ -855,7 +855,7 @@
 
   function loadVMStatus() {
     if (!vmCachedVMs && window.showLoading) window.showLoading('vm-status-panel');
-    fetch(BASE + '/api/v1/push/vms/status')
+    fetch(BASE + '/api/v1/fleet/vms/status')
       .then(function(r) { return r.json(); })
       .then(function(d) {
         vmCachedVMs = d.vms || [];
@@ -863,7 +863,7 @@
       })
       .catch(function() {
         var panel = document.getElementById('vm-status-panel');
-        if (panel) panel.innerHTML = '<p style="padding:.4rem;color:#ef4444;font-size:.78rem">push module not configured or unreachable.</p>';
+        if (panel) panel.innerHTML = '<p style="padding:.4rem;color:#ef4444;font-size:.78rem">fleet module not configured or unreachable.</p>';
       });
   }
 
@@ -872,7 +872,7 @@
     if (vmRefreshing) return;
     vmRefreshing = true; vmCdSec = VM_INTERVAL;
     if (btn) { btn.disabled = true; btn.textContent = '…'; }
-    fetch(BASE + '/api/v1/push/vms/status')
+    fetch(BASE + '/api/v1/fleet/vms/status')
       .then(function(r) { return r.json(); })
       .then(function(d) {
         vmCachedVMs = d.vms || [];
@@ -891,7 +891,7 @@
   window.doVMPing = function() {
     var btn = document.getElementById('vm-ping-btn');
     if (btn) { btn.disabled = true; btn.textContent = '…'; }
-    fetch(BASE + '/api/v1/push/vms/status')
+    fetch(BASE + '/api/v1/fleet/vms/status')
       .then(function(r) { return r.json(); })
       .then(function(d) {
         vmCachedVMs = d.vms || [];

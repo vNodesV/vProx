@@ -6,8 +6,8 @@ package runner
 import (
 	"fmt"
 
-	"github.com/vNodesV/vProx/internal/push/config"
-	pushssh "github.com/vNodesV/vProx/internal/push/ssh"
+	"github.com/vNodesV/vProx/internal/fleet/config"
+	fleetssh "github.com/vNodesV/vProx/internal/fleet/ssh"
 )
 
 // scriptBase is the path on remote VMs where vProx scripts are cloned.
@@ -33,7 +33,7 @@ func New() *Runner { return &Runner{} }
 //   - dryRun:    passes --dry-run flag to the script
 //   - env:       additional KEY=VALUE pairs prepended to the command
 func (r *Runner) Deploy(vm config.VM, chain, component, script string, dryRun bool, env map[string]string) Result {
-	c, err := pushssh.Dial(vm.Host, vm.Port, vm.User, vm.KeyPath)
+	c, err := fleetssh.Dial(vm.Host, vm.Port, vm.User, vm.KeyPath)
 	if err != nil {
 		return Result{Err: fmt.Errorf("runner: ssh dial: %w", err)}
 	}
@@ -62,7 +62,7 @@ func (r *Runner) Deploy(vm config.VM, chain, component, script string, dryRun bo
 
 // RunCmd executes an arbitrary command on vm (for diagnostics / one-offs).
 func (r *Runner) RunCmd(vm config.VM, cmd string) Result {
-	c, err := pushssh.Dial(vm.Host, vm.Port, vm.User, vm.KeyPath)
+	c, err := fleetssh.Dial(vm.Host, vm.Port, vm.User, vm.KeyPath)
 	if err != nil {
 		return Result{Err: fmt.Errorf("runner: ssh dial: %w", err)}
 	}

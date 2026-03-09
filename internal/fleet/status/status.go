@@ -19,7 +19,7 @@ var httpClient = &http.Client{Timeout: pollTimeout}
 // ChainStatus holds all polled data for one chain.
 type ChainStatus struct {
 	Chain   string `json:"chain"`
-	Type    string `json:"type"`              // validator | sp | relayer | external
+	Type    string `json:"type"` // validator | sp | relayer | external
 	RPCURL  string `json:"rpc_url"`
 	RESTURL string `json:"rest_url,omitempty"`
 
@@ -45,10 +45,10 @@ type ChainStatus struct {
 	UpgradeProposalID string `json:"upgrade_proposal_id,omitempty"`
 
 	// Chain identity
-	ChainID      string `json:"chain_id,omitempty"`       // official chain-id from config
-	ChainName    string `json:"chain_name,omitempty"`     // short slug, e.g. "cheqd" — used for tree grouping
-	NetworkType  string `json:"network_type,omitempty"`   // "mainnet" or "testnet" — used for tree grouping
-	ExplorerBase string `json:"explorer_url,omitempty"`   // block explorer base URL for dashboard links
+	ChainID      string `json:"chain_id,omitempty"`     // official chain-id from config
+	ChainName    string `json:"chain_name,omitempty"`   // short slug, e.g. "cheqd" — used for tree grouping
+	NetworkType  string `json:"network_type,omitempty"` // "mainnet" or "testnet" — used for tree grouping
+	ExplorerBase string `json:"explorer_url,omitempty"` // block explorer base URL for dashboard links
 
 	// LAN ping (vProx → node direct)
 	LanPingMs int64 `json:"lan_ping_ms"` // round-trip ms; -1=unreachable, 0=not configured
@@ -129,7 +129,7 @@ func pollRPC(ctx context.Context, s *ChainStatus) error {
 
 	si := r.Result.SyncInfo
 	var h, eh int64
-	fmt.Sscanf(si.LatestBlockHeight, "%d", &h)   //nolint:errcheck
+	fmt.Sscanf(si.LatestBlockHeight, "%d", &h)    //nolint:errcheck
 	fmt.Sscanf(si.EarliestBlockHeight, "%d", &eh) //nolint:errcheck
 
 	s.Moniker = r.Result.NodeInfo.Moniker
@@ -157,7 +157,6 @@ func pollRPC(ctx context.Context, s *ChainStatus) error {
 }
 
 // ---- Cosmos REST: governance ----
-
 
 // pollGov fetches active (voting period) governance proposals.
 // Tries the v1 API first (Cosmos SDK 0.47+/0.50+ with CometBFT), falls back to v1beta1.
