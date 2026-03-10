@@ -2,7 +2,7 @@
 # rev: {{SAMPLE_REV}}
 #
 # One file per chain. Place in: $VPROX_HOME/config/chains/
-# Example: config/chains/cheqd.toml
+# Example: config/chains/mychain.toml
 #
 # When chain_id is set, vProx auto-fetches general metadata from:
 #   https://chains.cosmos.directory/{chain_name}
@@ -14,9 +14,9 @@ schema_version = 2
 # ── Identity ──────────────────────────────────────────────────────────────────
 # chain_id triggers auto-import from cosmos.directory on startup/reload.
 # Use the first segment before "-" as the chain_name slug for cosmos.directory.
-chain_id       = "cheqd-mainnet-1"   # official chain-id
-chain_name     = "cheqd"             # slug used in log filenames and routes
-dashboard_name = ""                  # display name; empty = cosmos.directory pretty_name
+chain_id       = "mychain-mainnet-1"   # official chain-id
+chain_name     = "mychain"             # slug used in log filenames and routes
+dashboard_name = ""                    # display name; empty = cosmos.directory pretty_name
 
 # Auto-filled from cosmos.directory when chain_id is set:
 network_type        = ""             # e.g. "mainnet" or "testnet"
@@ -27,11 +27,11 @@ explorers           = []             # override cosmos.directory explorer list
 # ── vProx Proxy Config ─────────────────────────────────────────────────────────
 # These settings control how vProx routes and exposes the chain's endpoints.
 
-host          = "cheqd.srvs.vnodesv.net"   # public service hostname (vProx serves this)
-ip            = "10.0.0.66"                # LAN IP of the node (internal routing target)
-default_ports = true                       # use ports from config/chains/services.toml; set false to override below
-msg_rpc       = false                      # inject rpc_msg banner on RPC index
-msg_api       = false                      # inject api_msg banner on REST/swagger
+host          = "mychain.example.com"   # public service hostname (vProx serves this)
+ip            = "10.0.0.1"             # LAN IP of the node (internal routing target)
+default_ports = true                    # use ports from config/chains/services.toml; set false to override below
+msg_rpc       = false                   # inject rpc_msg banner on RPC index
+msg_api       = false                   # inject api_msg banner on REST/swagger
 
 [message]
 api_msg = ""
@@ -72,7 +72,7 @@ swagger_masking     = false
 absolute_links      = "auto"
 
 [logging]
-file   = "cheqd.log"
+file   = "mychain.log"
 format = "summary"
 
 
@@ -95,20 +95,20 @@ address = ""   # valoper operator address; auto-fills active/synced/jailed/misse
 # upgrade         = ""         # upgrade halt height if a pending upgrade exists, else ""
 
 [chain_services.validator.testnet]
-address = ""                   # testnet valoper; empty = testnet validator row hidden in dashboard
+address = ""   # testnet valoper; empty = testnet validator row hidden in dashboard
 
 [chain_services.sp.mainnet]
-hostname = "cheqd.srvs.vnodesv.net"
+hostname = "mychain.example.com"
 prefixes = ["api", "rest", "rpc"]   # subdomains to verify: api.<hostname>, rest.<hostname>, rpc.<hostname>
 suffixes = ["api", "rest", "rpc"]   # path suffixes to verify: <hostname>/api, /rest, /rpc
-lan_ip   = "10.0.0.66"             # internal LAN IP for direct probing via http://lan_ip:26657|1317
+lan_ip   = "10.0.0.1"              # internal LAN IP for direct probing via http://lan_ip:26657|1317
 ext_host = ""                       # external host/IP if node is on a different VPS (overrides lan_ip for probing)
 
 [chain_services.sp.testnet]
-hostname = "cheqd-testnet.srvs.vnodesv.net"
+hostname = ""                       # testnet public hostname; empty = testnet SP row hidden
 prefixes = ["api", "rest", "rpc"]
 suffixes = ["api", "rest", "rpc"]
-lan_ip   = ""                       # testnet node LAN IP (empty = testnet SP row hidden)
+lan_ip   = ""                       # testnet node LAN IP; empty = testnet SP row hidden
 ext_host = ""
 
 [chain_services.relayer]

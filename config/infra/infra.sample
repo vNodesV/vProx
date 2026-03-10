@@ -9,10 +9,10 @@
 # VMs automatically inherit host_ref from [host].name when host_ref is omitted.
 #
 # The vLog INFRASTRUCTURE block renders a collapsible tree:
-#   ▶ homelab-qc  QC  LAN 10.0.0.1  2/3 online
-#       akash       ONLINE  10.0.0.68  CPU: 12%  ...
-#       meme-val1   ONLINE  10.0.0.69  CPU: 8%   ...
-#       meme-val2   OFFLINE —
+#   ▶ my-server  QC  LAN 10.0.0.1  2/3 online
+#       chain-a     ONLINE  10.0.0.10  CPU: 12%  ...
+#       chain-b     ONLINE  10.0.0.11  CPU: 8%   ...
+#       chain-c     OFFLINE —
 #
 # Multiple datacenters: create qc.toml, rbx.toml, fra.toml, etc.
 # Standalone VPS (no physical host): omit [host] and use [[vm]] with empty host_ref.
@@ -22,7 +22,7 @@
 # Generate the fleet key (run once):
 #   ssh-keygen -t ed25519 -C "vprox-fleet" -f $HOME/.vprox/secret/id.push
 # Authorize it on each target VM:
-#   ssh-copy-id -i $HOME/.vprox/secret/id.push.pub <user>@<host>
+#   ssh-copy-id -i $HOME/.vprox/secret/id.push.pub <user>@<node_ip>
 #
 # SSH credential precedence (per VM):
 #   [[vm]].key_path  >  [host].ssh_key_path  >  [vprox].ssh_key_path
@@ -30,7 +30,7 @@
 #
 # ── CHAIN BINDING ─────────────────────────────────────────────────────────────
 # Use chain_name on [[vm]] to link the VM to a chain config file.
-# Example: chain_name = "akash" → reads config/chains/akash.toml for
+# Example: chain_name = "mychain" → reads config/chains/mychain.toml for
 # chain_id, valoper, rpc_url, rest_url, explorer, network_type, etc.
 # Chain details stay in chains/*.toml; infra.toml is infrastructure-only.
 
@@ -41,12 +41,12 @@
 
 
 [host]
-name        = "homelab-qc"         # unique name — VMs in this file inherit this as host_ref
-lan_ip      = "10.0.0.1"           # physical host LAN / management IP
-datacenter  = "QC"                 # short location label shown on the dashboard (e.g. QC, RBX, AMS)
-user        = "vnodesv"            # default SSH user for all [[vm]] entries in this file
+name        = "my-server"              # unique name — VMs in this file inherit this as host_ref
+lan_ip      = "10.0.0.1"              # physical host LAN / management IP
+datacenter  = "QC"                    # short location label shown on the dashboard (e.g. QC, RBX, AMS)
+user        = "ubuntu"                # default SSH user for all [[vm]] entries in this file
 ssh_key_path = "$HOME/.vprox/secret/id.push"  # default SSH key for all [[vm]] entries
-# public_ip = "1.2.3.4"           # display-only; omit for hosts behind vProx/Apache
+# public_ip = "1.2.3.4"              # display-only; omit for hosts behind vProx/Apache
 
 
 # ── vProx Agent ───────────────────────────────────────────────────────────────
@@ -56,22 +56,22 @@ ssh_key_path = "$HOME/.vprox/secret/id.push"  # default SSH key for all [[vm]] e
 
 [vprox]
 name         = "vProx"
-lan_ip       = "10.0.0.65"                   # LAN IP of the vProx machine itself
+lan_ip       = "10.0.0.2"                    # LAN IP of the vProx machine itself
 key          = "$HOME/.vprox/secret/id.agent" # private key for outbound SSH dispatch ($HOME expanded)
 ssh_key_path = "$HOME/.vprox/secret/id.push"  # file-level fallback key (lowest priority)
 
 
 [[vm]]
-name       = "akash"
-# host_ref = "homelab-qc"         # auto-inferred from [host].name above; override only if needed
-host       = "10.0.0.68"          # SSH target — the VM's IP or hostname
-lan_ip     = "10.0.0.68"          # LAN IP shown in INFRASTRUCTURE block
+name       = "chain-a"
+# host_ref = "my-server"             # auto-inferred from [host].name above; override only if needed
+host       = "10.0.0.10"             # SSH target — the VM's IP or hostname
+lan_ip     = "10.0.0.10"             # LAN IP shown in INFRASTRUCTURE block
 port       = 22
-# user     = "jarvis"             # omit to inherit from [host].user
-# key_path = ""                   # omit to inherit from [host].ssh_key_path
+# user     = "ubuntu"                # omit to inherit from [host].user
+# key_path = ""                      # omit to inherit from [host].ssh_key_path
 datacenter = "QC"
-type       = "validator"          # validator | sp | relayer | node (comma-separated for multi-role)
-chain_name = "akash"              # links to config/chains/akash.toml
+type       = "validator"             # validator | sp | relayer | node (comma-separated for multi-role)
+chain_name = "mychain"               # links to config/chains/mychain.toml
 
 [vm.ping]
 # country: ISO 3166-1 alpha-2 code for the check-host.net probe node.
@@ -84,13 +84,13 @@ provider = ""
 # ── Second VM on the same host ────────────────────────────────────────────────
 
 # [[vm]]
-# name       = "meme-val1"
-# host       = "10.0.0.69"
-# lan_ip     = "10.0.0.69"
+# name       = "chain-b"
+# host       = "10.0.0.11"
+# lan_ip     = "10.0.0.11"
 # port       = 22
 # datacenter = "QC"
 # type       = "validator"
-# chain_name = "meme"             # links to config/chains/meme.toml
+# chain_name = "otherchain"          # links to config/chains/otherchain.toml
 #
 # [vm.ping]
 # country  = "CA"
@@ -103,15 +103,15 @@ provider = ""
 
 # [[vm]]
 # name       = "my-rbx-vps"
-# host_ref   = ""                 # empty = standalone (not under any host)
-# host       = "1.2.3.4"         # public IP or hostname
+# host_ref   = ""                    # empty = standalone (not under any host)
+# host       = "1.2.3.4"            # public IP or hostname
 # lan_ip     = "1.2.3.4"
 # port       = 22
-# user       = "ubuntu"          # override [host].user if needed
+# user       = "ubuntu"             # override [host].user if needed
 # key_path   = "$HOME/.vprox/secret/id.push"
 # datacenter = "RBX"
 # type       = "validator"
-# chain_name = "meme"
+# chain_name = "mychain"
 #
 # [vm.ping]
 # country  = "FR"
