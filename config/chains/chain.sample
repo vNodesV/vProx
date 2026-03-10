@@ -29,13 +29,9 @@ explorers           = []             # override cosmos.directory explorer list
 
 host          = "cheqd.srvs.vnodesv.net"   # public service hostname (vProx serves this)
 ip            = "10.0.0.66"                # LAN IP of the node (internal routing target)
-default_ports = false
+default_ports = true                       # use ports from config/chains/services.toml; set false to override below
 msg_rpc       = false                      # inject rpc_msg banner on RPC index
 msg_api       = false                      # inject api_msg banner on REST/swagger
-
-rpc_aliases  = []   # extra RPC hostnames (expose.vhost must be true)
-rest_aliases = []   # extra REST/API hostnames
-api_aliases  = []   # extra /api hostnames
 
 [message]
 api_msg = ""
@@ -87,7 +83,7 @@ format = "summary"
 # Leave a mainnet/testnet address empty ("") to hide that row in the dashboard.
 
 [chain_services.validator.mainnet]
-address = "cheqdvaloper1..."   # valoper operator address; auto-fills active/synced/jailed/missed_blocks
+address = ""   # valoper operator address; auto-fills active/synced/jailed/missed_blocks
 
 # Auto-filled by cosmos.directory / chain RPC (do not set manually):
 # active          = false
@@ -121,43 +117,7 @@ ext_host = ""
 
 # ── Ping ───────────────────────────────────────────────────────────────────────
 # Controls the per-chain datacenter probe in the dashboard.
-# Used when no [management] section is present (non-managed chains).
 
 [chain_ping]
 country  = "CA"   # ISO 3166-1 alpha-2 code; supported: CA US FR DE NL GB FI JP SG BR IN
 provider = ""     # pin to specific check-host.net node (e.g. "ca1"); empty = random from country
-
-
-# ── Management (SSH / Fleet Module) ─────────────────────────────────────────────
-# managed_host: when true, this chain's node is registered in the fleet module —
-#   enabling SSH-based script execution, apt upgrades, and deployment dispatch.
-#   Independent from exposed_services; both flags can be set freely.
-#
-# exposed_services: when true, vLog probes this chain via the public chain.host domain
-#   (through vProx/Apache). When false, vLog probes directly via lan_ip,
-#   bypassing the public proxy — use when vLog is on the same LAN as the node.
-#
-# Truth table:
-#   managed_host=false  exposed_services=true  → chain shown; probed via public host; no SSH
-#   managed_host=false  exposed_services=false → chain shown; probed via LAN IP; no SSH
-#   managed_host=true   exposed_services=true  → chain shown; probed via public host; SSH managed
-#   managed_host=true   exposed_services=false → chain shown; probed via LAN IP;    SSH managed
-#
-# SSH defaults (user, key_path) are read from [vlog.fleet.defaults] in vlog.toml
-# when the fields below are left empty.
-
-[management]
-managed_host     = false
-lan_ip           = ""         # SSH target IP; empty = use chain.ip above
-public_ip        = ""         # display-only in dashboard; optional
-user             = ""         # SSH user; empty = [vlog.fleet.defaults].user
-key_path         = ""         # SSH private key path; empty = [vlog.fleet.defaults].key_path
-port             = 0          # SSH port; 0 = default 22
-type             = ["validator"]  # service roles: validator | sp | rpc | relayer | node
-valoper          = ""         # validator operator address for governance participation tracking
-datacenter       = ""         # location label, e.g. "QC", "RBX", "AMS"
-exposed_services = true
-
-[management.ping]
-country  = ""
-provider = ""
