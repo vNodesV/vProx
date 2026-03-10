@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"github.com/vNodesV/vProx/internal/fleet/config"
 	fleetssh "github.com/vNodesV/vProx/internal/fleet/ssh"
 	"github.com/vNodesV/vProx/internal/fleet/state"
+	vlogconfig "github.com/vNodesV/vProx/internal/vlog/config"
 )
 
 // runFleetCmd handles: vprox fleet <sub> [flags]
@@ -190,17 +192,28 @@ func fleetUnregister(home string, args []string) {
 	defer db.Close()
 
 	if err := db.RemoveRegisteredChain(chain); err != nil {
-		fmt.Fprintf(os.Stderr, "fleet unregister: %v\n", err)
+		if errors.Is(err, state.ErrNotFound) {
+			fmt.Fprintf(os.Stderr, "fleet unregister: no registered chain named %q\n", chain)
+			fmt.Fprintln(os.Stderr, "  Hint: run 'vprox fleet chains' to list registered chains")
+		} else {
+			fmt.Fprintf(os.Stderr, "fleet unregister: %v\n", err)
+		}
 		os.Exit(1)
 	}
 	fmt.Printf("Removed %q from registered chains.\n", chain)
 }
 
-// openFleetDB opens the fleet SQLite state DB from the standard path under home.
+// openFleetDB opens the fleet SQLite state DB using the configured path.
+// It reads db_path from vlog.toml ([vlog.push] db_path) and falls back
+// to $VPROX_HOME/data/push.db when the config is absent or the field is empty.
 func openFleetDB(home string) (*state.DB, error) {
-	// DB path mirrors the default in internal/vlog/config (push.db for compat).
-	path := filepath.Join(home, "data", "push.db")
-	return state.Open(path)
+	cfgPath := filepath.Join(home, "config", "vlog.toml")
+	cfg, err := vlogconfig.Load(cfgPath)
+	dbPath := cfg.VLog.Push.DBPath
+	if err != nil || strings.TrimSpace(dbPath) == "" {
+		dbPath = filepath.Join(home, "data", "push.db")
+	}
+	return state.Open(dbPath)
 }
 
 

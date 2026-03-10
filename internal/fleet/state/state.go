@@ -4,6 +4,7 @@ package state
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,6 +12,9 @@ import (
 
 	_ "modernc.org/sqlite" // CGO-free SQLite driver
 )
+
+// ErrNotFound is returned when a requested row does not exist in the DB.
+var ErrNotFound = errors.New("not found")
 
 // DB wraps *sql.DB with fleet-specific queries.
 type DB struct{ *sql.DB }
@@ -147,9 +151,20 @@ func (d *DB) AddRegisteredChain(chain, rpcURL, restURL, note string) error {
 }
 
 // RemoveRegisteredChain deletes an externally-monitored chain.
+// Returns ErrNotFound if no chain with that name exists in the DB.
 func (d *DB) RemoveRegisteredChain(chain string) error {
-	_, err := d.Exec(`DELETE FROM registered_chains WHERE chain=?`, chain)
-	return err
+	res, err := d.Exec(`DELETE FROM registered_chains WHERE chain=?`, chain)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return fmt.Errorf("%w: chain %q", ErrNotFound, chain)
+	}
+	return nil
 }
 
 // ListRegisteredChains returns all externally-monitored chains.
