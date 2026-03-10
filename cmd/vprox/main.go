@@ -28,6 +28,7 @@ import (
 
 	backup "github.com/vNodesV/vProx/internal/backup"
 	"github.com/vNodesV/vProx/internal/config"
+	"github.com/vNodesV/vProx/internal/cosmos"
 	"github.com/vNodesV/vProx/internal/counter"
 	"github.com/vNodesV/vProx/internal/geo"
 	"github.com/vNodesV/vProx/internal/limit"
@@ -119,6 +120,17 @@ func loadChains(dir string) error {
 
 		if err := config.ValidateConfig(&c); err != nil {
 			return fmt.Errorf("%s: %w", entry.Name(), err)
+		}
+
+		// Auto-enrich from cosmos.directory when chain_id is set.
+		// Only empty fields are filled — local config always wins.
+		if c.ChainID != "" {
+			slug := c.ChainName
+			if slug == "" {
+				// Derive slug from chain_id: "cheqd-mainnet-1" → "cheqd"
+				slug = strings.SplitN(c.ChainID, "-", 2)[0]
+			}
+			cosmos.Enrich(slug, &c.DashboardName, &c.NetworkType, &c.RecommendedVersion, &c.Explorers)
 		}
 
 		base := c.Host // already normalized

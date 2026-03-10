@@ -253,8 +253,29 @@ func LoadFromChainConfigs(dir string, defaults FleetDefaults) (*Config, error) {
 		rpcURL := ""
 		restURL := ""
 		if m.ExposedServices && cc.Host != "" {
-			rpcURL = "http://" + cc.Host
-			restURL = "http://" + cc.Host
+			base := "http://" + cc.Host
+			switch {
+			case cc.Expose.Path:
+				// vProx path routing: /rpc → RPC port, /rest → REST port
+				rpcURL = base + "/rpc"
+				restURL = base + "/rest"
+			case cc.Expose.VHost:
+				// vProx vhost routing: rpc.<host> and api.<host>
+				rp := cc.Expose.VHostPrefix.RPC
+				ap := cc.Expose.VHostPrefix.REST
+				if rp == "" {
+					rp = "rpc"
+				}
+				if ap == "" {
+					ap = "api"
+				}
+				rpcURL = "http://" + rp + "." + cc.Host
+				restURL = "http://" + ap + "." + cc.Host
+			default:
+				// No sub-routing — probe base host directly (non-standard setup)
+				rpcURL = base
+				restURL = base
+			}
 		}
 
 		vms = append(vms, VM{
