@@ -25,10 +25,15 @@ type VMPing struct {
 // Operators running standalone VPS (no hypervisor) can omit [[host]] sections entirely
 // and leave host_ref empty on their [[vm]] entries.
 type Host struct {
-	Name       string `toml:"name"       json:"name"`
-	PublicIP   string `toml:"public_ip"  json:"public_ip,omitempty"`
-	LanIP      string `toml:"lan_ip"     json:"lan_ip,omitempty"`
-	Datacenter string `toml:"datacenter" json:"datacenter,omitempty"`
+	Name       string `toml:"name"         json:"name"`
+	PublicIP   string `toml:"public_ip"    json:"public_ip,omitempty"`
+	LanIP      string `toml:"lan_ip"       json:"lan_ip,omitempty"`
+	Datacenter string `toml:"datacenter"   json:"datacenter,omitempty"`
+	// User and SSHKeyPath set per-host SSH defaults.
+	// Applied to [[vm]] entries in the same file that leave user / key_path empty.
+	// Precedence: VM > [host] > [vprox].ssh_key_path
+	User       string `toml:"user"         json:"user,omitempty"`
+	SSHKeyPath string `toml:"ssh_key_path" json:"ssh_key_path,omitempty"`
 }
 
 // VM describes one validator VM (or VPS) reachable via SSH.
@@ -392,7 +397,14 @@ func LoadFromInfraFiles(dir string) (*Config, error) {
 			if f.VMs[i].Port == 0 {
 				f.VMs[i].Port = 22
 			}
-			// Apply [vprox].ssh_key_path as default when the VM has no explicit key.
+			// Credential precedence: VM > [host] > [vprox].ssh_key_path
+			if f.VMs[i].User == "" && f.Host.User != "" {
+				f.VMs[i].User = f.Host.User
+			}
+			if f.VMs[i].KeyPath == "" && f.Host.SSHKeyPath != "" {
+				f.VMs[i].KeyPath = f.Host.SSHKeyPath
+			}
+			// Apply [vprox].ssh_key_path as final fallback when the VM still has no key.
 			if f.VMs[i].KeyPath == "" && f.Vprox.SSHKeyPath != "" {
 				f.VMs[i].KeyPath = f.Vprox.SSHKeyPath
 			}

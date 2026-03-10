@@ -1,4 +1,4 @@
-# infra/infra.sample.toml — per-datacenter physical host + VMs
+# infra/infra.sample — per-datacenter physical host + VMs
 # rev: {{SAMPLE_REV}}
 #
 # This file is the CANONICAL source for all infrastructure configuration.
@@ -15,17 +15,18 @@
 #       meme-val2   OFFLINE —
 #
 # Multiple datacenters: create qc.toml, rbx.toml, fra.toml, etc.
-# Standalone VPS (no physical host): use [[vps]] at the bottom of this file.
+# Standalone VPS (no physical host): omit [host] and use [[vm]] with empty host_ref.
 # The [vprox] section registers the vProx agent credentials for SSH dispatch.
 #
 # ── SSH KEY ───────────────────────────────────────────────────────────────────
-# Generate the push key (run once):
-#   ssh-keygen -t ed25519 -C "vprox-push" -f $HOME/.ssh/id_push
+# Generate the fleet key (run once):
+#   ssh-keygen -t ed25519 -C "vprox-fleet" -f $HOME/.vprox/secret/id.push
 # Authorize it on each target VM:
-#   ssh-copy-id -i $HOME/.ssh/id_push.pub <user>@<host>
+#   ssh-copy-id -i $HOME/.vprox/secret/id.push.pub <user>@<host>
 #
-# Set [vprox].ssh_key_path once per file — all [[vm]] entries inherit it.
-# Override with key_path on an individual [[vm]] when that VM uses a different key.
+# SSH credential precedence (per VM):
+#   [[vm]].key_path  >  [host].ssh_key_path  >  [vprox].ssh_key_path
+#   [[vm]].user      >  [host].user          >  (no further fallback — user required)
 #
 # ── CHAIN BINDING ─────────────────────────────────────────────────────────────
 # Use chain_name on [[vm]] to link the VM to a chain config file.
@@ -40,24 +41,24 @@
 
 
 [host]
-name       = "homelab-qc"          # unique name — VMs in this file inherit this as host_ref
-lan_ip     = "10.0.0.1"            # physical host LAN / management IP
-datacenter = "QC"                  # short location label shown on the dashboard (e.g. QC, RBX, AMS)
-enable     = true                  # when false, the host + all its VMs are hidden from the dashboard tree
-# public_ip = "1.2.3.4"           # display-only; omit for hosts behind vProx/Apache.
+name        = "homelab-qc"         # unique name — VMs in this file inherit this as host_ref
+lan_ip      = "10.0.0.1"           # physical host LAN / management IP
+datacenter  = "QC"                 # short location label shown on the dashboard (e.g. QC, RBX, AMS)
+user        = "vnodesv"            # default SSH user for all [[vm]] entries in this file
+ssh_key_path = "$HOME/.vprox/secret/id.push"  # default SSH key for all [[vm]] entries
+# public_ip = "1.2.3.4"           # display-only; omit for hosts behind vProx/Apache
 
 
 # ── vProx Agent ───────────────────────────────────────────────────────────────
 # Registers the vProx machine itself for SSH dispatch.
 # Generate key with: ssh-keygen -t ed25519 -C "vprox.agent@<lan_ip>" -f $HOME/.vprox/secret/id.agent
-# Then add the generated .pub to each VM/VPS authorized_keys.
+# Then add the generated .pub to each VM authorized_keys.
 
 [vprox]
 name         = "vProx"
-lan_ip       = "10.0.0.65"              # LAN IP of the vProx machine itself
-key          = "$HOME/.vprox/secret/id.agent"  # private key for outbound SSH dispatch ($HOME expanded)
-ssh_key_path = "$HOME/.ssh/id_push"     # default SSH key for all [[vm]] entries in this file ($HOME expanded)
-                                         # individual [[vm]] entries can override with their own key_path
+lan_ip       = "10.0.0.65"                   # LAN IP of the vProx machine itself
+key          = "$HOME/.vprox/secret/id.agent" # private key for outbound SSH dispatch ($HOME expanded)
+ssh_key_path = "$HOME/.vprox/secret/id.push"  # file-level fallback key (lowest priority)
 
 
 [[vm]]
@@ -66,11 +67,11 @@ name       = "akash"
 host       = "10.0.0.68"          # SSH target — the VM's IP or hostname
 lan_ip     = "10.0.0.68"          # LAN IP shown in INFRASTRUCTURE block
 port       = 22
-user       = "jarvis"
-# key_path = "$HOME/.ssh/id_push" # override only if this VM uses a different key than [vprox].ssh_key_path
+# user     = "jarvis"             # omit to inherit from [host].user
+# key_path = ""                   # omit to inherit from [host].ssh_key_path
 datacenter = "QC"
 type       = "validator"          # validator | sp | relayer | node (comma-separated for multi-role)
-chain_name = "akash"              # links to config/chains/akash.toml (chain_id, valoper, rpc_url, etc.)
+chain_name = "akash"              # links to config/chains/akash.toml
 
 [vm.ping]
 # country: ISO 3166-1 alpha-2 code for the check-host.net probe node.
@@ -80,12 +81,13 @@ country  = "CA"
 provider = ""
 
 
+# ── Second VM on the same host ────────────────────────────────────────────────
+
 # [[vm]]
 # name       = "meme-val1"
 # host       = "10.0.0.69"
 # lan_ip     = "10.0.0.69"
 # port       = 22
-# user       = "jarvis"
 # datacenter = "QC"
 # type       = "validator"
 # chain_name = "meme"             # links to config/chains/meme.toml
@@ -95,18 +97,22 @@ provider = ""
 # provider = ""
 
 
-# ── VPS entries ───────────────────────────────────────────────────────────────
-# For externally-hosted VPS nodes with no physical host parent.
-# Remove the leading '#' to enable.
+# ── Standalone VPS (no physical host parent) ──────────────────────────────────
+# For externally-hosted VPS nodes not associated with a physical hypervisor.
+# Leave host_ref empty — the VM appears at the top level in the INFRASTRUCTURE tree.
 
-# [[vps]]
-# name     = "my-vps"
-# ip_addr  = "1.2.3.4"           # public IP (use ip_addr OR hostname, not both)
-# hostname = ""                  # public hostname; leave empty if using ip_addr
-# user     = "ubuntu"
-# key      = "$HOME/.ssh/id_push" # private key; empty = use [vprox].key
-# datacenter = "RBX"             # optional location label
+# [[vm]]
+# name       = "my-rbx-vps"
+# host_ref   = ""                 # empty = standalone (not under any host)
+# host       = "1.2.3.4"         # public IP or hostname
+# lan_ip     = "1.2.3.4"
+# port       = 22
+# user       = "ubuntu"          # override [host].user if needed
+# key_path   = "$HOME/.vprox/secret/id.push"
+# datacenter = "RBX"
+# type       = "validator"
+# chain_name = "meme"
 #
-# [vps.ping]
+# [vm.ping]
 # country  = "FR"
 # provider = ""
