@@ -542,4 +542,158 @@ vLog builds a composite threat score (0–100) for each IP using three external 
 
 - `modernc.org/sqlite v1.46.1` — pure Go SQLite driver, no CGO required
 
+---
+
+## 12) Fleet Module (`internal/fleet/`)
+
+**Version**: v1.3.0  
+**Purpose**: Centralized SSH control plane. vProx SSHes into validator VMs to execute chain maintenance scripts, monitor upgrade proposals, poll chain status (height, governance, sync), and dispatch deployments.
+
+**Location:**
+- `internal/fleet/` — packages: `config/`, `ssh/`, `runner/`, `state/`, `status/`, `api/`
+- `cmd/vprox/fleet.go` — CLI command wiring
+- `scripts/chains/{chain}/{component}/{script}.sh` — scripts executed remotely on VMs
+
+### Config Files
+
+| File | Purpose |
+|---|---|
+| `config/fleet/settings.toml` | Global SSH defaults + poll interval. Copy from `settings.sample`. |
+| `config/infra/<datacenter>.toml` | VM registry (one file per datacenter). All `*.toml` files in `config/infra/` are scanned. |
+| `config/chains/*.toml` `[management]` | Per-chain SSH target, role, and datacenter. `managed_host=true` registers the chain node. |
+
+### SSH Key Setup
+
+Generate a dedicated key for fleet → VM connections (run once on the vProx machine):
+
+```bash
+ssh-keygen -t ed25519 -C "vprox-fleet" -f ~/.ssh/vprox_fleet
+```
+
+Authorize it on each validator VM:
+
+```bash
+ssh-copy-id -i ~/.ssh/vprox_fleet.pub <user>@<vm-ip>
+```
+
+Allow passwordless sudo for fleet scripts on each VM (edit `/etc/sudoers` or drop a file in `/etc/sudoers.d/`):
+
+```
+# /etc/sudoers.d/vprox-fleet
+<user> ALL=(ALL) NOPASSWD: /usr/bin/apt-get, /usr/bin/systemctl
+```
+
+Set the key path in `config/fleet/settings.toml`:
+
+```toml
+[ssh]
+user     = "ubuntu"
+key_path = "~/.ssh/vprox_fleet"
+port     = 22
+```
+
+### Credential Precedence
+
+SSH credentials are resolved per-VM with the following priority (highest → lowest):
+
+```
+[[vm]].user / [[vm]].key_path         ← VM-specific override (infra.toml)
+[host].user / [host].ssh_key_path     ← Physical host default (same infra.toml file)
+[vprox].ssh_key_path                  ← Fleet-wide default (infra.toml [vprox] section)
+config/fleet/settings.toml [ssh]      ← Global fallback
+```
+
+### Chain Registration
+
+To register a chain node for SSH management, set `managed_host = true` in the chain's `[management]` block:
+
+```toml
+# config/chains/mychain.toml
+[management]
+managed_host     = true
+lan_ip           = ""        # empty = use top-level chain.ip
+user             = ""        # empty = fleet settings.toml default
+key_path         = ""        # empty = fleet settings.toml default
+port             = 0         # 0 = port 22
+type             = ["validator"]
+valoper          = "cosmosvaloper1..."
+datacenter       = "QC"
+exposed_services = true      # true = probe via chain.host; false = probe via lan_ip directly
+```
+
+`exposed_services` controls probe routing only — it is independent of `managed_host`.
+
+| `managed_host` | `exposed_services` | Behaviour |
+|---|---|---|
+| false | false | vLog probes via `lan_ip`; no SSH management |
+| false | true | vLog probes via `chain.host` (through vProx); no SSH management |
+| true | false | SSH management enabled; vLog probes via `lan_ip` (same-LAN case) |
+| true | true | SSH management enabled; vLog probes via `chain.host` (public domain) |
+
+### CLI Commands
+
+```bash
+vprox fleet hosts          # List physical hosts from config/infra/
+vprox fleet vms            # List all registered VMs
+vprox fleet chains         # List chains registered in fleet SQLite state
+vprox fleet unregister <chain>   # Remove chain from fleet state (by chain_name)
+vprox fleet deploy --chain <name> --script <path>   # Dispatch script to VM via SSH
+vprox fleet update [--host <name>]   # Run apt upgrade on VM(s) via SSH
+```
+
+### API Routes
+
+| Method | Route | Description |
+|---|---|---|
+| `GET` | `/api/v1/fleet/vms` | JSON list of all VMs with status |
+| `GET` | `/api/v1/fleet/chains` | JSON list of registered chains |
+| `POST` | `/api/v1/fleet/deploy` | Dispatch a script to a VM |
+| `GET` | `/api/v1/fleet/deployments` | Deployment history |
+| `POST` | `/api/v1/fleet/chains/registered` | Register a chain |
+| `POST` | `/api/v1/fleet/chains/registered/{chain}/unregister` | Unregister a chain |
+
+### Internal Packages
+
+| Package | Description |
+|---|---|
+| `internal/fleet/config/` | Infra loader (`LoadFromInfraFiles`, `LoadFromChainConfigs`); credential precedence resolution |
+| `internal/fleet/ssh/` | SSH client dispatcher using `golang.org/x/crypto/ssh` |
+| `internal/fleet/runner/` | Remote bash execution over SSH; captures stdout/stderr |
+| `internal/fleet/state/` | SQLite persistence for deployments + registered chains |
+| `internal/fleet/status/` | Cosmos RPC poller: height, gov proposals, upgrade plan, sync status |
+| `internal/fleet/api/` | HTTP handlers wired into vProx router |
+
+### Infra File Structure
+
+```toml
+# config/infra/qc.toml — one file per datacenter
+
+[host]
+name         = "homelab-qc"
+lan_ip       = "10.0.0.1"
+datacenter   = "QC"
+user         = "ubuntu"           # default user for all [[vm]] in this file
+ssh_key_path = "~/.ssh/vprox_fleet"  # default key for all [[vm]] in this file
+
+[vprox]
+name     = "vProx"
+lan_ip   = "10.0.0.65"
+key      = "~/.vprox/secret/id.agent"
+
+[[vm]]
+name       = "mychain-val"
+host       = "10.0.0.66"        # SSH target
+lan_ip     = "10.0.0.66"        # shown in dashboard
+port       = 22
+datacenter = "QC"
+type       = "validator"
+chain_name = "mychain"          # links to config/chains/mychain.toml
+
+[vm.ping]
+country  = "CA"                 # check-host.net probe country
+provider = ""                   # empty = random node in country
+```
+
+Multiple VMs under the same physical host inherit `[host].user` and `[host].ssh_key_path` when their own `user`/`key_path` fields are empty.
+
 

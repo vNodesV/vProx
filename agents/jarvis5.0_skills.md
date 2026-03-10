@@ -300,7 +300,7 @@
 | Static file serving | 3 | `http.FileServer`, `fs.FS`, index fallback, cache headers |
 | HTTP/2 | 3 | Auto-enabled on TLS, h2c for gRPC upstream (planned) |
 | Per-host config | 4 | Per-entity TOML files, directory scanning, hot reload, *bool tri-state for TOML |
-| Config architecture | 4 | vprox.toml (proxy), webserver.toml (module), vhosts/*.toml (per-host), config naming conventions |
+| Config architecture | 4 | vprox.toml (proxy), webserver.toml (module), vhosts/*.toml (per-host), config naming conventions; **v1.4.0 restructure**: three-way split (chain identity / service node / infra settings), `tree_name`↔`tree` join key eliminates slug-matching hacks, `[[host]]` TOML array-of-tables pattern with `[host.ping]` subtables, `config/services/nodes/` directory scanner replaces SQLite `registered_chains` table |
 | Apache config import | 3 | VirtualHost parsing, directive mapping, TOML generation |
 | Apache reverse proxy config | 4 | ProxyTimeout, RequestReadTimeout (handshake/header/body=0), ProxyPass timeout=, SSE-safe settings, double-compress guard (`SetEnvIfNoCase Content-Encoding`), `X-Real-IP`; multi-vhost validation |
 | CLI subcommand design | 3 | `flag` package, subcommand dispatch, help formatting |
@@ -364,8 +364,8 @@
 | IP enrichment orchestration | 3 | Async enrichment queue, cache TTL, API rate limiting, graceful degradation |
 | FS watcher patterns | 3 | Poll-based archive watcher, dedup via processed-file registry, trigger-on-new logic |
 | Log analyzer web UI | 3 | Dashboard + CRM account view (search/sort/per-page/Investigate btn) + query builder + threat panel; htmx partial SSE updates; production-shipped in vLog v1.1.0 |
-| TOML config design patterns | 4 | Struct backfill defaults, tri-state `*bool`, soft migration (dual-source loading with precedence), vms-to-chain consolidation pattern, deprecation warnings, backward compat strategy — applied in v1.3.0 chain.toml redesign |
-| Soft migration patterns | 4 | Dual-source loading (old config still works, new config wins when present), deprecation log warnings, backward compat via fallback struct, phased rollout — v1.3.0 vms.toml→chain.toml `[management]` |
+| TOML config design patterns | 4 | Struct backfill defaults, tri-state `*bool`, soft migration (dual-source loading with precedence), vms-to-chain consolidation pattern, deprecation warnings, backward compat strategy — applied in v1.3.0 chain.toml redesign; **v1.4.0**: `[[host]]` array-of-tables with `[host.ping]` scoped subtable (valid TOML v1.0; Go struct `[]InfraHost{Ping HostPing}`); `tree_name`↔`tree` explicit join key (replaces slug-matching hack); `config/services/nodes/*.toml` scanner pattern (filename = label only, not config key) |
+| Soft migration patterns | 4 | Dual-source loading (old config still works, new config wins when present), deprecation log warnings, backward compat via fallback struct, phased rollout — v1.3.0 vms.toml→chain.toml `[management]`; **v1.4.0 P1–P6 restructure**: sample files first → loaders → dashboard tree-join → infra restructure → deprecate → remove |
 
 ---
 
@@ -480,4 +480,4 @@ Strategic Thinking:   ████████████         3/4    (RICE/
 ---
 
 *Skills are living documentation. Update this file when capabilities change or new domains are acquired.*
-*Last updated: 2026-03-07 (rev17: §19 Binary Consolidation NEW (multi-binary, go:embed, CLI trees, module lifecycle); §20 Strategic Product Thinking NEW (RICE/ICE, tech debt, build/buy, MVP, North Star); §14 Dashboard JS debugging 3→4 + JSON nil-vs-empty 4 added; §16 TOML config design 4 + soft migration 4 added; §18 check-host.net probe 4 + SSH VM metrics 4 added; capability index updated: Web GUI 3→3.5, Infra Deploy 3→3.5, Binary Consolidation 3 NEW, Strategic Thinking 3 NEW)*
+*Last updated: 2026-03-XX (rev20: §16 TOML config design updated — `[[host]]` array-of-tables + `[host.ping]` subtable scoping, tree-join pattern, v1.4.0 restructure P1–P6 migration path; Config architecture depth note expanded; §18 Config architecture row updated with restructure knowledge)*

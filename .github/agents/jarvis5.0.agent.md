@@ -48,6 +48,7 @@ performance claim is benchmarked, every recommendation is trade-off-aware.
 - Standard library mastery: `net/http`, `net/http/httputil`, `crypto/tls`, `compress/gzip`, `sync`, `context`, `io`, `encoding`, `testing`
 - **vProxWeb module** (`internal/webserver/`): embedded HTTP/HTTPS server with SNI TLS, gzip, CORS, reverse proxy, static files, per-host TOML config
 - **Config layout** (v1.3.0): `config/webservice.toml` (enable + server), `config/vhosts/*.toml` (per-vhost flat TOML), `config/chains/*.toml` (per-chain; `[management]` + `[management.ping]` + `chain_id` + `explorer_base`), `config/backup/backup.toml`, `config/ports.toml`, `config/infra/<datacenter>.toml` (VM inventory, all `*.toml` scanned), `config/fleet/settings.toml` (SSH defaults + poll interval — replaces deprecated `config/push/vms.toml`)
+- **Config layout** (v1.4.0 — PLANNED, design in `.vscode/restruct/PLAN.md`): Three-way split: (1) `config/chains/<chain>.sample` — identity only (`chain_id`, `tree_name`, `dashboard_name`, `network_type`; no proxy/service fields); (2) `config/services/nodes/<valoper_or_hostname>.toml` — per-node proxy + management config (host, ip, expose, services, ports, ws, features, logging, `[management]`, `[validator]`; uses `tree = "<tree_name>"` as join key to ChainIdentity); (3) `config/modules/infra/<datacenter>.toml` — physical host registry using `[[host]]` TOML array-of-tables (each `[[host]]` may have `[host.ping]` subtable; Go struct: `[]InfraHost{Ping HostPing}`). Tree-join algorithm: `ServiceNode.tree == ChainIdentity.tree_name` replaces the `deriveChainBase()` slug-matching hack permanently. `config/services/nodes/` scanner replaces `registered_chains` SQLite table — `pollAll()` iterates `[]ServiceNode` directly. Migration: P1 sample files → P2 loaders → P3 dashboard tree-join → P4 infra restructure → P5 deprecate old chain.toml proxy sections → P6 remove.
 - **Config priority**: TOML files take precedence over `.env`; `.env` is for deployment secrets and overrides only
 - **Config architecture** (P4 planned): `vprox.toml` (proxy/logger settings)
 - **CLI commands** (shipped): `start`, `stop`, `restart`, `webserver new|list|validate|remove`
@@ -65,9 +66,12 @@ performance claim is benchmarked, every recommendation is trade-off-aware.
 - **SSH key**: dedicated fleet→VM key; `key_path` in `config/fleet/settings.toml [ssh]` section; sudoers NOPASSWD on VMs for script execution
 - **Script path**: `~/vProx/scripts/chains/{chain}/{component}/{script}.sh` (VMs clone vProx)
 - **API routes**: `GET /api/v1/fleet/vms`, `GET /api/v1/fleet/chains`, `POST /api/v1/fleet/deploy`, `GET /api/v1/fleet/deployments`, `POST /api/v1/fleet/chains/registered`, `DELETE /api/v1/fleet/chains/registered/{chain}`
-- **CLI**: `vprox fleet [hosts|vms|deploy|update]`
-- **Config structs**: `FleetConfig` (was `PushConfig`), `FleetDefaults` (was `PushDefaults`) in `internal/vlog/config/config.go`
-- **Dashboard**: Deploy Wizard + Chain Status Table panels on vLog dashboard
+- **CLI**: `vprox fleet [hosts|vms|deploy|update|chains|unregister]` — `chains` lists registered chains; `unregister <chain>` removes by name from SQLite
+- **Config structs**: `FleetConfig` (was `PushConfig`), `FleetDefaults` (was `FleetDefaults`) in `internal/vlog/config/config.go`
+- **Dashboard**: Deploy Wizard + Chain Status Table panels on vLog dashboard; **chain delete** moved out of dashboard → `vprox fleet unregister` CLI only (Settings page deferred)
+- **Pending bugs** (from code review of `e52eaf1`): (1) `openFleetDB()` in `cmd/vprox/fleet.go` hardcodes `data/push.db` — HIGH: must load `cfg.VLog.Push.DBPath` from vlog config; (2) `RemoveRegisteredChain()` in `internal/fleet/state/state.go` discards `RowsAffected()` — MEDIUM: silent success on mistyped chain name; fix: check rows affected, return `ErrNotFound` when 0
+- **Chain dedup fix** (commit `fe5207e`): Added `chainBaseSlug(s string) string` (strips from first `-` or `_`); `FindVMForChain(slug string)` tries exact name, exact ChainName, base-slug match against both — eliminates double-rendering of `"cheqd-testnet"` (SQLite) vs `"cheqd"` (VM); `pollAll()` uses `FindVMForChain` instead of `FindVM`
+- **HTTP 405 delete workaround** (commit `fe5207e`): Apache `mod_proxy` blocks HTTP DELETE → 405; fleet delete uses POST alias; JS changed from `method:'DELETE'` to `method:'POST'` for all fleet delete calls
 
 ### vLog (module — `vLog1.3.0` branch, active)
 - **Binary**: standalone `vLog` — mirrors vProx architecture (single binary, embedded HTTP server, Apache-proxied)

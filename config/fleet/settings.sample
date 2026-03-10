@@ -1,6 +1,6 @@
 # vProx Fleet Control Settings
 # Copy to settings.toml and configure before using the fleet module.
-# rev: r3_030826_0
+# rev: {{SAMPLE_REV}}
 
 # ── SSH defaults ──────────────────────────────────────────────────────────────
 # These apply to all VMs unless overridden in config/infra/<datacenter>.toml

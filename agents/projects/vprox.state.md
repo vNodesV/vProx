@@ -1742,3 +1742,65 @@ config/dash/dashboard.toml       ← Dashboard config
 - `infra-toml-update` — Add `[[vps]]` sections to `infra.sample`
 - `vm-build-verify` — End-to-end build + deploy verify
 - `sample-rev-bump` — Bump SAMPLE_REV after all redesigns complete
+
+---
+
+## Session: 2026-03-XX — vLog1.3.0: chain dedup + fleet CLI + restructure design
+
+### Active Branch
+`vLog_v1.3.0` — HEAD: `e52eaf1`
+
+### Recent Commits
+```
+e52eaf1  feat(fleet): add CLI chain unregister + remove dashboard remove button
+fe5207e  fix: chain status duplication + delete 405
+```
+
+### Completed This Session
+
+#### Chain Status Duplication Fix (commit `fe5207e`)
+- **Root cause**: `pollAll()` used `FindVM(rc.Chain)` with exact string match → `"cheqd-testnet"` (SQLite) ≠ `"cheqd"` (VM.Name) → both polled → two `ChainStatus` entries → dashboard `deriveChainBase()` grouped both under same tree
+- **Fix**: Added `chainBaseSlug(s string) string` (strips from first `-` or `_`) and `FindVMForChain(slug string)` (tries exact name, exact ChainName, base-slug on both) in `internal/fleet/config/config.go`
+- `pollAll()` in `internal/fleet/push.go` now uses `FindVMForChain` instead of `FindVM`
+
+#### HTTP 405 Chain Delete Fix (commit `fe5207e`)
+- **Root cause**: Apache `mod_proxy` blocks HTTP DELETE → 405
+- **Fix**: POST alias already registered server-side; JS changed from `method:'DELETE'` to `method:'POST'`
+
+#### Fleet CLI: chains + unregister (commit `e52eaf1`)
+- Added `vprox fleet chains` (lists registered chains from SQLite) + `vprox fleet unregister <chain>` (removes by name) to `cmd/vprox/fleet.go`
+- Removed "Remove" button column from Chain Services table in `dashboard.html`
+- Removed `/api/v1/fleet/chains/registered` fetch from `loadChainStatus` Promise.all
+- Commented out `removeChain()` JS — stub for future Settings page
+
+#### Code Review Findings (from `reviewer` agent — fixes PENDING)
+| Severity | Location | Issue |
+|----------|----------|-------|
+| HIGH | `cmd/vprox/fleet.go` `openFleetDB()` | Hardcodes `data/push.db` — must read `cfg.VLog.Push.DBPath` from vlog config |
+| MEDIUM | `internal/fleet/state/state.go` `RemoveRegisteredChain` | Discards `RowsAffected()` — silent success on mistyped chain name; need `ErrNotFound` sentinel |
+
+#### Restructure Design — `.vscode/restruct/` (10 files created)
+- `PLAN.md` — full design doc: problem, directory structure, 6 decisions, data flow, migration P1–P6, todos
+- `chain.sample` — identity-only (schema_version=3, `tree_name`, no proxy/service)
+- `service.sample` — per-node proxy + management (valoper-named, `tree` join key)
+- `infra-settings.sample` — corrected `[[host]]` array-of-tables with `[host.ping]` subtables
+- `infra-host.sample`, `infra-vps.sample` — host VMs + standalone VPS
+- `vprox-settings.sample`, `fleet-settings.sample`, `backup-settings.sample`, `vlog-settings.sample` — module configs (API keys scrubbed)
+
+### Config Duplication Diagnosed (user's live config)
+- `chain.toml` `[management]` with `managed_host=true` AND `infra.toml` `[[vm]]` both produce entries for cheqd
+- Tree rendering: VM from infra.toml + VM from chain.toml management → renders twice under same tree base
+- Long-term fix: v1.4.0 restructure (one canonical service file per node)
+- Short-term: already fixed via `FindVMForChain` dedup
+
+### Open v1.3.0 Todos
+- `fix-openfleetdb-path` — HIGH: load `cfg.VLog.Push.DBPath` in `openFleetDB()` instead of hardcoded `data/push.db`
+- `fix-removeregisteredchain-rowsaffected` — MEDIUM: check `RowsAffected()`, return `ErrNotFound` when 0
+- `chain-toml-redesign` — Redesign `chain.sample` with cosmos.directory schema
+- `cosmos-dir-client` — cosmos.directory auto-import client
+- `infra-toml-update` — Add `[[vps]]` sections to infra.sample
+- `vm-build-verify` — End-to-end build + deploy verify
+
+### Patterns Established
+- **`chainBaseSlug`**: fuzzy chain-name dedup for legacy SQLite `registered_chains` (temporary; permanent fix = tree-join in v1.4.0)
+- **Apache DELETE block**: always use POST for fleet mutations; JS client must match

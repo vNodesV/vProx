@@ -27,7 +27,7 @@ DIR_LIST := $(DATA_DIR) $(LOG_DIR) $(CFG_DIR) $(CFG_DIR)/chains $(CFG_DIR)/backu
 # Sample file revision — format: r{major}_{MMDDYY}_{seq}
 # Increment {seq} for multiple revisions on the same day; reset to 0 on new date.
 # Injected into the "# rev: {{SAMPLE_REV}}" placeholder in every .sample file at install/refresh time.
-SAMPLE_REV := r3_030826_0
+SAMPLE_REV := r3_031026_0
 
 # GeoLocation database — bundled in assets/geo/, extracted to user data dir
 GEO_DB_SRC := assets/geo/ip2location.mmdb.gz

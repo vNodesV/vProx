@@ -101,6 +101,15 @@ func loadChains(dir string) error {
 	if err != nil {
 		return err
 	}
+
+	type chainEntry struct {
+		name string
+		slug string // cosmos.directory slug; empty = no enrichment
+		cfg  config.ChainConfig
+	}
+
+	// Pass 1: decode + validate all chain configs.
+	var parsed []chainEntry
 	for _, entry := range entries {
 		name := entry.Name()
 		if entry.IsDir() || !config.IsChainTOML(name) {
@@ -112,79 +121,97 @@ func loadChains(dir string) error {
 			return err
 		}
 		var c config.ChainConfig
-		if err := toml.NewDecoder(f).Decode(&c); err != nil {
-			f.Close()
-			return fmt.Errorf("decode %s: %w", entry.Name(), err)
-		}
+		decErr := toml.NewDecoder(f).Decode(&c)
 		f.Close()
-
+		if decErr != nil {
+			return fmt.Errorf("decode %s: %w", name, decErr)
+		}
 		if err := config.ValidateConfig(&c); err != nil {
-			return fmt.Errorf("%s: %w", entry.Name(), err)
+			return fmt.Errorf("%s: %w", name, err)
 		}
 
-		// Auto-enrich from cosmos.directory when chain_id is set.
-		// Only empty fields are filled — local config always wins.
+		slug := ""
 		if c.ChainID != "" {
-			slug := c.ChainName
+			slug = c.ChainName
 			if slug == "" {
-				// Derive slug from chain_id: "cheqd-mainnet-1" → "cheqd"
 				slug = strings.SplitN(c.ChainID, "-", 2)[0]
 			}
-			cosmos.Enrich(slug, &c.DashboardName, &c.NetworkType, &c.RecommendedVersion, &c.Explorers)
 		}
+		parsed = append(parsed, chainEntry{name: name, slug: slug, cfg: c})
+	}
 
-		base := c.Host // already normalized
+	// Pass 2: parallel cosmos.directory enrichment (only empty fields filled; non-fatal).
+	// Running concurrently avoids blocking startup by N × httpTimeout when chain_id is set.
+	if len(parsed) > 0 {
+		var wg sync.WaitGroup
+		for i := range parsed {
+			if parsed[i].slug == "" {
+				continue
+			}
+			wg.Add(1)
+			go func(e *chainEntry) {
+				defer wg.Done()
+				cosmos.Enrich(e.slug, &e.cfg.DashboardName, &e.cfg.NetworkType, &e.cfg.RecommendedVersion, &e.cfg.Explorers)
+			}(&parsed[i])
+		}
+		wg.Wait()
+	}
+
+	// Pass 3: register all chains.
+	for i := range parsed {
+		name := parsed[i].name
+		c := &parsed[i].cfg
+
 		// normalize alias lists
-		for i, a := range c.RPCAliases {
-			c.RPCAliases[i] = strings.ToLower(strings.TrimSpace(a))
+		for j, a := range c.RPCAliases {
+			c.RPCAliases[j] = strings.ToLower(strings.TrimSpace(a))
 		}
-		for i, a := range c.RESTAliases {
-			c.RESTAliases[i] = strings.ToLower(strings.TrimSpace(a))
+		for j, a := range c.RESTAliases {
+			c.RESTAliases[j] = strings.ToLower(strings.TrimSpace(a))
 		}
-		for i, a := range c.APIAliases {
-			c.APIAliases[i] = strings.ToLower(strings.TrimSpace(a))
-		}
-
-		// register base host
-		if err := registerHost(base, &c); err != nil {
-			return fmt.Errorf("%s: %w", entry.Name(), err)
+		for j, a := range c.APIAliases {
+			c.APIAliases[j] = strings.ToLower(strings.TrimSpace(a))
 		}
 
-		// register standard vhosts (rpc.<base>, <rest|api>.<base>) when enabled
+		base := c.Host
+		if err := registerHost(base, c); err != nil {
+			return fmt.Errorf("%s: %w", name, err)
+		}
+
 		if c.Expose.VHost {
 			rp := c.Expose.VHostPrefix.RPC
 			ap := c.Expose.VHostPrefix.REST
-			if err := registerHost(rp+"."+base, &c); err != nil {
-				return fmt.Errorf("%s: %w", entry.Name(), err)
+			if err := registerHost(rp+"."+base, c); err != nil {
+				return fmt.Errorf("%s: %w", name, err)
 			}
-			if err := registerHost(ap+"."+base, &c); err != nil {
-				return fmt.Errorf("%s: %w", entry.Name(), err)
+			if err := registerHost(ap+"."+base, c); err != nil {
+				return fmt.Errorf("%s: %w", name, err)
 			}
 		}
 
-		// register explicit alias hosts (active only when expose.vhost = true)
 		for _, h := range c.RPCAliases {
 			if h != "" {
-				if err := registerHost(h, &c); err != nil {
-					return fmt.Errorf("%s: %w", entry.Name(), err)
+				if err := registerHost(h, c); err != nil {
+					return fmt.Errorf("%s: %w", name, err)
 				}
 			}
 		}
 		for _, h := range c.RESTAliases {
 			if h != "" {
-				if err := registerHost(h, &c); err != nil {
-					return fmt.Errorf("%s: %w", entry.Name(), err)
+				if err := registerHost(h, c); err != nil {
+					return fmt.Errorf("%s: %w", name, err)
 				}
 			}
 		}
 		for _, h := range c.APIAliases {
 			if h != "" {
-				if err := registerHost(h, &c); err != nil {
-					return fmt.Errorf("%s: %w", entry.Name(), err)
+				if err := registerHost(h, c); err != nil {
+					return fmt.Errorf("%s: %w", name, err)
 				}
 			}
 		}
 	}
+
 	if len(chains) == 0 {
 		return errors.New("no chain configs found in " + dir)
 	}

@@ -355,9 +355,11 @@
 | Resource | URL | Notes |
 |----------|-----|-------|
 | TOML spec | https://toml.io/en | TOML language specification |
-| go-toml v2 | https://github.com/pelletier/go-toml | Marshaling/unmarshaling |
+| TOML array-of-tables | https://toml.io/en/v1.0.0#array-of-tables | `[[host]]` syntax; subtable `[host.ping]` after `[[host]]` scopes to current array element — valid TOML v1.0 |
+| go-toml v2 | https://github.com/pelletier/go-toml | Marshaling/unmarshaling; `[[host]]` → Go `[]InfraHost` tagged `toml:"host"` |
 | Apache mod_proxy | https://httpd.apache.org/docs/2.4/mod/mod_proxy.html | Apache proxy directives (import source) |
 | Apache VirtualHost | https://httpd.apache.org/docs/2.4/vhosts | VirtualHost configuration reference |
+| Restruct design folder | `.vscode/restruct/PLAN.md` | v1.4.0 config restructure — chain identity / service node / infra split; tree-join algorithm; migration path P1–P6; implementation todos |
 
 ---
 
@@ -649,4 +651,4 @@ resources infra       → Section 17 (SSH, VM registry, chain upgrade, circuit b
 
 ---
 
-*Last updated: 2026-03-07 (rev17: §18 MCP Server Ecosystem NEW — filesystem, SQLite, memory, sequential-thinking, git, Playwright, Brave Search servers; §19 Binary Consolidation & CLI Design NEW — goreleaser, cobra, cmd/ layout, go:embed patterns; §20 Strategic Product Thinking NEW — RICE/ICE, tech debt, build/buy, MVP frameworks; Quick Domain Lookup updated)*
+*Last updated: 2026-03-XX (rev20: §16 Config Architecture — TOML array-of-tables spec added (`[[host]]` + `[host.ping]` scoping), go-toml v2 array struct mapping; Restruct design folder reference added (`.vscode/restruct/PLAN.md`))*
