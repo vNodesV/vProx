@@ -28,7 +28,7 @@ DIR_LIST := $(DATA_DIR) $(LOG_DIR) $(CFG_DIR) $(CFG_DIR)/chains $(CFG_DIR)/backu
 # Sample file revision — format: r{major}_{MMDDYY}_{seq}
 # Increment {seq} for multiple revisions on the same day; reset to 0 on new date.
 # Injected into the "# rev: {{SAMPLE_REV}}" placeholder in every .sample file at install/refresh time.
-SAMPLE_REV := r4_031126_0
+SAMPLE_REV := r5_031126_0
 
 # GeoLocation database — bundled in assets/geo/, extracted to user data dir
 GEO_DB_SRC := assets/geo/ip2location.mmdb.gz
@@ -149,11 +149,11 @@ env:
 config: dirs config-modules
 	@if [[ ! -f "$(CFG_DIR)/chains/services.toml" && ! -f "$(CFG_DIR)/chains/ports.toml" && ! -f "$(CFG_DIR)/ports.toml" ]]; then \
 		echo "Creating default services.toml..."; \
-		if [[ -f "config/samples/chains/services.sample" ]]; then \
-			sed "s/{{SAMPLE_REV}}/$(SAMPLE_REV)/" "config/samples/chains/services.sample" > "$(CFG_DIR)/chains/services.toml"; \
+		if [[ -f ".samples/chains/services.sample" ]]; then \
+			sed "s/{{SAMPLE_REV}}/$(SAMPLE_REV)/" ".samples/chains/services.sample" > "$(CFG_DIR)/chains/services.toml"; \
 			echo "✓ Installed services.toml → $(CFG_DIR)/chains/services.toml"; \
-		elif [[ -f "config/samples/chains/ports.sample" ]]; then \
-			sed "s/{{SAMPLE_REV}}/$(SAMPLE_REV)/" "config/samples/chains/ports.sample" > "$(CFG_DIR)/chains/ports.toml"; \
+		elif [[ -f ".samples/chains/ports.sample" ]]; then \
+			sed "s/{{SAMPLE_REV}}/$(SAMPLE_REV)/" ".samples/chains/ports.sample" > "$(CFG_DIR)/chains/ports.toml"; \
 			echo "✓ Installed ports.toml → $(CFG_DIR)/chains/ports.toml (legacy fallback)"; \
 		else \
 			{ \
@@ -170,11 +170,11 @@ config: dirs config-modules
 		echo "✓ Port/service config already exists (services.toml or ports.toml)"; \
 	fi
 	@if [[ ! -f "$(CFG_DIR)/backup/backup.toml" ]]; then \
-		if [[ -f "config/samples/backup/backup.sample" ]]; then \
-			sed "s/{{SAMPLE_REV}}/$(SAMPLE_REV)/" "config/samples/backup/backup.sample" > "$(CFG_DIR)/backup/backup.toml"; \
+		if [[ -f ".samples/backup/backup.sample" ]]; then \
+			sed "s/{{SAMPLE_REV}}/$(SAMPLE_REV)/" ".samples/backup/backup.sample" > "$(CFG_DIR)/backup/backup.toml"; \
 			echo "✓ Installed backup.toml → $(CFG_DIR)/backup/backup.toml"; \
 		else \
-			echo "NOTE: config/samples/backup/backup.sample not found; skipping backup.toml install"; \
+			echo "NOTE: .samples/backup/backup.sample not found; skipping backup.toml install"; \
 		fi \
 	else \
 		echo "✓ $(CFG_DIR)/backup/backup.toml already exists"; \
@@ -184,8 +184,8 @@ config: dirs config-modules
 
 config-vprox: dirs
 	@mkdir -p "$(CFG_DIR)/vprox"
-	@if [[ -f "config/samples/vprox/settings.sample" ]]; then \
-		sed "s/{{SAMPLE_REV}}/$(SAMPLE_REV)/" "config/samples/vprox/settings.sample" > "$(CFG_DIR)/vprox/settings.sample"; \
+	@if [[ -f ".samples/vprox/settings.sample" ]]; then \
+		sed "s/{{SAMPLE_REV}}/$(SAMPLE_REV)/" ".samples/vprox/settings.sample" > "$(CFG_DIR)/vprox/settings.sample"; \
 		echo "✓ Installed proxy settings sample → $(CFG_DIR)/vprox/settings.sample"; \
 		if [[ ! -f "$(CFG_DIR)/vprox/settings.toml" ]]; then \
 			echo "  Copy to activate: cp $(CFG_DIR)/vprox/settings.sample $(CFG_DIR)/vprox/settings.toml"; \
@@ -193,7 +193,7 @@ config-vprox: dirs
 			echo "✓ $(CFG_DIR)/vprox/settings.toml already exists"; \
 		fi \
 	else \
-		echo "NOTE: config/samples/vprox/settings.sample not found in repo; skipping"; \
+		echo "NOTE: .samples/vprox/settings.sample not found in repo; skipping"; \
 	fi
 
 ## Overwrite ALL sample files in CFG_DIR/samples/ — safe to run anytime; never touches live config.
@@ -218,16 +218,16 @@ samples-fleet:
 		fi; \
 	}; \
 	_copy() { sed "s/{{SAMPLE_REV}}/$$_rev/" "$$1" > "$$2" && echo "✓ $$2  [$$_rev]"; }; \
-	_archive "$(CFG_DIR)/samples/vlog/vlog.sample"          "vlog";         _copy "config/samples/vlog/vlog.sample"              "$(CFG_DIR)/samples/vlog/vlog.sample"; \
-	_archive "$(CFG_DIR)/samples/chains/chain.sample"       "chains";       _copy "config/samples/chains/chain.sample"           "$(CFG_DIR)/samples/chains/chain.sample"; \
-	_archive "$(CFG_DIR)/samples/chains/ports.sample"       "chains";       _copy "config/samples/chains/ports.sample"           "$(CFG_DIR)/samples/chains/ports.sample"; \
-	_archive "$(CFG_DIR)/samples/chains/services.sample"    "chains";       _copy "config/samples/chains/services.sample"        "$(CFG_DIR)/samples/chains/services.sample"; \
-	_archive "$(CFG_DIR)/samples/backup/backup.sample"      "backup";       _copy "config/samples/backup/backup.sample"          "$(CFG_DIR)/samples/backup/backup.sample"; \
-	_archive "$(CFG_DIR)/samples/infra/infra.sample"        "infra";        _copy "config/samples/infra/infra.sample"            "$(CFG_DIR)/samples/infra/infra.sample"; \
-	_archive "$(CFG_DIR)/samples/vprox/settings.sample"     "vprox";        _copy "config/samples/vprox/settings.sample"         "$(CFG_DIR)/samples/vprox/settings.sample"; \
-	_archive "$(CFG_DIR)/samples/fleet/settings.sample"     "fleet";        _copy "config/samples/fleet/settings.sample"         "$(CFG_DIR)/samples/fleet/settings.sample"; \
-	_archive "$(CFG_DIR)/samples/vprox/nodes/vprox-node.sample" "vprox/nodes"; _copy "config/samples/vprox/nodes/vprox-node.sample" "$(CFG_DIR)/samples/vprox/nodes/vprox-node.sample"; \
-	_archive "$(CFG_DIR)/samples/vlog/chains/vlog-chain.sample" "vlog/chains"; _copy "config/samples/vlog/chains/vlog-chain.sample" "$(CFG_DIR)/samples/vlog/chains/vlog-chain.sample"
+	_archive "$(CFG_DIR)/samples/vlog/vlog.sample"          "vlog";         _copy ".samples/vlog/vlog.sample"              "$(CFG_DIR)/samples/vlog/vlog.sample"; \
+	_archive "$(CFG_DIR)/samples/chains/chain.sample"       "chains";       _copy ".samples/chains/chain.sample"           "$(CFG_DIR)/samples/chains/chain.sample"; \
+	_archive "$(CFG_DIR)/samples/chains/ports.sample"       "chains";       _copy ".samples/chains/ports.sample"           "$(CFG_DIR)/samples/chains/ports.sample"; \
+	_archive "$(CFG_DIR)/samples/chains/services.sample"    "chains";       _copy ".samples/chains/services.sample"        "$(CFG_DIR)/samples/chains/services.sample"; \
+	_archive "$(CFG_DIR)/samples/backup/backup.sample"      "backup";       _copy ".samples/backup/backup.sample"          "$(CFG_DIR)/samples/backup/backup.sample"; \
+	_archive "$(CFG_DIR)/samples/infra/infra.sample"        "infra";        _copy ".samples/infra/infra.sample"            "$(CFG_DIR)/samples/infra/infra.sample"; \
+	_archive "$(CFG_DIR)/samples/vprox/settings.sample"     "vprox";        _copy ".samples/vprox/settings.sample"         "$(CFG_DIR)/samples/vprox/settings.sample"; \
+	_archive "$(CFG_DIR)/samples/fleet/settings.sample"     "fleet";        _copy ".samples/fleet/settings.sample"         "$(CFG_DIR)/samples/fleet/settings.sample"; \
+	_archive "$(CFG_DIR)/samples/vprox/nodes/vprox-node.sample" "vprox/nodes"; _copy ".samples/vprox/nodes/vprox-node.sample" "$(CFG_DIR)/samples/vprox/nodes/vprox-node.sample"; \
+	_archive "$(CFG_DIR)/samples/vlog/chains/vlog-chain.sample" "vlog/chains"; _copy ".samples/vlog/chains/vlog-chain.sample" "$(CFG_DIR)/samples/vlog/chains/vlog-chain.sample"
 	@echo "Done. Samples refreshed — $(SAMPLE_REV). See $(CFG_DIR)/samples/"
 
 ## Install modules registry stub
@@ -388,14 +388,14 @@ build-vlog:
 	@echo "✓ Build complete"
 	@echo "  Output: $(VLOG_BUILD)"
 
-## Install config/samples/vlog/vlog.sample → ~/.vProx/config/vlog/vlog.toml (only if absent)
+## Install .samples/vlog/vlog.sample → ~/.vProx/config/vlog/vlog.toml (only if absent)
 
 config-vlog: dirs
 	@echo "Installing vLog config..."
 	@mkdir -p "$(CFG_DIR)/vlog"
-	@if [[ -f "config/samples/vlog/vlog.sample" ]]; then \
+	@if [[ -f ".samples/vlog/vlog.sample" ]]; then \
 		if [[ ! -f "$(CFG_DIR)/vlog/vlog.toml" ]]; then \
-			cp "config/samples/vlog/vlog.sample" "$(CFG_DIR)/vlog/vlog.toml"; \
+			cp ".samples/vlog/vlog.sample" "$(CFG_DIR)/vlog/vlog.toml"; \
 			echo "✓ Copied vlog.sample to $(CFG_DIR)/vlog/vlog.toml"; \
 			echo "  Edit $(CFG_DIR)/vlog/vlog.toml to set your API keys."; \
 		else \
@@ -430,7 +430,7 @@ config-vlog: dirs
 			fi; \
 		fi; \
 	else \
-		echo "WARNING: config/samples/vlog/vlog.sample not found in repo"; \
+		echo "WARNING: .samples/vlog/vlog.sample not found in repo"; \
 	fi
 
 ## Create and optionally install vLog systemd service

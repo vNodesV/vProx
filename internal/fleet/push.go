@@ -150,7 +150,12 @@ func (s *Service) pollAll(ctx context.Context) {
 				st.LanPingMs = status.PingLanIP(ctx, vm.LanIP)
 			}
 			if vm.Valoper != "" {
+				st.HasValidator = true
 				st.ValParticipation = status.PollValParticipation(ctx, vm.REST(), vm.Valoper)
+				vs := status.PollValidatorStatus(ctx, vm.REST(), vm.Valoper)
+				st.ValBonded = vs.Bonded
+				st.ValJailed = vs.Jailed
+				st.ValMissedBlocks = vs.MissedBlocks
 			}
 			s.mu.Lock()
 			s.statuses[vm.Name] = st

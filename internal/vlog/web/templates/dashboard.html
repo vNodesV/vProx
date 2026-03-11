@@ -489,6 +489,23 @@
       var participation = c.val_participation
         ? '<span style="font-variant-numeric:tabular-nums;font-size:.72rem">' + escH(c.val_participation) + '</span>'
         : '<span style="opacity:.3">—</span>';
+
+      // Validator on-chain status cells (only when has_validator is set)
+      var valActive = '<span style="opacity:.3">—</span>';
+      var valJailed = '<span style="opacity:.3">—</span>';
+      var valMissed = '<span style="opacity:.3">—</span>';
+      if (c.has_validator) {
+        valActive = c.val_bonded
+          ? '<span style="color:#4caf50;font-size:.8rem" title="In active bonded set">✓</span>'
+          : '<span style="color:#ef5350;font-size:.8rem" title="Not in active set">✗</span>';
+        valJailed = c.val_jailed
+          ? '<span style="color:#ef5350;font-size:.72rem;font-weight:600">JAILED</span>'
+          : '<span style="color:#4caf50;font-size:.72rem;opacity:.7">OK</span>';
+        valMissed = '<span style="font-variant-numeric:tabular-nums;font-size:.72rem' +
+          (c.val_missed_blocks > 0 ? ';color:#ffa726;font-weight:600' : ';opacity:.65') + '">' +
+          Number(c.val_missed_blocks).toLocaleString() + '</span>';
+      }
+
       var indentPfx = isChild ? 'padding-left:.9rem;' : '';
       var monikerPfx = isChild ? '<span style="opacity:.3;font-size:.65rem;margin-right:.25rem">└</span>' : '';
       var monikerContent = monikerPfx + escH(c.dashboard_name || c.moniker || c.chain) + netBadge(isChild ? c.network_type : null);
@@ -505,6 +522,9 @@
         row += '<td style="' + tdNum + ';font-size:.7rem">' + votingEnds + '</td>';
         row += '<td style="' + tdStyle + '">' + upg + '</td>';
         row += '<td style="' + tdStyle + '">' + participation + '</td>';
+        row += '<td style="' + tdStyle + ';border-left:1px solid var(--vn-border);text-align:center">' + valActive + '</td>';
+        row += '<td style="' + tdStyle + ';text-align:center">' + valJailed + '</td>';
+        row += '<td style="' + tdNum + '">' + valMissed + '</td>';
       }
       row +=
         '<td style="' + tdStyle + ';border-left:1px solid var(--vn-border)">' + lanPingCell(c.lan_ping_ms) + '</td>' +
@@ -558,6 +578,7 @@
         headerRow += '<td style="' + tdNum + ';opacity:.3">—</td>';
         headerRow += '<td style="' + tdStyle + ';opacity:.3">—</td>';
         headerRow += '<td colspan="4" style="' + tdStyle + ';opacity:.3;border-left:1px solid var(--vn-border)"></td>';
+        headerRow += '<td colspan="3" style="' + tdStyle + ';opacity:.3;border-left:1px solid var(--vn-border)"></td>';
       }
       headerRow += '<td style="' + tdStyle + ';border-left:1px solid var(--vn-border)"></td></tr>';
 
@@ -572,6 +593,7 @@
       '<th colspan="' + chainInfoCols + '" style="' + catStyle + '">Services Statistics</th>';
     if (ex) {
       catRow += '<th colspan="4" style="' + catStyle + ';border-left:1px solid var(--vn-border)">Governance</th>';
+      catRow += '<th colspan="3" style="' + catStyle + ';border-left:1px solid var(--vn-border)">Validator</th>';
     }
     catRow +=
       '<th style="' + catStyle + ';border-left:1px solid var(--vn-border)">Ping</th></tr>';
@@ -588,6 +610,9 @@
       colRow += '<th style="' + thStyle + '">Voting Ends</th>';
       colRow += '<th style="' + thStyle + '">Upgrade</th>';
       colRow += '<th style="' + thStyle + '">Participation</th>';
+      colRow += '<th style="' + thStyle + ';border-left:1px solid var(--vn-border);text-align:center">Active</th>';
+      colRow += '<th style="' + thStyle + ';text-align:center">Jailed</th>';
+      colRow += '<th style="' + thStyle + '">Missed</th>';
     }
     colRow +=
       '<th style="' + thStyle + ';border-left:1px solid var(--vn-border)">Ping</th></tr>';
