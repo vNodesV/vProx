@@ -20,10 +20,14 @@ SERVICE_DIR := $(VPROX_HOME)/service
 SERVICE_PATH := $(SERVICE_DIR)/vProx.service
 VLOG_SERVICE := $(SERVICE_DIR)/vLog.service
 GEO_DIR := $(DATA_DIR)/geolocation
+SAMPLES_DIR := $(VPROX_HOME)/.samples
 DIR_LIST := $(DATA_DIR) $(LOG_DIR) $(CFG_DIR) $(CFG_DIR)/chains $(CFG_DIR)/backup \
             $(CFG_DIR)/vlog $(CFG_DIR)/infra $(CFG_DIR)/vprox $(CFG_DIR)/fleet \
             $(CFG_DIR)/vprox/nodes $(CFG_DIR)/vlog/chains \
-            $(INTERNAL_DIR) $(ARCHIVE_DIR) $(SERVICE_DIR) $(GEO_DIR)
+            $(INTERNAL_DIR) $(ARCHIVE_DIR) $(SERVICE_DIR) $(GEO_DIR) \
+            $(SAMPLES_DIR) $(SAMPLES_DIR)/chains $(SAMPLES_DIR)/backup \
+            $(SAMPLES_DIR)/vlog $(SAMPLES_DIR)/infra $(SAMPLES_DIR)/fleet \
+            $(SAMPLES_DIR)/vprox $(SAMPLES_DIR)/vprox/nodes $(SAMPLES_DIR)/vlog/chains
 
 # Sample file revision — format: r{major}_{MMDDYY}_{seq}
 # Increment {seq} for multiple revisions on the same day; reset to 0 on new date.
@@ -196,39 +200,39 @@ config-vprox: dirs
 		echo "NOTE: .samples/vprox/settings.sample not found in repo; skipping"; \
 	fi
 
-## Overwrite ALL sample files in CFG_DIR/samples/ — safe to run anytime; never touches live config.
-## When a sample already exists, it is archived to CFG_DIR/samples/archives/<old_rev>/<subfolder>/
+## Overwrite ALL sample files in SAMPLES_DIR (~/.vProx/.samples/) — safe to run anytime; never touches live config.
+## When a sample already exists, it is archived to SAMPLES_DIR/archives/<old_rev>/<subfolder>/
 ## before the new version is written, so every prior revision is recoverable.
 samples-fleet:
 	@mkdir -p \
-		"$(CFG_DIR)/samples/chains"       "$(CFG_DIR)/samples/backup" \
-		"$(CFG_DIR)/samples/vlog"         "$(CFG_DIR)/samples/infra" \
-		"$(CFG_DIR)/samples/fleet"        "$(CFG_DIR)/samples/vprox" \
-		"$(CFG_DIR)/samples/vprox/nodes"  "$(CFG_DIR)/samples/vlog/chains"
+		"$(SAMPLES_DIR)/chains"       "$(SAMPLES_DIR)/backup" \
+		"$(SAMPLES_DIR)/vlog"         "$(SAMPLES_DIR)/infra" \
+		"$(SAMPLES_DIR)/fleet"        "$(SAMPLES_DIR)/vprox" \
+		"$(SAMPLES_DIR)/vprox/nodes"  "$(SAMPLES_DIR)/vlog/chains"
 	@_rev="$(SAMPLE_REV)"; \
 	_archive() { \
 		local dst="$$1" sub="$$2" old_rev adir; \
 		if [[ -f "$$dst" ]]; then \
 			old_rev="$$(grep -m1 '^# rev:' "$$dst" 2>/dev/null | sed 's/.*# rev: *//' | tr -d '[:space:]')"; \
 			old_rev="$${old_rev:-unknown}"; \
-			adir="$(CFG_DIR)/samples/archives/$$old_rev/$$sub"; \
+			adir="$(SAMPLES_DIR)/archives/$$old_rev/$$sub"; \
 			mkdir -p "$$adir"; \
 			mv "$$dst" "$$adir/$$(basename "$$dst")"; \
 			echo "  ↳ archived → $$adir/$$(basename "$$dst")  [$$old_rev]"; \
 		fi; \
 	}; \
 	_copy() { sed "s/{{SAMPLE_REV}}/$$_rev/" "$$1" > "$$2" && echo "✓ $$2  [$$_rev]"; }; \
-	_archive "$(CFG_DIR)/samples/vlog/vlog.sample"          "vlog";         _copy ".samples/vlog/vlog.sample"              "$(CFG_DIR)/samples/vlog/vlog.sample"; \
-	_archive "$(CFG_DIR)/samples/chains/chain.sample"       "chains";       _copy ".samples/chains/chain.sample"           "$(CFG_DIR)/samples/chains/chain.sample"; \
-	_archive "$(CFG_DIR)/samples/chains/ports.sample"       "chains";       _copy ".samples/chains/ports.sample"           "$(CFG_DIR)/samples/chains/ports.sample"; \
-	_archive "$(CFG_DIR)/samples/chains/services.sample"    "chains";       _copy ".samples/chains/services.sample"        "$(CFG_DIR)/samples/chains/services.sample"; \
-	_archive "$(CFG_DIR)/samples/backup/backup.sample"      "backup";       _copy ".samples/backup/backup.sample"          "$(CFG_DIR)/samples/backup/backup.sample"; \
-	_archive "$(CFG_DIR)/samples/infra/infra.sample"        "infra";        _copy ".samples/infra/infra.sample"            "$(CFG_DIR)/samples/infra/infra.sample"; \
-	_archive "$(CFG_DIR)/samples/vprox/settings.sample"     "vprox";        _copy ".samples/vprox/settings.sample"         "$(CFG_DIR)/samples/vprox/settings.sample"; \
-	_archive "$(CFG_DIR)/samples/fleet/settings.sample"     "fleet";        _copy ".samples/fleet/settings.sample"         "$(CFG_DIR)/samples/fleet/settings.sample"; \
-	_archive "$(CFG_DIR)/samples/vprox/nodes/vprox-node.sample" "vprox/nodes"; _copy ".samples/vprox/nodes/vprox-node.sample" "$(CFG_DIR)/samples/vprox/nodes/vprox-node.sample"; \
-	_archive "$(CFG_DIR)/samples/vlog/chains/vlog-chain.sample" "vlog/chains"; _copy ".samples/vlog/chains/vlog-chain.sample" "$(CFG_DIR)/samples/vlog/chains/vlog-chain.sample"
-	@echo "Done. Samples refreshed — $(SAMPLE_REV). See $(CFG_DIR)/samples/"
+	_archive "$(SAMPLES_DIR)/vlog/vlog.sample"          "vlog";         _copy ".samples/vlog/vlog.sample"              "$(SAMPLES_DIR)/vlog/vlog.sample"; \
+	_archive "$(SAMPLES_DIR)/chains/chain.sample"       "chains";       _copy ".samples/chains/chain.sample"           "$(SAMPLES_DIR)/chains/chain.sample"; \
+	_archive "$(SAMPLES_DIR)/chains/ports.sample"       "chains";       _copy ".samples/chains/ports.sample"           "$(SAMPLES_DIR)/chains/ports.sample"; \
+	_archive "$(SAMPLES_DIR)/chains/services.sample"    "chains";       _copy ".samples/chains/services.sample"        "$(SAMPLES_DIR)/chains/services.sample"; \
+	_archive "$(SAMPLES_DIR)/backup/backup.sample"      "backup";       _copy ".samples/backup/backup.sample"          "$(SAMPLES_DIR)/backup/backup.sample"; \
+	_archive "$(SAMPLES_DIR)/infra/infra.sample"        "infra";        _copy ".samples/infra/infra.sample"            "$(SAMPLES_DIR)/infra/infra.sample"; \
+	_archive "$(SAMPLES_DIR)/vprox/settings.sample"     "vprox";        _copy ".samples/vprox/settings.sample"         "$(SAMPLES_DIR)/vprox/settings.sample"; \
+	_archive "$(SAMPLES_DIR)/fleet/settings.sample"     "fleet";        _copy ".samples/fleet/settings.sample"         "$(SAMPLES_DIR)/fleet/settings.sample"; \
+	_archive "$(SAMPLES_DIR)/vprox/nodes/vprox-node.sample" "vprox/nodes"; _copy ".samples/vprox/nodes/vprox-node.sample" "$(SAMPLES_DIR)/vprox/nodes/vprox-node.sample"; \
+	_archive "$(SAMPLES_DIR)/vlog/chains/vlog-chain.sample" "vlog/chains"; _copy ".samples/vlog/chains/vlog-chain.sample" "$(SAMPLES_DIR)/vlog/chains/vlog-chain.sample"
+	@echo "Done. Samples refreshed — $(SAMPLE_REV). See $(SAMPLES_DIR)/"
 
 ## Install modules registry stub
 
