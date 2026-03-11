@@ -28,6 +28,7 @@
         radial-gradient(circle at 80% 0%, rgba(0, 255, 0, 0.06), transparent 50%),
         var(--bg);
       min-height: 100vh;
+      overflow-x: hidden;
     }
 
     .wrap {
@@ -102,6 +103,8 @@
       background: var(--card);
       padding: 0.9rem;
       box-shadow: var(--glow);
+      position: relative;
+      overflow: clip;
     }
 
     .panel.active { display: block; }
@@ -122,7 +125,7 @@
       color: var(--muted);
     }
 
-    input, textarea, select {
+    input:not([type="checkbox"]), textarea, select {
       width: 100%;
       border: 1px solid var(--line);
       border-radius: 7px;
@@ -130,6 +133,10 @@
       color: var(--text);
       padding: 0.5rem 0.55rem;
       font: inherit;
+      line-height: 1.25;
+      background-clip: padding-box;
+      -webkit-appearance: none;
+      appearance: none;
     }
 
     textarea {
@@ -153,6 +160,26 @@
       width: auto;
       margin: 0;
       accent-color: #00ff88;
+      border: 0;
+      padding: 0;
+      background: transparent;
+      box-shadow: none;
+    }
+
+    select option, select optgroup {
+      background: #071107;
+      color: var(--text);
+    }
+
+    input:-webkit-autofill,
+    input:-webkit-autofill:hover,
+    input:-webkit-autofill:focus,
+    textarea:-webkit-autofill,
+    select:-webkit-autofill {
+      -webkit-text-fill-color: var(--text);
+      -webkit-box-shadow: 0 0 0 1000px rgba(0, 0, 0, 0.35) inset;
+      caret-color: var(--text);
+      transition: background-color 9999s ease-out 0s;
     }
 
     details {
