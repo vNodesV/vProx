@@ -192,6 +192,92 @@ type FleetDefaults struct {
 	KeyPath string
 }
 
+// LoadFromNodeConfigs reads all node TOML files from dir (config/vprox/nodes/) and
+// extracts entries with managed_host = true as VM entries.
+// This is the v1.4.0 equivalent of LoadFromChainConfigs for the new config layout.
+// Returns an empty Config (not error) when dir does not exist.
+func LoadFromNodeConfigs(dir string, defaults FleetDefaults) (*Config, error) {
+	nodes, err := chainconfig.LoadNodes(dir)
+	if err != nil || len(nodes) == 0 {
+		return &Config{}, nil
+	}
+
+	var vms []VM
+	for _, nc := range nodes {
+		if !nc.Management.ManagedHost {
+			continue
+		}
+		m := nc.Management
+
+		sshHost := m.LanIP
+		if sshHost == "" {
+			sshHost = nc.IP
+		}
+		user := m.User
+		if user == "" {
+			user = defaults.User
+		}
+		keyPath := m.KeyPath
+		if keyPath == "" {
+			keyPath = defaults.KeyPath
+		}
+		port := m.Port
+		if port == 0 {
+			port = 22
+		}
+
+		rpcURL, restURL := "", ""
+		if m.ExposedServices && nc.Host != "" {
+			base := "http://" + nc.Host
+			switch {
+			case nc.Expose.Path:
+				rpcURL = base + "/rpc"
+				restURL = base + "/rest"
+			case nc.Expose.VHost:
+				rp := nc.Expose.VHostPrefix.RPC
+				ap := nc.Expose.VHostPrefix.REST
+				if rp == "" {
+					rp = "rpc"
+				}
+				if ap == "" {
+					ap = "api"
+				}
+				rpcURL = "http://" + rp + "." + nc.Host
+				restURL = "http://" + ap + "." + nc.Host
+			default:
+				rpcURL = base
+				restURL = base
+			}
+		}
+
+		vmName := nc.BaseName
+		if vmName == "" {
+			vmName = chainVMName("", nc.Host)
+		}
+
+		vms = append(vms, VM{
+			Name:       vmName,
+			Host:       sshHost,
+			LanIP:      sshHost,
+			PublicIP:   m.PublicIP,
+			Port:       port,
+			User:       user,
+			KeyPath:    keyPath,
+			Datacenter: m.Datacenter,
+			Type:       strings.Join(m.Type, ","),
+			RPCURL:     rpcURL,
+			RESTURL:    restURL,
+			// Chain identity enriched later via enrichVMsFromVLogChains or enrichVMsFromChains.
+			Valoper: m.Valoper,
+			Ping: VMPing{
+				Country:  m.Ping.Country,
+				Provider: m.Ping.Provider,
+			},
+		})
+	}
+	return &Config{VMs: vms}, nil
+}
+
 // LoadFromChainConfigs reads all chain TOML files from dir and extracts
 // [management] sections with managed_host = true as VM entries.
 // Per-chain management config takes precedence over vms.toml when merged.

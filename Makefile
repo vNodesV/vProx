@@ -22,12 +22,13 @@ VLOG_SERVICE := $(SERVICE_DIR)/vLog.service
 GEO_DIR := $(DATA_DIR)/geolocation
 DIR_LIST := $(DATA_DIR) $(LOG_DIR) $(CFG_DIR) $(CFG_DIR)/chains $(CFG_DIR)/backup \
             $(CFG_DIR)/vlog $(CFG_DIR)/infra $(CFG_DIR)/vprox $(CFG_DIR)/fleet \
+            $(CFG_DIR)/vprox/nodes $(CFG_DIR)/vlog/chains \
             $(INTERNAL_DIR) $(ARCHIVE_DIR) $(SERVICE_DIR) $(GEO_DIR)
 
 # Sample file revision — format: r{major}_{MMDDYY}_{seq}
 # Increment {seq} for multiple revisions on the same day; reset to 0 on new date.
 # Injected into the "# rev: {{SAMPLE_REV}}" placeholder in every .sample file at install/refresh time.
-SAMPLE_REV := r3_031026_0
+SAMPLE_REV := r4_031126_0
 
 # GeoLocation database — bundled in assets/geo/, extracted to user data dir
 GEO_DB_SRC := assets/geo/ip2location.mmdb.gz
@@ -200,9 +201,10 @@ config-vprox: dirs
 ## before the new version is written, so every prior revision is recoverable.
 samples-fleet:
 	@mkdir -p \
-		"$(CFG_DIR)/samples/chains" "$(CFG_DIR)/samples/backup" \
-		"$(CFG_DIR)/samples/vlog"   "$(CFG_DIR)/samples/infra" \
-		"$(CFG_DIR)/samples/fleet"  "$(CFG_DIR)/samples/vprox"
+		"$(CFG_DIR)/samples/chains"       "$(CFG_DIR)/samples/backup" \
+		"$(CFG_DIR)/samples/vlog"         "$(CFG_DIR)/samples/infra" \
+		"$(CFG_DIR)/samples/fleet"        "$(CFG_DIR)/samples/vprox" \
+		"$(CFG_DIR)/samples/vprox/nodes"  "$(CFG_DIR)/samples/vlog/chains"
 	@_rev="$(SAMPLE_REV)"; \
 	_archive() { \
 		local dst="$$1" sub="$$2" old_rev adir; \
@@ -216,14 +218,16 @@ samples-fleet:
 		fi; \
 	}; \
 	_copy() { sed "s/{{SAMPLE_REV}}/$$_rev/" "$$1" > "$$2" && echo "✓ $$2  [$$_rev]"; }; \
-	_archive "$(CFG_DIR)/samples/vlog/vlog.sample"          "vlog";   _copy "config/samples/vlog/vlog.sample"          "$(CFG_DIR)/samples/vlog/vlog.sample"; \
-	_archive "$(CFG_DIR)/samples/chains/chain.sample"       "chains"; _copy "config/samples/chains/chain.sample"       "$(CFG_DIR)/samples/chains/chain.sample"; \
-	_archive "$(CFG_DIR)/samples/chains/ports.sample"       "chains"; _copy "config/samples/chains/ports.sample"       "$(CFG_DIR)/samples/chains/ports.sample"; \
-	_archive "$(CFG_DIR)/samples/chains/services.sample"    "chains"; _copy "config/samples/chains/services.sample"    "$(CFG_DIR)/samples/chains/services.sample"; \
-	_archive "$(CFG_DIR)/samples/backup/backup.sample"      "backup"; _copy "config/samples/backup/backup.sample"      "$(CFG_DIR)/samples/backup/backup.sample"; \
-	_archive "$(CFG_DIR)/samples/infra/infra.sample"        "infra";  _copy "config/samples/infra/infra.sample"        "$(CFG_DIR)/samples/infra/infra.sample"; \
-	_archive "$(CFG_DIR)/samples/vprox/settings.sample"     "vprox";  _copy "config/samples/vprox/settings.sample"     "$(CFG_DIR)/samples/vprox/settings.sample"; \
-	_archive "$(CFG_DIR)/samples/fleet/settings.sample"     "fleet";  _copy "config/samples/fleet/settings.sample"     "$(CFG_DIR)/samples/fleet/settings.sample"
+	_archive "$(CFG_DIR)/samples/vlog/vlog.sample"          "vlog";         _copy "config/samples/vlog/vlog.sample"              "$(CFG_DIR)/samples/vlog/vlog.sample"; \
+	_archive "$(CFG_DIR)/samples/chains/chain.sample"       "chains";       _copy "config/samples/chains/chain.sample"           "$(CFG_DIR)/samples/chains/chain.sample"; \
+	_archive "$(CFG_DIR)/samples/chains/ports.sample"       "chains";       _copy "config/samples/chains/ports.sample"           "$(CFG_DIR)/samples/chains/ports.sample"; \
+	_archive "$(CFG_DIR)/samples/chains/services.sample"    "chains";       _copy "config/samples/chains/services.sample"        "$(CFG_DIR)/samples/chains/services.sample"; \
+	_archive "$(CFG_DIR)/samples/backup/backup.sample"      "backup";       _copy "config/samples/backup/backup.sample"          "$(CFG_DIR)/samples/backup/backup.sample"; \
+	_archive "$(CFG_DIR)/samples/infra/infra.sample"        "infra";        _copy "config/samples/infra/infra.sample"            "$(CFG_DIR)/samples/infra/infra.sample"; \
+	_archive "$(CFG_DIR)/samples/vprox/settings.sample"     "vprox";        _copy "config/samples/vprox/settings.sample"         "$(CFG_DIR)/samples/vprox/settings.sample"; \
+	_archive "$(CFG_DIR)/samples/fleet/settings.sample"     "fleet";        _copy "config/samples/fleet/settings.sample"         "$(CFG_DIR)/samples/fleet/settings.sample"; \
+	_archive "$(CFG_DIR)/samples/vprox/nodes/vprox-node.sample" "vprox/nodes"; _copy "config/samples/vprox/nodes/vprox-node.sample" "$(CFG_DIR)/samples/vprox/nodes/vprox-node.sample"; \
+	_archive "$(CFG_DIR)/samples/vlog/chains/vlog-chain.sample" "vlog/chains"; _copy "config/samples/vlog/chains/vlog-chain.sample" "$(CFG_DIR)/samples/vlog/chains/vlog-chain.sample"
 	@echo "Done. Samples refreshed — $(SAMPLE_REV). See $(CFG_DIR)/samples/"
 
 ## Install modules registry stub

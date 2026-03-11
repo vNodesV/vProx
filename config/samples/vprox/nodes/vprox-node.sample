@@ -1,0 +1,99 @@
+# vProx Node Configuration
+# rev: {{SAMPLE_REV}}
+#
+# One file per managed node. Place in: $VPROX_HOME/config/vprox/nodes/
+# Example: config/vprox/nodes/your_chain.toml
+#
+# This file controls how vProx routes and exposes the node's endpoints.
+# Chain identity (chain_id, validator info, ping) lives separately in:
+#   config/vlog/chains/<chain>.toml
+#
+# Join key: tree_name (this file) ↔ node (vlog chain file), or tree_name fallback.
+
+schema_version = 2
+
+# ── Identity ────────────────────────────────────────────────────────────────────
+# tree_name links this node to config/vlog/chains/<chain>.toml via chain.node field.
+tree_name = "your_chain"   # chain slug, e.g. "osmosis", "cheqd", "cosmoshub"
+
+# ── Proxy Routing ───────────────────────────────────────────────────────────────
+host = "your_chain.example.com"   # public hostname vProx serves
+ip   = "10.0.0.10"               # LAN IP of the upstream node (internal routing)
+
+default_ports = false
+msg_rpc       = false   # inject rpc_msg banner on RPC index
+msg_api       = false   # inject api_msg banner on REST/swagger
+
+rpc_aliases  = []   # extra RPC hostnames (expose.vhost must be true)
+rest_aliases = []   # extra REST/API hostnames
+api_aliases  = []   # extra /api hostnames
+
+[message]
+api_msg = ""
+rpc_msg = ""
+
+[expose]
+path  = true    # enable /rpc, /rest, /websocket on base host
+vhost = true    # enable rpc.<host>, api.<host> subdomains
+
+[expose.vhost_prefix]
+rpc  = "rpc"
+rest = "api"
+
+[services]
+rpc       = true
+rest      = true
+websocket = true
+grpc      = true
+grpc_web  = true
+api_alias = true
+
+# [ports] — only needed when default_ports = false
+# [ports]
+#   rpc      = 26657
+#   rest     = 1317
+#   grpc     = 9090
+#   grpc_web = 9091
+#   api      = 1317
+
+[ws]
+idle_timeout_sec = 3600
+max_lifetime_sec = 0
+
+[features]
+rpc_address_masking = true
+mask_rpc            = ""
+swagger_masking     = false
+absolute_links      = "auto"
+
+[logging]
+file   = "your_chain.log"
+format = "summary"
+
+
+# ── Fleet Management (SSH) ──────────────────────────────────────────────────────
+# managed_host: when true, this node is registered in the fleet module —
+#   enabling SSH-based script execution, apt upgrades, and deployment dispatch.
+#
+# exposed_services: when true, vLog probes via the public chain.host domain
+#   (through vProx/Apache). When false, probes directly via lan_ip (same-LAN,
+#   lower latency). Independent from managed_host — controls probe routing only.
+#
+# SSH defaults (user, key_path) are read from [vlog.fleet.defaults] in vlog.toml
+# when the fields below are left empty.
+
+[management]
+managed_host     = false
+lan_ip           = ""         # SSH target IP; empty = use ip above
+public_ip        = ""         # display-only in dashboard; optional
+user             = ""         # SSH user; empty = [vlog.fleet.defaults].user
+key_path         = ""         # SSH private key; empty = [vlog.fleet.defaults].key_path
+port             = 0          # SSH port; 0 = default 22
+type             = ["validator"]   # service roles: validator | sp | rpc | relayer | node
+valoper          = ""         # validator operator address for governance tracking
+datacenter       = ""         # location label, e.g. "QC", "RBX", "AMS"
+exposed_services = true
+
+[management.ping]
+country  = ""   # ISO 3166-1 alpha-2 (CA US FR DE NL GB FI JP SG BR IN)
+provider = ""   # pin to check-host.net node (e.g. "ca1"); empty = random from country

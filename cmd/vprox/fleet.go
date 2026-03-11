@@ -58,34 +58,44 @@ func runFleetCmd(home string, args []string) {
 	}
 }
 
-// loadFleetVMsCfg loads the merged VM registry from all available sources:
-//  1. config/chains/*.toml   — [management] sections where managed_host=true
-//  2. config/infra/*.toml    — canonical host+VM registry; one file per datacenter (highest priority)
+// loadFleetVMsCfg loads the merged VM registry from all available sources.
 //
-// Infra files are scanned by name (qc.toml, rbx.toml, etc.) so any *.toml added to
-// config/infra/ is automatically picked up. Sources are merged with later entries
-// overriding earlier ones by name. Infra-sourced VMs are enriched with chain identity
-// data (chain_id, valoper, explorer) from the corresponding chains/{chain_name}.toml.
+// Priority (lowest → highest, later wins on name collision):
+//  1. config/chains/*.toml        — legacy: [management] sections (backward compat)
+//  2. config/vprox/nodes/*.toml   — v1.4.0: per-node proxy + management (overrides legacy)
+//  3. config/infra/*.toml         — canonical host+VM registry (highest priority)
+//
+// After merging, VMs are enriched with chain identity from:
+//   - config/chains/*.toml        (legacy)
+//   - config/vlog/chains/*.toml   (v1.4.0)
 func loadFleetVMsCfg(home string) (*config.Config, error) {
 	merged := &config.Config{}
 	chainsDir := filepath.Join(home, "config", "chains")
+	nodesDir := filepath.Join(home, "config", "vprox", "nodes")
+	vlogChainsDir := filepath.Join(home, "config", "vlog", "chains")
 
-	// 2. Overlay chain.toml [management] sections (medium priority).
+	// 1. Legacy: config/chains/*.toml [management] sections.
 	if chainCfg, err := config.LoadFromChainConfigs(chainsDir, config.FleetDefaults{}); err == nil && len(chainCfg.VMs) > 0 {
 		merged = config.MergeConfigs(merged, chainCfg)
 	}
 
-	// 3. Overlay infra/*.toml (highest priority).
+	// 2. v1.4.0: config/vprox/nodes/*.toml (overrides legacy on name collision).
+	if nodeCfg, err := config.LoadFromNodeConfigs(nodesDir, config.FleetDefaults{}); err == nil && len(nodeCfg.VMs) > 0 {
+		merged = config.MergeConfigs(merged, nodeCfg)
+	}
+
+	// 3. Overlay config/infra/*.toml (highest priority).
 	infraDir := filepath.Join(home, "config", "infra")
 	if infraCfg, err := config.LoadFromInfraFiles(infraDir); err == nil && (len(infraCfg.VMs) > 0 || len(infraCfg.Hosts) > 0) {
 		merged = config.MergeInfraConfig(merged, infraCfg)
 	}
 
-	// Enrich infra-sourced VMs with chain identity from chains/{chain_name}.toml.
+	// Enrich VMs with chain identity (legacy path first, then v1.4.0 vlog/chains/).
 	enrichVMsFromChains(merged.VMs, chainsDir)
+	enrichVMsFromVLogChains(merged.VMs, vlogChainsDir)
 
 	if len(merged.VMs) == 0 && len(merged.Hosts) == 0 {
-		return nil, fmt.Errorf("no VMs registered — add entries to config/infra/*.toml or set managed_host=true in config/chains/*.toml")
+		return nil, fmt.Errorf("no VMs registered — add entries to config/infra/*.toml, config/vprox/nodes/*.toml, or set managed_host=true in config/chains/*.toml")
 	}
 	return merged, nil
 }
@@ -125,6 +135,62 @@ func enrichVMsFromChains(vms []config.VM, chainsDir string) {
 		}
 		if vms[i].Valoper == "" {
 			vms[i].Valoper = cc.ChainServices.Validator.Mainnet.Address
+		}
+	}
+}
+
+// enrichVMsFromVLogChains populates missing chain identity fields on VMs from
+// config/vlog/chains/*.toml (v1.4.0 layout). Only fills fields not already set
+// by enrichVMsFromChains or infra config.
+// Lookup order: vm.Name → ChainIdentity.BaseName, then vm.ChainName → ChainIdentity.TreeName.
+func enrichVMsFromVLogChains(vms []config.VM, vlogChainsDir string) {
+	chains, err := chainconfig.LoadChains(vlogChainsDir)
+	if err != nil || len(chains) == 0 {
+		return
+	}
+
+	// Build lookup indexes.
+	byBase := make(map[string]*chainconfig.ChainIdentity, len(chains))
+	byTree := make(map[string]*chainconfig.ChainIdentity, len(chains))
+	for i := range chains {
+		byBase[chains[i].BaseName] = &chains[i]
+		if chains[i].TreeName != "" {
+			byTree[chains[i].TreeName] = &chains[i]
+		}
+	}
+
+	for i := range vms {
+		if vms[i].ChainID != "" {
+			continue // already enriched by legacy path
+		}
+		var ci *chainconfig.ChainIdentity
+		if v, ok := byBase[vms[i].Name]; ok {
+			ci = v
+		} else if v, ok := byTree[vms[i].ChainName]; ok {
+			ci = v
+		}
+		if ci == nil {
+			continue
+		}
+		vms[i].ChainID = ci.ChainID
+		if vms[i].ChainName == "" {
+			vms[i].ChainName = ci.ChainName
+		}
+		if vms[i].DashboardName == "" {
+			vms[i].DashboardName = ci.DashboardName
+		}
+		if vms[i].NetworkType == "" {
+			vms[i].NetworkType = ci.NetworkType
+		}
+		if vms[i].Explorer == "" {
+			vms[i].Explorer = ci.ExplorerBase
+		}
+		if vms[i].Valoper == "" {
+			vms[i].Valoper = ci.ChainServices.Validator.Mainnet.Address
+		}
+		if vms[i].Ping.Country == "" {
+			vms[i].Ping.Country = ci.ChainPing.Country
+			vms[i].Ping.Provider = ci.ChainPing.Provider
 		}
 	}
 }
