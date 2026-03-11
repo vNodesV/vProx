@@ -1,0 +1,627 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>vProx Config Wizard</title>
+  <style>
+    :root {
+      --bg: #050805;
+      --bg-soft: rgba(8, 20, 8, 0.72);
+      --card: rgba(6, 28, 10, 0.72);
+      --text: #d6ffd6;
+      --muted: #78b478;
+      --ok: #00ff7f;
+      --warn: #ffd166;
+      --err: #ff6b6b;
+      --line: rgba(0, 255, 0, 0.35);
+      --glow: 0 0 20px rgba(0, 255, 0, 0.25);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 20% 20%, rgba(0, 255, 0, 0.08), transparent 40%),
+        radial-gradient(circle at 80% 0%, rgba(0, 255, 0, 0.06), transparent 50%),
+        var(--bg);
+      min-height: 100vh;
+    }
+
+    .wrap {
+      width: min(1200px, 96vw);
+      margin: 1rem auto 2rem;
+    }
+
+    .header {
+      border: 1px solid var(--line);
+      box-shadow: var(--glow);
+      border-radius: 10px;
+      background: var(--bg-soft);
+      padding: 1rem;
+      margin-bottom: 0.9rem;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 1.1rem;
+      color: var(--ok);
+      letter-spacing: 0.03em;
+    }
+
+    .hint {
+      color: var(--muted);
+      margin-top: 0.4rem;
+      font-size: 0.9rem;
+    }
+
+    .status {
+      margin-top: 0.6rem;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 0.5rem 0.6rem;
+      background: rgba(0, 0, 0, 0.25);
+      min-height: 2.2rem;
+      white-space: pre-wrap;
+    }
+
+    .status.ok { border-color: rgba(0, 255, 127, 0.45); color: var(--ok); }
+    .status.warn { border-color: rgba(255, 209, 102, 0.45); color: var(--warn); }
+    .status.err { border-color: rgba(255, 107, 107, 0.45); color: var(--err); }
+
+    .tabs {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      gap: 0.45rem;
+      margin: 0.8rem 0;
+    }
+
+    .tab {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(0, 0, 0, 0.28);
+      color: var(--text);
+      padding: 0.55rem;
+      cursor: pointer;
+      font-size: 0.82rem;
+      text-align: center;
+    }
+
+    .tab.active {
+      background: rgba(0, 255, 0, 0.14);
+      color: var(--ok);
+      box-shadow: var(--glow);
+    }
+
+    .panel {
+      display: none;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--card);
+      padding: 0.9rem;
+      box-shadow: var(--glow);
+    }
+
+    .panel.active { display: block; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.7rem;
+      align-items: start;
+    }
+
+    .full { grid-column: 1 / -1; }
+
+    label {
+      display: grid;
+      gap: 0.3rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    input, textarea, select {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: rgba(0, 0, 0, 0.35);
+      color: var(--text);
+      padding: 0.5rem 0.55rem;
+      font: inherit;
+    }
+
+    textarea {
+      min-height: 130px;
+      resize: vertical;
+    }
+
+    .check {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: var(--text);
+      font-size: 0.9rem;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 0.5rem;
+      background: rgba(0, 0, 0, 0.26);
+    }
+
+    .check input {
+      width: auto;
+      margin: 0;
+      accent-color: #00ff88;
+    }
+
+    details {
+      margin-top: 0.7rem;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      overflow: hidden;
+      background: rgba(0, 0, 0, 0.24);
+    }
+
+    summary {
+      cursor: pointer;
+      padding: 0.45rem 0.55rem;
+      color: var(--muted);
+      user-select: none;
+    }
+
+    pre {
+      margin: 0;
+      padding: 0.6rem;
+      border-top: 1px solid var(--line);
+      color: #bdebbd;
+      background: rgba(0, 0, 0, 0.35);
+      overflow: auto;
+      max-height: 280px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .actions {
+      display: flex;
+      gap: 0.6rem;
+      margin-top: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    button {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(0, 255, 0, 0.12);
+      color: var(--text);
+      padding: 0.48rem 0.8rem;
+      font: inherit;
+      cursor: pointer;
+    }
+
+    button:hover { background: rgba(0, 255, 0, 0.2); }
+    button[disabled] { opacity: 0.6; cursor: wait; }
+    .danger {
+      border-color: rgba(255, 107, 107, 0.45);
+      background: rgba(255, 107, 107, 0.12);
+    }
+
+    @media (max-width: 980px) {
+      .tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="header">
+      <h1>vProx Configuration Wizard — Dual Mode (Web)</h1>
+      <div class="hint">Save each step in any order. Files are written with backup behavior from the shared wizard backend.</div>
+      <div class="status" id="status">Ready.</div>
+    </section>
+
+    <nav class="tabs" aria-label="Wizard steps">
+      <button class="tab active" data-tab="ports">1. Ports</button>
+      <button class="tab" data-tab="settings">2. Settings</button>
+      <button class="tab" data-tab="chain">3. Chain</button>
+      <button class="tab" data-tab="vlog">4. vLog</button>
+      <button class="tab" data-tab="fleet">5. Fleet</button>
+      <button class="tab" data-tab="infra">6. Infra</button>
+      <button class="tab" data-tab="backup">7. Backup</button>
+    </nav>
+
+    <section class="panel active" id="panel-ports">
+      <form id="form-ports" data-endpoint="/api/config/ports">
+        <div class="grid">
+          <label>rpc<input name="rpc" type="number" min="1" max="65535" value="26657"></label>
+          <label>rest<input name="rest" type="number" min="1" max="65535" value="1317"></label>
+          <label>grpc<input name="grpc" type="number" min="0" max="65535" value="0"></label>
+          <label>grpc_web<input name="grpc_web" type="number" min="0" max="65535" value="0"></label>
+          <label>api<input name="api" type="number" min="0" max="65535" value="0"></label>
+          <label>vlog_url<input name="vlog_url" type="text" placeholder="http://127.0.0.1:8889"></label>
+          <label class="full">trusted_proxies (comma-separated CIDRs)
+            <input name="trusted_proxies" type="text" value="127.0.0.1/32,::1/128">
+          </label>
+        </div>
+        <div class="actions"><button type="submit">Save Ports</button></div>
+      </form>
+      <details><summary>Current ports.toml</summary><pre id="raw-ports">(not found)</pre></details>
+    </section>
+
+    <section class="panel" id="panel-settings">
+      <form id="form-settings" data-endpoint="/api/config/settings">
+        <div class="grid">
+          <label>rps<input name="rps" type="number" step="0.1" min="0.1" value="25"></label>
+          <label>burst<input name="burst" type="number" min="1" value="100"></label>
+          <label class="check full"><input name="aq_enabled" type="checkbox" checked> auto_quarantine.enabled</label>
+          <label>aq_threshold<input name="aq_threshold" type="number" min="1" value="120"></label>
+          <label>aq_window_sec<input name="aq_window_sec" type="number" min="1" value="10"></label>
+          <label>aq_penalty_rps<input name="aq_penalty_rps" type="number" step="0.1" min="0.1" value="1"></label>
+          <label>aq_penalty_burst<input name="aq_penalty_burst" type="number" min="1" value="1"></label>
+          <label>aq_ttl_sec<input name="aq_ttl_sec" type="number" min="1" value="900"></label>
+          <label class="check full"><input name="debug_enabled" type="checkbox"> debug.enabled</label>
+          <label>debug_port<input name="debug_port" type="number" min="1" max="65535" value="6060"></label>
+        </div>
+        <div class="actions"><button type="submit">Save Settings</button></div>
+      </form>
+      <details><summary>Current settings.toml</summary><pre id="raw-settings">(not found)</pre></details>
+    </section>
+
+    <section class="panel" id="panel-chain">
+      <form id="form-chain" data-endpoint="/api/config/chain">
+        <div class="grid">
+          <label>chain_name<input name="chain_name" type="text" placeholder="cheqd"></label>
+          <label>chain_id<input name="chain_id" type="text" placeholder="cheqd-mainnet-1"></label>
+          <label>dashboard_name<input name="dashboard_name" type="text"></label>
+          <label>explorer_base<input name="explorer_base" type="text"></label>
+          <label>host<input name="host" type="text" placeholder="api.example.net"></label>
+          <label>ip<input name="ip" type="text" placeholder="10.0.0.10"></label>
+          <label class="check"><input name="expose_path" type="checkbox" checked> expose.path</label>
+          <label class="check"><input name="expose_vhost" type="checkbox" checked> expose.vhost</label>
+          <label>vhost_prefix_rpc<input name="vhost_prefix_rpc" type="text" value="rpc"></label>
+          <label>vhost_prefix_rest<input name="vhost_prefix_rest" type="text" value="api"></label>
+          <label class="check"><input name="svc_rpc" type="checkbox" checked> services.rpc</label>
+          <label class="check"><input name="svc_rest" type="checkbox" checked> services.rest</label>
+          <label class="check"><input name="svc_ws" type="checkbox" checked> services.websocket</label>
+          <label class="check"><input name="svc_grpc" type="checkbox" checked> services.grpc</label>
+          <label class="check"><input name="svc_grpcweb" type="checkbox" checked> services.grpc_web</label>
+          <label class="check"><input name="svc_apialias" type="checkbox" checked> services.api_alias</label>
+          <label class="check"><input name="default_ports" type="checkbox" checked> default_ports</label>
+          <label class="check"><input name="managed_host" type="checkbox"> management.managed_host</label>
+          <label>management_lan_ip<input name="management_lan_ip" type="text"></label>
+          <label>management_user<input name="management_user" type="text"></label>
+          <label>management_key_path<input name="management_key_path" type="text"></label>
+          <label class="check"><input name="exposed_services" type="checkbox" checked> management.exposed_services</label>
+          <label>valoper<input name="valoper" type="text"></label>
+          <label>ping_country<input name="ping_country" type="text" value="CA"></label>
+          <label>ping_provider<input name="ping_provider" type="text"></label>
+        </div>
+        <div class="actions"><button type="submit">Save Chain</button></div>
+      </form>
+      <details><summary>Tip</summary><pre>Chain and infra files may be multiple. This form writes one chain file based on chain_name.</pre></details>
+    </section>
+
+    <section class="panel" id="panel-vlog">
+      <form id="form-vlog" data-endpoint="/api/config/vlog">
+        <div class="grid">
+          <label>port<input name="port" type="number" min="1" max="65535" value="8889"></label>
+          <label>bind_address<input name="bind_address" type="text" value="127.0.0.1"></label>
+          <label>base_path<input name="base_path" type="text"></label>
+          <label>api_key<input name="api_key" type="text"></label>
+          <label>username<input name="username" type="text" value="admin"></label>
+          <label>password_hash (already hashed)<input name="password_hash" type="text"></label>
+          <label class="check full"><input name="auto_enrich" type="checkbox" checked> intel.auto_enrich</label>
+          <label>cache_ttl_hours<input name="cache_ttl_hours" type="number" min="1" value="24"></label>
+          <label>rate_limit_rpm<input name="rate_limit_rpm" type="number" min="1" value="10"></label>
+          <label>abuseipdb<input name="abuseipdb" type="text"></label>
+          <label>virustotal<input name="virustotal" type="text"></label>
+          <label>shodan<input name="shodan" type="text"></label>
+          <label>push_user<input name="push_user" type="text"></label>
+          <label>push_key_path<input name="push_key_path" type="text"></label>
+          <label>poll_interval_sec<input name="poll_interval_sec" type="number" min="1" value="60"></label>
+          <label>db_path<input name="db_path" type="text"></label>
+          <label>archives_dir<input name="archives_dir" type="text"></label>
+          <label>vprox_bin<input name="vprox_bin" type="text" value="vprox"></label>
+        </div>
+        <div class="actions"><button type="submit">Save vLog</button></div>
+      </form>
+      <details><summary>Current vlog.toml</summary><pre id="raw-vlog">(not found)</pre></details>
+    </section>
+
+    <section class="panel" id="panel-fleet">
+      <form id="form-fleet" data-endpoint="/api/config/fleet">
+        <div class="grid">
+          <label>ssh_user<input name="ssh_user" type="text" value="ubuntu"></label>
+          <label>ssh_key_path<input name="ssh_key_path" type="text"></label>
+          <label>ssh_port<input name="ssh_port" type="number" min="1" max="65535" value="22"></label>
+          <label>poll_interval_sec<input name="poll_interval_sec" type="number" min="1" value="60"></label>
+          <label>datacenter (default)<input name="datacenter" type="text"></label>
+        </div>
+        <div class="actions"><button type="submit">Save Fleet</button></div>
+      </form>
+      <details><summary>Current fleet/settings.toml</summary><pre id="raw-fleet">(not found)</pre></details>
+    </section>
+
+    <section class="panel" id="panel-infra">
+      <form id="form-infra" data-endpoint="/api/config/infra">
+        <div class="grid">
+          <label>datacenter<input name="datacenter" type="text" placeholder="qc"></label>
+          <label class="full">toml_raw (full infra TOML content)
+            <textarea name="toml_raw" placeholder="[host]
+name = &quot;host-a&quot;
+lan_ip = &quot;10.0.0.2&quot;
+
+[vprox]
+name = &quot;vProx&quot;
+lan_ip = &quot;10.0.0.10&quot;
+
+[[vm]]
+name = &quot;vm1&quot;
+host = &quot;10.0.0.21&quot;
+chain_name = &quot;cheqd&quot;"></textarea>
+          </label>
+        </div>
+        <div class="actions"><button type="submit">Save Infra</button></div>
+      </form>
+      <details><summary>Tip</summary><pre>This step accepts full TOML in toml_raw and writes config/infra/&lt;datacenter&gt;.toml.</pre></details>
+    </section>
+
+    <section class="panel" id="panel-backup">
+      <form id="form-backup" data-endpoint="/api/config/backup">
+        <div class="grid">
+          <label class="check full"><input name="automation" type="checkbox"> automation</label>
+          <label>interval_days<input name="interval_days" type="number" min="0" value="7"></label>
+          <label>max_size_mb<input name="max_size_mb" type="number" min="0" value="100"></label>
+          <label>check_interval_min<input name="check_interval_min" type="number" min="1" value="10"></label>
+          <label class="full">destination<input name="destination" type="text"></label>
+          <label class="full">files_logs (comma-separated)<input name="files_logs" type="text" value="main.log"></label>
+          <label class="full">files_data (comma-separated)<input name="files_data" type="text" value="access-counts.json"></label>
+          <label class="full">files_config (comma-separated)<input name="files_config" type="text" value="chains/ports.toml"></label>
+        </div>
+        <div class="actions"><button type="submit">Save Backup</button></div>
+      </form>
+      <details><summary>Current backup.toml</summary><pre id="raw-backup">(not found)</pre></details>
+    </section>
+
+    <div class="actions" style="margin-top: 1rem;">
+      <button id="btn-refresh" type="button">Reload Current Values</button>
+      <button id="btn-done" class="danger" type="button">Finish Wizard</button>
+    </div>
+  </div>
+
+  <script>
+    const $ = (s, r = document) => r.querySelector(s);
+    const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+
+    function setStatus(msg, kind = "") {
+      const box = $("#status");
+      box.textContent = msg;
+      box.className = "status" + (kind ? " " + kind : "");
+    }
+
+    function setBusy(form, busy) {
+      $$("button", form).forEach((b) => { b.disabled = busy; });
+    }
+
+    function formToObject(form) {
+      const out = {};
+      $$("input,textarea,select", form).forEach((el) => {
+        if (!el.name) return;
+        if (el.type === "checkbox") out[el.name] = !!el.checked;
+        else out[el.name] = el.value.trim();
+      });
+      return out;
+    }
+
+    async function submitForm(form) {
+      const endpoint = form.dataset.endpoint;
+      const body = formToObject(form);
+      setBusy(form, true);
+      setStatus(`Saving ${endpoint}...`);
+      try {
+        const resp = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+        });
+        const txt = await resp.text();
+        if (!resp.ok) {
+          throw new Error(txt || `HTTP ${resp.status}`);
+        }
+        setStatus(`Saved: ${endpoint}`, "ok");
+        await loadCurrent();
+      } catch (err) {
+        setStatus(`Save failed (${endpoint}): ${err.message}`, "err");
+      } finally {
+        setBusy(form, false);
+      }
+    }
+
+    function parseTomlMap(text) {
+      const map = { root: {} };
+      let section = "root";
+      for (const raw of text.split(/\r?\n/)) {
+        const noComment = raw.split("#")[0].trim();
+        if (!noComment) continue;
+        const sec = noComment.match(/^\[([^\]]+)\]$/);
+        if (sec) {
+          section = sec[1].trim();
+          if (!map[section]) map[section] = {};
+          continue;
+        }
+        const kv = noComment.match(/^([A-Za-z0-9_]+)\s*=\s*(.+)$/);
+        if (!kv) continue;
+        const key = kv[1].trim();
+        const val = kv[2].trim();
+        if (!map[section]) map[section] = {};
+        map[section][key] = val;
+      }
+      return map;
+    }
+
+    function unquote(v) {
+      if (typeof v !== "string") return "";
+      const t = v.trim();
+      if (t.startsWith('"') && t.endsWith('"')) return t.slice(1, -1);
+      return t;
+    }
+
+    function asNum(v, def = 0) {
+      const n = Number(unquote(v));
+      return Number.isFinite(n) ? n : def;
+    }
+
+    function asBool(v, def = false) {
+      const t = unquote(v).toLowerCase();
+      if (t === "true") return true;
+      if (t === "false") return false;
+      return def;
+    }
+
+    function asList(v) {
+      const t = String(v || "").trim();
+      if (!t.startsWith("[") || !t.endsWith("]")) return "";
+      return t.slice(1, -1).split(",").map((x) => unquote(x)).map((x) => x.trim()).filter(Boolean).join(",");
+    }
+
+    function setVal(formId, name, value) {
+      const el = $(`#form-${formId} [name="${name}"]`);
+      if (!el || value === undefined || value === null || value === "") return;
+      el.value = String(value);
+    }
+
+    function setCheck(formId, name, value) {
+      const el = $(`#form-${formId} [name="${name}"]`);
+      if (!el || el.type !== "checkbox") return;
+      el.checked = !!value;
+    }
+
+    function prefillFromCurrent(current) {
+      const rawKeys = ["ports", "settings", "vlog", "fleet", "backup"];
+      rawKeys.forEach((k) => {
+        const pre = $(`#raw-${k}`);
+        if (pre) pre.textContent = current[k] || "(not found)";
+      });
+
+      if (current.ports) {
+        const m = parseTomlMap(current.ports);
+        setVal("ports", "rpc", asNum(m.root.rpc, 26657));
+        setVal("ports", "rest", asNum(m.root.rest, 1317));
+        setVal("ports", "grpc", asNum(m.root.grpc, 0));
+        setVal("ports", "grpc_web", asNum(m.root.grpc_web, 0));
+        setVal("ports", "api", asNum(m.root.api, 0));
+        setVal("ports", "vlog_url", unquote(m.root.vlog_url));
+        setVal("ports", "trusted_proxies", asList(m.root.trusted_proxies));
+      }
+
+      if (current.settings) {
+        const m = parseTomlMap(current.settings);
+        setVal("settings", "rps", asNum((m.rate_limit || {}).rps, 25));
+        setVal("settings", "burst", asNum((m.rate_limit || {}).burst, 100));
+        setCheck("settings", "aq_enabled", asBool((m.auto_quarantine || {}).enabled, true));
+        setVal("settings", "aq_threshold", asNum((m.auto_quarantine || {}).threshold, 120));
+        setVal("settings", "aq_window_sec", asNum((m.auto_quarantine || {}).window_sec, 10));
+        setVal("settings", "aq_penalty_rps", asNum((m.auto_quarantine || {}).penalty_rps, 1));
+        setVal("settings", "aq_penalty_burst", asNum((m.auto_quarantine || {}).penalty_burst, 1));
+        setVal("settings", "aq_ttl_sec", asNum((m.auto_quarantine || {}).ttl_sec, 900));
+        setCheck("settings", "debug_enabled", asBool((m.debug || {}).enabled, false));
+        setVal("settings", "debug_port", asNum((m.debug || {}).port, 6060));
+      }
+
+      if (current.vlog) {
+        const m = parseTomlMap(current.vlog);
+        setVal("vlog", "port", asNum((m.vlog || {}).port, 8889));
+        setVal("vlog", "bind_address", unquote((m.vlog || {}).bind_address));
+        setVal("vlog", "base_path", unquote((m.vlog || {}).base_path));
+        setVal("vlog", "api_key", unquote((m.vlog || {}).api_key));
+        setVal("vlog", "username", unquote((m["vlog.auth"] || {}).username));
+        setVal("vlog", "password_hash", unquote((m["vlog.auth"] || {}).password_hash));
+        setCheck("vlog", "auto_enrich", asBool((m["vlog.intel"] || {}).auto_enrich, true));
+        setVal("vlog", "cache_ttl_hours", asNum((m["vlog.intel"] || {}).cache_ttl_hours, 24));
+        setVal("vlog", "rate_limit_rpm", asNum((m["vlog.intel"] || {}).rate_limit_rpm, 10));
+        setVal("vlog", "abuseipdb", unquote((m["vlog.intel.keys"] || {}).abuseipdb));
+        setVal("vlog", "virustotal", unquote((m["vlog.intel.keys"] || {}).virustotal));
+        setVal("vlog", "shodan", unquote((m["vlog.intel.keys"] || {}).shodan));
+        setVal("vlog", "push_user", unquote((m["vlog.push.defaults"] || {}).user));
+        setVal("vlog", "push_key_path", unquote((m["vlog.push.defaults"] || {}).key_path));
+        setVal("vlog", "poll_interval_sec", asNum((m["vlog.push"] || {}).poll_interval_sec, 60));
+        setVal("vlog", "db_path", unquote((m.vlog || {}).db_path));
+        setVal("vlog", "archives_dir", unquote((m.vlog || {}).archives_dir));
+        setVal("vlog", "vprox_bin", unquote((m.vlog || {}).vprox_bin));
+      }
+
+      if (current.fleet) {
+        const m = parseTomlMap(current.fleet);
+        setVal("fleet", "ssh_user", unquote((m.ssh || {}).user));
+        setVal("fleet", "ssh_key_path", unquote((m.ssh || {}).key_path));
+        setVal("fleet", "ssh_port", asNum((m.ssh || {}).port, 22));
+        setVal("fleet", "poll_interval_sec", asNum((m.poll || {}).interval_sec, 60));
+        setVal("fleet", "datacenter", unquote((m.defaults || {}).datacenter));
+      }
+
+      if (current.backup) {
+        const m = parseTomlMap(current.backup);
+        setCheck("backup", "automation", asBool((m.backup || {}).automation, false));
+        setVal("backup", "interval_days", asNum((m.backup || {}).interval_days, 7));
+        setVal("backup", "max_size_mb", asNum((m.backup || {}).max_size_mb, 100));
+        setVal("backup", "check_interval_min", asNum((m.backup || {}).check_interval_min, 10));
+        setVal("backup", "destination", unquote((m.backup || {}).destination));
+        setVal("backup", "files_logs", asList((m["backup.files"] || {}).logs));
+        setVal("backup", "files_data", asList((m["backup.files"] || {}).data));
+        setVal("backup", "files_config", asList((m["backup.files"] || {}).config));
+      }
+    }
+
+    async function loadCurrent() {
+      try {
+        const resp = await fetch("/api/config/current", { method: "GET" });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const current = await resp.json();
+        prefillFromCurrent(current || {});
+      } catch (err) {
+        setStatus(`Could not load current config: ${err.message}`, "warn");
+      }
+    }
+
+    function initTabs() {
+      $$(".tab").forEach((tab) => {
+        tab.addEventListener("click", () => {
+          const name = tab.dataset.tab;
+          $$(".tab").forEach((t) => t.classList.toggle("active", t === tab));
+          $$(".panel").forEach((p) => p.classList.toggle("active", p.id === `panel-${name}`));
+        });
+      });
+    }
+
+    async function finishWizard() {
+      setStatus("Finishing wizard...");
+      try {
+        const resp = await fetch("/api/config/done", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: "{}"
+        });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        setStatus("Done. You can close this tab.", "ok");
+      } catch (err) {
+        setStatus(`Finish failed: ${err.message}`, "err");
+      }
+    }
+
+    function initForms() {
+      $$("form[data-endpoint]").forEach((form) => {
+        form.addEventListener("submit", (ev) => {
+          ev.preventDefault();
+          submitForm(form);
+        });
+      });
+      $("#btn-refresh").addEventListener("click", () => loadCurrent());
+      $("#btn-done").addEventListener("click", () => finishWizard());
+    }
+
+    initTabs();
+    initForms();
+    loadCurrent();
+  </script>
+</body>
+</html>

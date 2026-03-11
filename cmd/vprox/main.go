@@ -1160,6 +1160,7 @@ func main() {
 		fmt.Fprintln(out, "  fleet <sub> [flags]     manage remote VMs and deployments")
 		fmt.Fprintln(out, "  mod   <sub> [flags]     manage vProx ecosystem modules")
 		fmt.Fprintln(out, "  chain <sub> [flags]     chain node status and upgrade tracking")
+		fmt.Fprintln(out, "  config [step] [--web]   interactive TOML configuration wizard")
 		fmt.Fprintln(out, "")
 		fmt.Fprintln(out, "Flags:")
 		fmt.Fprintln(out, "  --addr string           listen address (default :3000)")
@@ -1214,6 +1215,9 @@ func main() {
 		os.Exit(0)
 	case "chain":
 		runChainCmd(resolveHome(rawArgs[1:]), rawArgs[1:])
+		os.Exit(0)
+	case "config":
+		runConfigCmd(resolveHome(rawArgs[1:]), rawArgs[1:])
 		os.Exit(0)
 	default:
 		// Unknown bare word (not a flag) → error
