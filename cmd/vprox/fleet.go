@@ -58,85 +58,35 @@ func runFleetCmd(home string, args []string) {
 	}
 }
 
-// loadFleetVMsCfg loads the merged VM registry from all available sources.
+// loadFleetVMsCfg loads the VM registry from the v1.4.0 config layout.
 //
-// Priority (lowest → highest, later wins on name collision):
-//  1. config/chains/*.toml        — legacy: [management] sections (backward compat)
-//  2. config/vprox/nodes/*.toml   — v1.4.0: per-node proxy + management (overrides legacy)
-//  3. config/infra/*.toml         — canonical host+VM registry (highest priority)
+// Sources (lowest → highest priority, later wins on name collision):
+//  1. config/vprox/nodes/*.toml  — per-node proxy + management
+//  2. config/infra/*.toml        — canonical host+VM registry
 //
-// After merging, VMs are enriched with chain identity from:
-//   - config/chains/*.toml        (legacy)
-//   - config/vlog/chains/*.toml   (v1.4.0)
+// VMs are enriched with chain identity from config/vlog/chains/*.toml.
 func loadFleetVMsCfg(home string) (*config.Config, error) {
 	merged := &config.Config{}
-	chainsDir := filepath.Join(home, "config", "chains")
 	nodesDir := filepath.Join(home, "config", "vprox", "nodes")
 	vlogChainsDir := filepath.Join(home, "config", "vlog", "chains")
 
-	// 1. Legacy: config/chains/*.toml [management] sections.
-	if chainCfg, err := config.LoadFromChainConfigs(chainsDir, config.FleetDefaults{}); err == nil && len(chainCfg.VMs) > 0 {
-		merged = config.MergeConfigs(merged, chainCfg)
-	}
-
-	// 2. v1.4.0: config/vprox/nodes/*.toml (overrides legacy on name collision).
+	// 1. config/vprox/nodes/*.toml — managed nodes.
 	if nodeCfg, err := config.LoadFromNodeConfigs(nodesDir, config.FleetDefaults{}); err == nil && len(nodeCfg.VMs) > 0 {
 		merged = config.MergeConfigs(merged, nodeCfg)
 	}
 
-	// 3. Overlay config/infra/*.toml (highest priority).
+	// 2. config/infra/*.toml — physical host registry (highest priority).
 	infraDir := filepath.Join(home, "config", "infra")
 	if infraCfg, err := config.LoadFromInfraFiles(infraDir); err == nil && (len(infraCfg.VMs) > 0 || len(infraCfg.Hosts) > 0) {
 		merged = config.MergeInfraConfig(merged, infraCfg)
 	}
 
-	// Enrich VMs with chain identity (legacy path first, then v1.4.0 vlog/chains/).
-	enrichVMsFromChains(merged.VMs, chainsDir)
 	enrichVMsFromVLogChains(merged.VMs, vlogChainsDir)
 
 	if len(merged.VMs) == 0 && len(merged.Hosts) == 0 {
-		return nil, fmt.Errorf("no VMs registered — add entries to config/infra/*.toml, config/vprox/nodes/*.toml, or set managed_host=true in config/chains/*.toml")
+		return nil, fmt.Errorf("no VMs registered — add entries to config/infra/*.toml or set managed_host=true in config/vprox/nodes/*.toml")
 	}
 	return merged, nil
-}
-
-// enrichVMsFromChains populates missing chain identity fields (chain_id, valoper,
-// dashboard_name, network_type, explorer) on VMs that carry a chain_name reference
-// but lack those fields. This wires the infra→chain join for infra-sourced VMs.
-func enrichVMsFromChains(vms []config.VM, chainsDir string) {
-	cache := make(map[string]*chainconfig.ChainConfig)
-	for i := range vms {
-		if vms[i].ChainName == "" || vms[i].ChainID != "" {
-			continue
-		}
-		cc, seen := cache[vms[i].ChainName]
-		if !seen {
-			data, err := os.ReadFile(filepath.Join(chainsDir, vms[i].ChainName+".toml"))
-			if err == nil {
-				var c chainconfig.ChainConfig
-				if toml.Unmarshal(data, &c) == nil {
-					cc = &c
-				}
-			}
-			cache[vms[i].ChainName] = cc // nil on error — skip silently
-		}
-		if cc == nil {
-			continue
-		}
-		vms[i].ChainID = cc.ChainID
-		if vms[i].DashboardName == "" {
-			vms[i].DashboardName = cc.DashboardName
-		}
-		if vms[i].NetworkType == "" {
-			vms[i].NetworkType = cc.NetworkType
-		}
-		if vms[i].Explorer == "" {
-			vms[i].Explorer = cc.ExplorerBase
-		}
-		if vms[i].Valoper == "" {
-			vms[i].Valoper = cc.ChainServices.Validator.Mainnet.Address
-		}
-	}
 }
 
 // enrichVMsFromVLogChains populates missing chain identity fields on VMs from
