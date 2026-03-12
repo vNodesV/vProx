@@ -10,14 +10,6 @@
   <aside class="settings-side">
     <h3>Configuration</h3>
     <p>Centralized editor for vProx and vLog configuration files.</p>
-    <label>Mode
-      <select id="settings-mode">
-        <option value="upgrade">Upgrade</option>
-        <option value="migration">Migration</option>
-        <option value="new">New deployment</option>
-      </select>
-    </label>
-    <p class="muted">Mode controls how existing TOML files are scanned and merged for prefill.</p>
     <a href="#sec-ports">vProx Ports</a>
     <a href="#sec-proxy">vProx Proxy Controls</a>
     <a href="#sec-chains">Chain Profiles</a>
@@ -34,6 +26,12 @@
         <h4>vProx Ports</h4>
         <p>Edit `config/chains/ports.toml`.</p>
       </header>
+      <div class="settings-import-row">
+        <label class="settings-import-toggle">
+          <input class="settings-import-check" data-step="ports" type="checkbox">
+          I want to convert an existing toml files
+        </label>
+      </div>
       <form id="settings-form-ports" data-step="ports">
         <div class="settings-grid">
           <label>rpc <span class="required-dot">*</span><input name="rpc" type="number" min="1" max="65535" value="26657" required></label>
@@ -53,6 +51,12 @@
         <h4>vProx Proxy Controls</h4>
         <p>Edit `config/vprox/settings.toml`.</p>
       </header>
+      <div class="settings-import-row">
+        <label class="settings-import-toggle">
+          <input class="settings-import-check" data-step="settings" type="checkbox">
+          I want to convert an existing toml files
+        </label>
+      </div>
       <form id="settings-form-proxy" data-step="settings">
         <div class="settings-grid">
           <label>rps<input name="rps" type="number" step="0.1" min="0.1" value="25"></label>
@@ -75,6 +79,12 @@
         <h4>Chain Profiles</h4>
         <p>Edit `config/chains/&lt;chain&gt;.toml` files.</p>
       </header>
+      <div class="settings-import-row">
+        <label class="settings-import-toggle">
+          <input class="settings-import-check" data-step="chain" type="checkbox">
+          I want to convert an existing toml files
+        </label>
+      </div>
       <div class="settings-toolbar">
         <label>Profile
           <select id="settings-chain-select"></select>
@@ -133,6 +143,10 @@
         </div>
         <div class="settings-actions"><button type="submit">Save chain profile</button></div>
       </form>
+      <label class="settings-raw-label">
+        Current selected chain TOML (read-only)
+        <textarea id="settings-chain-raw" class="settings-raw" readonly></textarea>
+      </label>
     </article>
 
     <article id="sec-vlog" class="settings-card">
@@ -140,6 +154,12 @@
         <h4>vLog Core</h4>
         <p>Edit `config/vlog/vlog.toml`.</p>
       </header>
+      <div class="settings-import-row">
+        <label class="settings-import-toggle">
+          <input class="settings-import-check" data-step="vlog" type="checkbox">
+          I want to convert an existing toml files
+        </label>
+      </div>
       <form id="settings-form-vlog" data-step="vlog">
         <div class="settings-grid">
           <label>port<input name="port" type="number" min="1" max="65535" value="8889"></label>
@@ -170,6 +190,12 @@
         <h4>Fleet Defaults</h4>
         <p>Edit `config/fleet/settings.toml`.</p>
       </header>
+      <div class="settings-import-row">
+        <label class="settings-import-toggle">
+          <input class="settings-import-check" data-step="fleet" type="checkbox">
+          I want to convert an existing toml files
+        </label>
+      </div>
       <form id="settings-form-fleet" data-step="fleet">
         <div class="settings-grid">
           <label>ssh_user <span class="required-dot">*</span><input name="ssh_user" type="text" required></label>
@@ -187,6 +213,12 @@
         <h4>Infra Datacenters</h4>
         <p>Edit `config/infra/&lt;datacenter&gt;.toml` files and VM rows.</p>
       </header>
+      <div class="settings-import-row">
+        <label class="settings-import-toggle">
+          <input class="settings-import-check" data-step="infra" type="checkbox">
+          I want to convert an existing toml files
+        </label>
+      </div>
       <div class="settings-toolbar">
         <label>Datacenter file
           <select id="settings-infra-select"></select>
@@ -232,6 +264,10 @@
 
         <div class="settings-actions"><button type="submit">Save infra file</button></div>
       </form>
+      <label class="settings-raw-label">
+        Current selected infra snapshot (read-only)
+        <textarea id="settings-infra-raw" class="settings-raw" readonly></textarea>
+      </label>
     </article>
 
     <article id="sec-backup" class="settings-card">
@@ -239,6 +275,12 @@
         <h4>Backups</h4>
         <p>Edit `config/backup/backup.toml`.</p>
       </header>
+      <div class="settings-import-row">
+        <label class="settings-import-toggle">
+          <input class="settings-import-check" data-step="backup" type="checkbox">
+          I want to convert an existing toml files
+        </label>
+      </div>
       <form id="settings-form-backup" data-step="backup">
         <div class="settings-grid">
           <label class="check full"><input name="automation" type="checkbox"> automation</label>
@@ -278,6 +320,22 @@
   </article>
 </template>
 
+<div class="enrich-overlay" id="settings-import-overlay" style="display:none;">
+  <div class="enrich-popup settings-import-popup">
+    <h4>TOML Import</h4>
+    <p class="settings-import-copy">Please enter the path and filename to import (i.e <code>/home/user/.vProx/config/infra/myinfra.toml</code>) and click validate. If the file is validated, the bottom button will change from <strong>DISMISS</strong> to <strong>IMPORT</strong>.</p>
+    <label class="settings-import-field">
+      TOML path
+      <input id="settings-import-path" type="text" placeholder="/home/user/.vProx/config/.../file.toml">
+    </label>
+    <div id="settings-import-log" class="enrich-log"></div>
+    <div class="settings-import-actions">
+      <button id="settings-import-validate" type="button">Validate file</button>
+    </div>
+    <button class="enrich-dismiss visible" id="settings-import-dismiss" type="button">DISMISS</button>
+  </div>
+</div>
+
 <script>
 (() => {
   const BASE = "{{.BasePath}}";
@@ -298,9 +356,25 @@
   const state = {
     chains: [],
     infras: [],
-    mode: "upgrade",
     desiredChain: "__new__",
     desiredInfra: "__new__"
+  };
+
+  const stepForms = {
+    ports: forms.ports,
+    settings: forms.proxy,
+    chain: forms.chain,
+    vlog: forms.vlog,
+    fleet: forms.fleet,
+    infra: forms.infra,
+    backup: forms.backup
+  };
+
+  const importState = {
+    step: "",
+    checkbox: null,
+    fields: null,
+    sourcePath: ""
   };
 
   function setStatus(message, kind = "") {
@@ -381,6 +455,17 @@
 
   function resetForm(form) {
     form.reset();
+  }
+
+  function renderInfraRaw(entry) {
+    if (!entry) return "(new datacenter file)";
+    return JSON.stringify({
+      file: entry.file || "",
+      datacenter: entry.datacenter || "",
+      host: entry.host || {},
+      vprox: entry.vprox || {},
+      vms: Array.isArray(entry.vms) ? entry.vms : []
+    }, null, 2);
   }
 
   function vmKey(vm) {
@@ -537,6 +622,7 @@
 
   function prefillChain(entry) {
     resetForm(forms.chain);
+    $("#settings-chain-raw").value = (entry && entry.raw) ? entry.raw : "(new chain profile)";
     if (!entry || !entry.raw) return;
     const m = parseTomlMap(entry.raw);
     setVal(forms.chain, "chain_name", unquote((m.root || {}).chain_name));
@@ -586,9 +672,11 @@
   function prefillInfra(entry) {
     resetForm(forms.infra);
     if (!entry) {
+      $("#settings-infra-raw").value = renderInfraRaw(null);
       setVMRows([]);
       return;
     }
+    $("#settings-infra-raw").value = renderInfraRaw(entry);
     const host = entry.host || {};
     const vprox = entry.vprox || {};
     setVal(forms.infra, "datacenter", entry.datacenter || "");
@@ -654,17 +742,126 @@
   }
 
   async function loadCurrent() {
-    const query = new URLSearchParams({ mode: state.mode });
-    const resp = await fetch(apiPath(`/settings/api/config/current?${query.toString()}`), { method: "GET" });
+    const resp = await fetch(apiPath("/settings/api/config/current"), { method: "GET" });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const current = await resp.json();
-    state.mode = String(current.mode || state.mode || "upgrade").toLowerCase();
-    $("#settings-mode").value = state.mode;
     prefillSimpleForms(current || {});
     state.chains = Array.isArray(current.chains) ? current.chains : [];
     state.infras = Array.isArray(current.infras) ? current.infras : [];
     populateChainSelect();
     populateInfraSelect();
+  }
+
+  function resetImportDialog() {
+    importState.fields = null;
+    importState.sourcePath = "";
+    $("#settings-import-path").value = "";
+    $("#settings-import-log").innerHTML = "";
+    const action = $("#settings-import-dismiss");
+    action.textContent = "DISMISS";
+    action.dataset.mode = "dismiss";
+  }
+
+  function closeImportDialog() {
+    $("#settings-import-overlay").style.display = "none";
+    if (importState.checkbox) {
+      importState.checkbox.checked = false;
+    }
+    importState.step = "";
+    importState.checkbox = null;
+    resetImportDialog();
+  }
+
+  function openImportDialog(step, checkbox) {
+    importState.step = step;
+    importState.checkbox = checkbox || null;
+    resetImportDialog();
+    $("#settings-import-overlay").style.display = "flex";
+  }
+
+  function appendImportLog(message, kind = "enrich-log-line") {
+    const log = $("#settings-import-log");
+    const line = document.createElement("div");
+    line.className = kind;
+    line.textContent = message;
+    log.appendChild(line);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  function applyImportedFields(step, fields) {
+    const form = stepForms[step];
+    if (!form || !fields) return;
+    resetForm(form);
+    Object.entries(fields).forEach(([name, value]) => {
+      const el = $(`[name="${name}"]`, form);
+      if (!el) return;
+      if (el.type === "checkbox") {
+        el.checked = !!value;
+        return;
+      }
+      if (value === undefined || value === null) {
+        el.value = "";
+        return;
+      }
+      el.value = String(value);
+    });
+    if (step === "infra") {
+      if (Array.isArray(fields.vms)) {
+        setVMRows(fields.vms);
+      } else if (typeof fields.vms_json === "string" && fields.vms_json.trim() !== "") {
+        try {
+          const parsed = JSON.parse(fields.vms_json);
+          setVMRows(Array.isArray(parsed) ? parsed : []);
+        } catch {
+          setVMRows([]);
+        }
+      } else {
+        setVMRows([]);
+      }
+      syncVMJSON();
+    }
+    if (step === "chain" && fields.chain_name) {
+      state.desiredChain = `${String(fields.chain_name).trim()}.toml`;
+    }
+    if (step === "infra" && fields.datacenter) {
+      state.desiredInfra = `${String(fields.datacenter).trim().toLowerCase()}.toml`;
+    }
+  }
+
+  async function validateImportPath() {
+    const path = ($("#settings-import-path").value || "").trim();
+    if (!importState.step) {
+      appendImportLog("Missing target section.", "enrich-log-err");
+      return;
+    }
+    if (!path) {
+      appendImportLog("Please enter a TOML path first.", "enrich-log-err");
+      return;
+    }
+    appendImportLog(`Validating ${path} ...`, "enrich-log-line");
+    try {
+      const resp = await fetch(apiPath("/settings/api/config/import"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ step: importState.step, path })
+      });
+      const body = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(body.error || `HTTP ${resp.status}`);
+      importState.fields = body.fields || null;
+      importState.sourcePath = String(body.source_path || path);
+      appendImportLog(`Validation passed: ${importState.sourcePath}`, "enrich-log-ok");
+      appendImportLog("Click IMPORT to load values into this section.", "enrich-log-ok");
+      const action = $("#settings-import-dismiss");
+      action.textContent = "IMPORT";
+      action.dataset.mode = "import";
+    } catch (err) {
+      importState.fields = null;
+      importState.sourcePath = "";
+      const action = $("#settings-import-dismiss");
+      action.textContent = "DISMISS";
+      action.dataset.mode = "dismiss";
+      appendImportLog(`Validation failed: ${err.message}`, "enrich-log-err");
+    }
   }
 
   async function submitForm(form) {
@@ -732,12 +929,23 @@
 
     $("#settings-infra-add-vm").addEventListener("click", () => addVMRow({}));
 
-    $("#settings-mode").addEventListener("change", (ev) => {
-      state.mode = String(ev.target.value || "upgrade").toLowerCase();
-      setStatus(`Reloading in ${state.mode} mode…`, "warn");
-      loadCurrent()
-        .then(() => setStatus(`Settings loaded in ${state.mode} mode.`, "ok"))
-        .catch((err) => setStatus(`Could not reload config: ${err.message}`, "err"));
+    $$(".settings-import-check").forEach((chk) => {
+      chk.addEventListener("change", (ev) => {
+        if (!ev.target.checked) return;
+        openImportDialog(ev.target.dataset.step, ev.target);
+      });
+    });
+
+    $("#settings-import-validate").addEventListener("click", () => validateImportPath());
+    $("#settings-import-dismiss").addEventListener("click", () => {
+      if ($("#settings-import-dismiss").dataset.mode === "import" && importState.fields) {
+        applyImportedFields(importState.step, importState.fields);
+        setStatus(`Imported values from ${importState.sourcePath}. Save when ready.`, "ok");
+      }
+      closeImportDialog();
+    });
+    $("#settings-import-overlay").addEventListener("click", (ev) => {
+      if (ev.target.id === "settings-import-overlay") closeImportDialog();
     });
   }
 

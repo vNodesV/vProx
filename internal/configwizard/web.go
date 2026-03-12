@@ -88,6 +88,7 @@ func (w *Web) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/config/fleet", w.enforceLocalhost(w.handlePOST(w.saveStep("fleet"))))
 	mux.HandleFunc("/api/config/infra", w.enforceLocalhost(w.handlePOST(w.saveStep("infra"))))
 	mux.HandleFunc("/api/config/backup", w.enforceLocalhost(w.handlePOST(w.saveStep("backup"))))
+	mux.HandleFunc("/api/config/import", w.enforceLocalhost(w.handlePOST(w.handleImport)))
 
 	// Shutdown signal.
 	mux.HandleFunc("/api/config/done", w.enforceLocalhost(w.handleDone))
@@ -144,6 +145,31 @@ func (w *Web) handleIndex(rw http.ResponseWriter, r *http.Request) {
 // handleGetCurrent reads all present TOML files and returns their values as JSON.
 func (w *Web) handleGetCurrent(rw http.ResponseWriter, r *http.Request) {
 	writeJSON(rw, CurrentSnapshot(w.home, r.URL.Query().Get("mode")))
+}
+
+func (w *Web) handleImport(rw http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(rw, r.Body, 512*1024)
+	var req struct {
+		Step string `json:"step"`
+		Path string `json:"path"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		rw.WriteHeader(http.StatusBadRequest)
+		writeJSON(rw, map[string]string{"error": "invalid JSON payload"})
+		return
+	}
+	fields, normalizedPath, err := ImportStepFieldsFromPath(req.Step, req.Path)
+	if err != nil {
+		rw.WriteHeader(http.StatusUnprocessableEntity)
+		writeJSON(rw, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(rw, map[string]any{
+		"status":      "ok",
+		"step":        strings.ToLower(strings.TrimSpace(req.Step)),
+		"source_path": normalizedPath,
+		"fields":      fields,
+	})
 }
 
 // WizardHTML returns the embedded wizard HTML page.

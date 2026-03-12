@@ -67,7 +67,7 @@
     .header, .panel, .infra-vm-row, fieldset {
       border: 1px solid var(--line);
       box-shadow: var(--glow);
-      border-radius: 10px;
+      border-radius: 7px;
       background: var(--vn-bg-card);
       backdrop-filter: blur(8px);
       -webkit-backdrop-filter: blur(8px);
@@ -94,24 +94,12 @@
     .toolbar {
       display: flex;
       flex-wrap: wrap;
-      align-items: end;
+      align-items: center;
       justify-content: space-between;
       gap: 0.65rem;
       margin-top: 0.75rem;
       padding-top: 0.65rem;
       border-top: 1px solid var(--vn-green-border);
-    }
-
-    .mode-switch {
-      display: grid;
-      gap: 0.25rem;
-      min-width: 220px;
-    }
-
-    .mode-switch span {
-      font-size: 0.78rem;
-      color: var(--vn-text-muted);
-      letter-spacing: 0.01em;
     }
 
     .required-note {
@@ -148,12 +136,12 @@
 
     .tab {
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: 7px;
       background: rgba(0, 0, 0, 0.32);
       color: var(--vn-text-muted);
       padding: 0.55rem;
       cursor: pointer;
-      font-size: 0.82rem;
+      font-size: 0.8rem;
       text-align: center;
       font-weight: 600;
       transition: color 0.15s, background 0.15s, border-color 0.15s;
@@ -389,6 +377,111 @@
       line-height: 1.35;
     }
 
+    .import-toggle {
+      margin: 0 0 0.7rem;
+    }
+
+    .import-toggle label {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: var(--vn-text);
+      font-size: 0.85rem;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 0.5rem;
+      background: rgba(0, 0, 0, 0.26);
+    }
+
+    .import-toggle input {
+      width: auto;
+      margin: 0;
+      accent-color: var(--vn-green);
+    }
+
+    .enrich-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.65);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    }
+
+    .enrich-popup {
+      background: var(--vn-bg-card);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 8px;
+      padding: 1.5rem 1.75rem;
+      width: min(520px, 94vw);
+      box-shadow: 0 16px 48px rgba(0,0,0,0.45);
+    }
+
+    .enrich-popup h4 {
+      margin: 0 0 1rem;
+      font-size: 0.75rem;
+      letter-spacing: 0.09em;
+      text-transform: uppercase;
+      opacity: 0.55;
+    }
+
+    .enrich-log {
+      font-size: 0.72rem;
+      font-family: var(--font-mono);
+      max-height: 120px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+      margin-top: 0.4rem;
+    }
+
+    .enrich-log-line::before { content: '› '; }
+    .enrich-log-line { opacity: 0.65; }
+    .enrich-log-ok { opacity: 1; color: #198754; }
+    .enrich-log-err { opacity: 1; color: #dc3545; }
+
+    .enrich-dismiss {
+      margin-top: 0.9rem;
+      width: 100%;
+      padding: 0.4rem;
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 4px;
+      background: transparent;
+      color: inherit;
+      cursor: pointer;
+      font-size: 0.78rem;
+      opacity: 0.7;
+    }
+
+    .enrich-dismiss:hover {
+      opacity: 1;
+      background: rgba(255,255,255,0.06);
+    }
+
+    .import-copy {
+      margin: 0 0 0.75rem;
+      font-size: 0.84rem;
+      color: var(--vn-text);
+      line-height: 1.45;
+    }
+
+    .import-field {
+      display: grid;
+      gap: 0.25rem;
+      margin-bottom: 0.65rem;
+      color: var(--vn-text-muted);
+      font-size: 0.84rem;
+    }
+
+    .import-actions {
+      display: flex;
+      gap: 0.55rem;
+      flex-wrap: wrap;
+      margin-top: 0.45rem;
+    }
+
     .mini {
       margin: 0.55rem 0 0;
       font-size: 0.78rem;
@@ -409,14 +502,6 @@
       <h1>vProx Configuration Wizard — Dual Mode (Web)</h1>
       <div class="hint">Save each step in any order. Files are written with backup behavior from the shared wizard backend.</div>
       <div class="toolbar">
-        <label class="mode-switch" for="deploy-mode">
-          <span>Workflow mode</span>
-          <select id="deploy-mode">
-            <option value="upgrade" selected>Upgrade (import current TOMLs)</option>
-            <option value="migration">Migration (import + convert legacy TOMLs)</option>
-            <option value="new">New deployment (start from defaults)</option>
-          </select>
-        </label>
         <div class="required-note"><span class="required-mark">*</span> mandatory field</div>
       </div>
       <div class="status" id="status">Ready.</div>
@@ -436,6 +521,9 @@
       <div class="helper-blob">
         <strong>Helper — Ports</strong>
         <p>Writes <code>config/chains/ports.toml</code>. Keep <code>rpc</code> and <code>rest</code> valid; use <code>0</code> for optional ports you want disabled.</p>
+      </div>
+      <div class="import-toggle">
+        <label><input class="wizard-import-check" data-step="ports" type="checkbox"> I want to convert an existing toml files</label>
       </div>
       <form id="form-ports" data-endpoint="api/config/ports">
         <div class="grid">
@@ -459,6 +547,9 @@
         <strong>Helper — Settings</strong>
         <p>Writes <code>config/vprox/settings.toml</code>. Tune global rate limiting, quarantine thresholds, and debug listener values.</p>
       </div>
+      <div class="import-toggle">
+        <label><input class="wizard-import-check" data-step="settings" type="checkbox"> I want to convert an existing toml files</label>
+      </div>
       <form id="form-settings" data-endpoint="api/config/settings">
         <div class="grid">
           <label>rps<input name="rps" type="number" step="0.1" min="0.1" value="25"></label>
@@ -481,6 +572,9 @@
       <div class="helper-blob">
         <strong>Helper — Chain</strong>
         <p>Writes one chain file: <code>config/chains/&lt;chain_name&gt;.toml</code>. Minimum identity fields: <code>chain_name</code>, <code>chain_id</code>, <code>host</code>, and <code>ip</code>.</p>
+      </div>
+      <div class="import-toggle">
+        <label><input class="wizard-import-check" data-step="chain" type="checkbox"> I want to convert an existing toml files</label>
       </div>
       <form id="form-chain" data-endpoint="api/config/chain">
         <div class="grid">
@@ -537,6 +631,9 @@
         <strong>Helper — vLog</strong>
         <p>Writes <code>config/vlog/vlog.toml</code>. Password input expects a bcrypt hash value; keep it empty only if you intentionally disable auth.</p>
       </div>
+      <div class="import-toggle">
+        <label><input class="wizard-import-check" data-step="vlog" type="checkbox"> I want to convert an existing toml files</label>
+      </div>
       <form id="form-vlog" data-endpoint="api/config/vlog">
         <div class="grid">
           <label>port<input name="port" type="number" min="1" max="65535" value="8889"></label>
@@ -568,6 +665,9 @@
         <strong>Helper — Fleet</strong>
         <p>Writes <code>config/fleet/settings.toml</code>. These SSH values become operational defaults for managed hosts.</p>
       </div>
+      <div class="import-toggle">
+        <label><input class="wizard-import-check" data-step="fleet" type="checkbox"> I want to convert an existing toml files</label>
+      </div>
       <form id="form-fleet" data-endpoint="api/config/fleet">
         <div class="grid">
           <label>ssh_user<span class="required-mark">*</span><input name="ssh_user" type="text" value="ubuntu" required></label>
@@ -585,6 +685,9 @@
       <div class="helper-blob">
         <strong>Helper — Infra</strong>
         <p>Writes <code>config/infra/&lt;datacenter&gt;.toml</code>. <code>[host]</code> is optional; each VM row should include at least <code>name</code> and <code>host</code>.</p>
+      </div>
+      <div class="import-toggle">
+        <label><input class="wizard-import-check" data-step="infra" type="checkbox"> I want to convert an existing toml files</label>
       </div>
       <form id="form-infra" data-endpoint="api/config/infra">
         <div class="grid">
@@ -654,6 +757,9 @@
         <strong>Helper — Backup</strong>
         <p>Writes <code>config/backup/backup.toml</code>. File lists are comma-separated; toggle <code>automation</code> to enable scheduled backups.</p>
       </div>
+      <div class="import-toggle">
+        <label><input class="wizard-import-check" data-step="backup" type="checkbox"> I want to convert an existing toml files</label>
+      </div>
       <form id="form-backup" data-endpoint="api/config/backup">
         <div class="grid">
           <label class="check full"><input name="automation" type="checkbox"> automation</label>
@@ -676,10 +782,35 @@
     </div>
   </div>
 
+  <div class="enrich-overlay" id="wizard-import-overlay" style="display:none;">
+    <div class="enrich-popup">
+      <h4>TOML Import</h4>
+      <p class="import-copy">Please enter the path and filename to import (i.e <code>/home/user/.vProx/config/infra/myinfra.toml</code>) and click validate. The file is validated for vProx TOML structure, safety checks, and field mapping. If valid, the bottom button will change from <strong>DISMISS</strong> to <strong>IMPORT</strong>.</p>
+      <label class="import-field">
+        TOML path
+        <input id="wizard-import-path" type="text" placeholder="/home/user/.vProx/config/.../file.toml">
+      </label>
+      <div id="wizard-import-log" class="enrich-log"></div>
+      <div class="import-actions">
+        <button id="wizard-import-validate" type="button">Validate file</button>
+      </div>
+      <button id="wizard-import-dismiss" class="enrich-dismiss" type="button">DISMISS</button>
+    </div>
+  </div>
+
   <script>
     const $ = (s, r = document) => r.querySelector(s);
     const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
-    const initialState = new Map();
+    const stepForms = {
+      ports: $("#form-ports"),
+      settings: $("#form-settings"),
+      chain: $("#form-chain"),
+      vlog: $("#form-vlog"),
+      fleet: $("#form-fleet"),
+      infra: $("#form-infra"),
+      backup: $("#form-backup")
+    };
+    const importState = { step: "", checkbox: null, fields: null, sourcePath: "" };
 
     function setStatus(msg, kind = "") {
       const box = $("#status");
@@ -689,10 +820,6 @@
 
     function setBusy(form, busy) {
       $$("button", form).forEach((b) => { b.disabled = busy; });
-    }
-
-    function getDeployMode() {
-      return ($("#deploy-mode")?.value || "upgrade").trim().toLowerCase();
     }
 
     function formToObject(form) {
@@ -711,7 +838,6 @@
         syncInfraVMJSON();
       }
       const body = formToObject(form);
-      body.mode = getDeployMode();
       setBusy(form, true);
       setStatus(`Saving ${endpoint}...`);
       try {
@@ -884,28 +1010,6 @@
       syncInfraVMJSON();
     }
 
-    function snapshotDefaults() {
-      $$("form[data-endpoint] input, form[data-endpoint] textarea, form[data-endpoint] select").forEach((el) => {
-        if (!el.name) return;
-        initialState.set(el, el.type === "checkbox" ? !!el.checked : (el.value || ""));
-      });
-    }
-
-    function resetToDefaults() {
-      initialState.forEach((value, el) => {
-        if (el.type === "checkbox") {
-          el.checked = !!value;
-          return;
-        }
-        el.value = String(value);
-      });
-      setInfraVMs([]);
-      ["ports", "settings", "vlog", "fleet", "backup"].forEach((k) => {
-        const pre = $(`#raw-${k}`);
-        if (pre) pre.textContent = "(new deployment mode)";
-      });
-    }
-
     function prefillFromCurrent(current) {
       const rawKeys = ["ports", "settings", "vlog", "fleet", "backup"];
       rawKeys.forEach((k) => {
@@ -1048,14 +1152,139 @@
 
     async function loadCurrent() {
       try {
-        const mode = encodeURIComponent(getDeployMode());
-        const resp = await fetch(`api/config/current?mode=${mode}`, { method: "GET" });
+        const resp = await fetch("api/config/current", { method: "GET" });
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const current = await resp.json();
         prefillFromCurrent(current || {});
       } catch (err) {
         setStatus(`Could not load current config: ${err.message}`, "warn");
       }
+    }
+
+    function resetImportDialog() {
+      importState.fields = null;
+      importState.sourcePath = "";
+      $("#wizard-import-path").value = "";
+      $("#wizard-import-log").innerHTML = "";
+      const action = $("#wizard-import-dismiss");
+      action.textContent = "DISMISS";
+      action.dataset.mode = "dismiss";
+    }
+
+    function closeImportDialog() {
+      $("#wizard-import-overlay").style.display = "none";
+      if (importState.checkbox) {
+        importState.checkbox.checked = false;
+      }
+      importState.step = "";
+      importState.checkbox = null;
+      resetImportDialog();
+    }
+
+    function openImportDialog(step, checkbox) {
+      importState.step = step;
+      importState.checkbox = checkbox || null;
+      resetImportDialog();
+      $("#wizard-import-overlay").style.display = "flex";
+    }
+
+    function appendImportLog(message, kind = "enrich-log-line") {
+      const log = $("#wizard-import-log");
+      const line = document.createElement("div");
+      line.className = kind;
+      line.textContent = message;
+      log.appendChild(line);
+      log.scrollTop = log.scrollHeight;
+    }
+
+    function applyImportedFields(step, fields) {
+      const form = stepForms[step];
+      if (!form || !fields) return;
+      form.reset();
+      Object.entries(fields).forEach(([name, value]) => {
+        const el = $(`[name="${name}"]`, form);
+        if (!el) return;
+        if (el.type === "checkbox") {
+          el.checked = !!value;
+          return;
+        }
+        if (value === undefined || value === null) {
+          el.value = "";
+          return;
+        }
+        el.value = String(value);
+      });
+      if (step === "infra") {
+        if (Array.isArray(fields.vms)) {
+          setInfraVMs(fields.vms);
+        } else if (typeof fields.vms_json === "string" && fields.vms_json.trim() !== "") {
+          try {
+            const parsed = JSON.parse(fields.vms_json);
+            setInfraVMs(Array.isArray(parsed) ? parsed : []);
+          } catch {
+            setInfraVMs([]);
+          }
+        } else {
+          setInfraVMs([]);
+        }
+        syncInfraVMJSON();
+      }
+    }
+
+    async function validateImportPath() {
+      const path = ($("#wizard-import-path").value || "").trim();
+      if (!importState.step) {
+        appendImportLog("Missing target section.", "enrich-log-err");
+        return;
+      }
+      if (!path) {
+        appendImportLog("Please enter a TOML path first.", "enrich-log-err");
+        return;
+      }
+      appendImportLog(`Validating ${path} ...`, "enrich-log-line");
+      try {
+        const resp = await fetch("api/config/import", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ step: importState.step, path })
+        });
+        const body = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(body.error || `HTTP ${resp.status}`);
+        importState.fields = body.fields || null;
+        importState.sourcePath = String(body.source_path || path);
+        appendImportLog(`Validation passed: ${importState.sourcePath}`, "enrich-log-ok");
+        appendImportLog("Click IMPORT to load values into this section.", "enrich-log-ok");
+        const action = $("#wizard-import-dismiss");
+        action.textContent = "IMPORT";
+        action.dataset.mode = "import";
+      } catch (err) {
+        importState.fields = null;
+        importState.sourcePath = "";
+        const action = $("#wizard-import-dismiss");
+        action.textContent = "DISMISS";
+        action.dataset.mode = "dismiss";
+        appendImportLog(`Validation failed: ${err.message}`, "enrich-log-err");
+      }
+    }
+
+    function initImportFlow() {
+      $$(".wizard-import-check").forEach((chk) => {
+        chk.addEventListener("change", (ev) => {
+          if (!ev.target.checked) return;
+          openImportDialog(ev.target.dataset.step, ev.target);
+        });
+      });
+      $("#wizard-import-validate").addEventListener("click", () => validateImportPath());
+      $("#wizard-import-dismiss").addEventListener("click", () => {
+        if ($("#wizard-import-dismiss").dataset.mode === "import" && importState.fields) {
+          applyImportedFields(importState.step, importState.fields);
+          setStatus(`Imported values from ${importState.sourcePath}. Save when ready.`, "ok");
+        }
+        closeImportDialog();
+      });
+      $("#wizard-import-overlay").addEventListener("click", (ev) => {
+        if (ev.target.id === "wizard-import-overlay") closeImportDialog();
+      });
     }
 
     function initTabs() {
@@ -1115,31 +1344,10 @@
       $("#btn-done").addEventListener("click", () => finishWizard());
     }
 
-    function initModeSwitch() {
-      const modeEl = $("#deploy-mode");
-      if (!modeEl) return;
-      modeEl.addEventListener("change", async () => {
-        const mode = getDeployMode();
-        if (mode === "new") {
-          resetToDefaults();
-          setStatus("Mode: new deployment — forms reset to defaults.", "warn");
-          return;
-        }
-        resetToDefaults();
-        await loadCurrent();
-        if (mode === "migration") {
-          setStatus("Mode: migration — imported current + legacy TOMLs.", "ok");
-          return;
-        }
-        setStatus("Mode: upgrade — imported current TOMLs.", "ok");
-      });
-    }
-
     initTabs();
     initInfra();
     initForms();
-    snapshotDefaults();
-    initModeSwitch();
+    initImportFlow();
     loadCurrent();
   </script>
 </body>

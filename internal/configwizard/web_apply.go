@@ -1,13 +1,16 @@
 package configwizard
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/pelletier/go-toml/v2"
 	"github.com/vNodesV/vProx/internal/backup"
@@ -15,6 +18,8 @@ import (
 	fleetcfg "github.com/vNodesV/vProx/internal/fleet/config"
 	vlogcfg "github.com/vNodesV/vProx/internal/vlog/config"
 )
+
+const maxImportFileBytes int64 = 512 * 1024
 
 // ApplyFields applies one web wizard step payload to disk.
 // Exported for reuse by the dashboard Settings page.
@@ -438,6 +443,417 @@ func loadExistingInfraVMKeys(home, targetDC string) map[string]struct{} {
 		}
 	}
 	return keys
+}
+
+// ImportStepFieldsFromPath validates and converts an external TOML file into wizard field payloads.
+func ImportStepFieldsFromPath(step, srcPath string) (map[string]any, string, error) {
+	step = strings.ToLower(strings.TrimSpace(step))
+	if step == "" {
+		return nil, "", fmt.Errorf("step is required")
+	}
+	path, data, err := readImportTOML(srcPath)
+	if err != nil {
+		return nil, "", err
+	}
+	if err := validateImportLocation(step, path); err != nil {
+		return nil, "", err
+	}
+	fields, err := importFieldsFromTOML(step, path, data)
+	if err != nil {
+		return nil, "", err
+	}
+	return fields, path, nil
+}
+
+func readImportTOML(raw string) (string, []byte, error) {
+	path := strings.TrimSpace(raw)
+	if path == "" {
+		return "", nil, fmt.Errorf("path is required")
+	}
+	if strings.ContainsRune(path, '\x00') {
+		return "", nil, fmt.Errorf("path contains invalid null bytes")
+	}
+	if !filepath.IsAbs(path) {
+		abs, err := filepath.Abs(path)
+		if err != nil {
+			return "", nil, fmt.Errorf("resolve path: %w", err)
+		}
+		path = abs
+	}
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		path = resolved
+	}
+	path = filepath.Clean(path)
+	if !strings.EqualFold(filepath.Ext(path), ".toml") {
+		return "", nil, fmt.Errorf("import file must use .toml extension")
+	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		return "", nil, fmt.Errorf("read file metadata: %w", err)
+	}
+	if !info.Mode().IsRegular() {
+		return "", nil, fmt.Errorf("import path must reference a regular file")
+	}
+	if info.Size() <= 0 {
+		return "", nil, fmt.Errorf("import file is empty")
+	}
+	if info.Size() > maxImportFileBytes {
+		return "", nil, fmt.Errorf("import file exceeds %d KB safety limit", maxImportFileBytes/1024)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", nil, fmt.Errorf("read import file: %w", err)
+	}
+	if bytes.IndexByte(data, 0) >= 0 {
+		return "", nil, fmt.Errorf("import file contains invalid binary data")
+	}
+	if !utf8.Valid(data) {
+		return "", nil, fmt.Errorf("import file must be valid UTF-8 TOML text")
+	}
+	return path, data, nil
+}
+
+func validateImportLocation(step, path string) error {
+	lower := strings.ToLower(filepath.ToSlash(path))
+	if !strings.Contains(lower, "/config/") {
+		return fmt.Errorf("import path must be inside a vProx config directory (.../config/...)")
+	}
+
+	base := strings.ToLower(filepath.Base(path))
+	switch step {
+	case "ports":
+		if !strings.Contains(lower, "/config/chains/") || base != "ports.toml" {
+			return fmt.Errorf("ports import expects .../config/chains/ports.toml")
+		}
+	case "settings":
+		if !strings.Contains(lower, "/config/vprox/") || base != "settings.toml" {
+			return fmt.Errorf("settings import expects .../config/vprox/settings.toml")
+		}
+	case "chain":
+		if !strings.Contains(lower, "/config/chains/") || base == "ports.toml" {
+			return fmt.Errorf("chain import expects a chain file under .../config/chains/*.toml")
+		}
+	case "vlog":
+		if !strings.Contains(lower, "/config/vlog/") || base != "vlog.toml" {
+			return fmt.Errorf("vlog import expects .../config/vlog/vlog.toml")
+		}
+	case "fleet":
+		if !strings.Contains(lower, "/config/fleet/") || base != "settings.toml" {
+			return fmt.Errorf("fleet import expects .../config/fleet/settings.toml")
+		}
+	case "infra":
+		if strings.HasSuffix(lower, "/config/push/vms.toml") {
+			return nil // legacy migration source
+		}
+		if !strings.Contains(lower, "/config/infra/") {
+			return fmt.Errorf("infra import expects .../config/infra/<datacenter>.toml or legacy .../config/push/vms.toml")
+		}
+	case "backup":
+		if !strings.Contains(lower, "/config/backup/") || base != "backup.toml" {
+			return fmt.Errorf("backup import expects .../config/backup/backup.toml")
+		}
+	default:
+		return fmt.Errorf("unknown step: %q", step)
+	}
+	return nil
+}
+
+func importFieldsFromTOML(step, path string, data []byte) (map[string]any, error) {
+	switch step {
+	case "ports":
+		return importPortsFields(data)
+	case "settings":
+		return importSettingsFields(data)
+	case "chain":
+		return importChainFields(data)
+	case "vlog":
+		return importVLogFields(data)
+	case "fleet":
+		return importFleetFields(data)
+	case "infra":
+		return importInfraFields(path, data)
+	case "backup":
+		return importBackupFields(data)
+	default:
+		return nil, fmt.Errorf("unknown step: %q", step)
+	}
+}
+
+func importPortsFields(data []byte) (map[string]any, error) {
+	var p chainconfig.Ports
+	if err := toml.Unmarshal(data, &p); err != nil {
+		return nil, fmt.Errorf("parse ports TOML: %w", err)
+	}
+	if p.RPC <= 0 || p.REST <= 0 {
+		return nil, fmt.Errorf("ports.toml must define positive rpc and rest values")
+	}
+	return map[string]any{
+		"rpc":             p.RPC,
+		"rest":            p.REST,
+		"grpc":            p.GRPC,
+		"grpc_web":        p.GRPCWeb,
+		"api":             p.API,
+		"vlog_url":        p.VLogURL,
+		"trusted_proxies": strings.Join(p.TrustedProxies, ","),
+	}, nil
+}
+
+func importSettingsFields(data []byte) (map[string]any, error) {
+	rawLower := strings.ToLower(string(data))
+	if !strings.Contains(rawLower, "[rate_limit]") && !strings.Contains(rawLower, "[auto_quarantine]") {
+		return nil, fmt.Errorf("file does not look like vProx settings.toml")
+	}
+	var s proxySettingsFile
+	if err := toml.Unmarshal(data, &s); err != nil {
+		return nil, fmt.Errorf("parse settings TOML: %w", err)
+	}
+	return map[string]any{
+		"rps":              s.RateLimit.RPS,
+		"burst":            s.RateLimit.Burst,
+		"aq_enabled":       s.AutoQuarantine.Enabled,
+		"aq_threshold":     s.AutoQuarantine.Threshold,
+		"aq_window_sec":    s.AutoQuarantine.WindowSec,
+		"aq_penalty_rps":   s.AutoQuarantine.PenaltyRPS,
+		"aq_penalty_burst": s.AutoQuarantine.PenaltyBurst,
+		"aq_ttl_sec":       s.AutoQuarantine.TTLSec,
+		"debug_enabled":    s.Debug.Enabled,
+		"debug_port":       s.Debug.Port,
+	}, nil
+}
+
+func importChainFields(data []byte) (map[string]any, error) {
+	var c chainconfig.ChainConfig
+	if err := toml.Unmarshal(data, &c); err != nil {
+		return nil, fmt.Errorf("parse chain TOML: %w", err)
+	}
+	if err := chainconfig.ValidateConfig(&c); err != nil {
+		return nil, fmt.Errorf("chain validation failed: %w", err)
+	}
+	fields := map[string]any{
+		"chain_name":                c.ChainName,
+		"chain_id":                  c.ChainID,
+		"dashboard_name":            c.DashboardName,
+		"explorer_base":             c.ExplorerBase,
+		"host":                      c.Host,
+		"ip":                        c.IP,
+		"expose_path":               c.Expose.Path,
+		"expose_vhost":              c.Expose.VHost,
+		"vhost_prefix_rpc":          c.Expose.VHostPrefix.RPC,
+		"vhost_prefix_rest":         c.Expose.VHostPrefix.REST,
+		"svc_rpc":                   c.Services.RPC,
+		"svc_rest":                  c.Services.REST,
+		"svc_ws":                    c.Services.WebSocket,
+		"svc_grpc":                  c.Services.GRPC,
+		"svc_grpcweb":               c.Services.GRPCWeb,
+		"svc_apialias":              c.Services.APIAlias,
+		"default_ports":             c.DefaultPorts,
+		"port_rpc":                  c.Ports.RPC,
+		"port_rest":                 c.Ports.REST,
+		"port_grpc":                 c.Ports.GRPC,
+		"port_grpc_web":             c.Ports.GRPCWeb,
+		"port_api":                  c.Ports.API,
+		"managed_host":              c.Management.ManagedHost,
+		"management_lan_ip":         c.Management.LanIP,
+		"management_public_ip":      c.Management.PublicIP,
+		"management_user":           c.Management.User,
+		"management_key_path":       c.Management.KeyPath,
+		"management_port":           c.Management.Port,
+		"management_datacenter":     c.Management.Datacenter,
+		"management_type":           strings.Join(c.Management.Type, ","),
+		"exposed_services":          c.Management.ExposedServices,
+		"valoper":                   c.Management.Valoper,
+		"management_ping_country":   strings.ToUpper(c.Management.Ping.Country),
+		"management_ping_provider":  c.Management.Ping.Provider,
+		"chain_ping_country":        strings.ToUpper(c.ChainPing.Country),
+		"chain_ping_provider":       c.ChainPing.Provider,
+		"validator_mainnet_address": c.ChainServices.Validator.Mainnet.Address,
+		"validator_testnet_address": c.ChainServices.Validator.Testnet.Address,
+		"sp_mainnet_hostname":       c.ChainServices.SP.Mainnet.Hostname,
+		"sp_mainnet_lan_ip":         c.ChainServices.SP.Mainnet.LanIP,
+		"sp_testnet_hostname":       c.ChainServices.SP.Testnet.Hostname,
+		"sp_testnet_lan_ip":         c.ChainServices.SP.Testnet.LanIP,
+	}
+	return fields, nil
+}
+
+func importVLogFields(data []byte) (map[string]any, error) {
+	rawLower := strings.ToLower(string(data))
+	if !strings.Contains(rawLower, "[vlog]") {
+		return nil, fmt.Errorf("file does not look like vlog.toml")
+	}
+	var cfg vlogcfg.Config
+	if err := toml.Unmarshal(data, &cfg); err != nil {
+		return nil, fmt.Errorf("parse vlog TOML: %w", err)
+	}
+	v := cfg.VLog
+	return map[string]any{
+		"port":              v.Port,
+		"bind_address":      v.BindAddress,
+		"base_path":         v.BasePath,
+		"api_key":           v.APIKey,
+		"username":          v.Auth.Username,
+		"password_hash":     v.Auth.PasswordHash,
+		"auto_enrich":       v.Intel.AutoEnrich,
+		"cache_ttl_hours":   v.Intel.CacheTTLHours,
+		"rate_limit_rpm":    v.Intel.RateLimitRPM,
+		"abuseipdb":         v.Intel.Keys.AbuseIPDB,
+		"virustotal":        v.Intel.Keys.VirusTotal,
+		"shodan":            v.Intel.Keys.Shodan,
+		"push_user":         v.Push.Defaults.User,
+		"push_key_path":     v.Push.Defaults.KeyPath,
+		"poll_interval_sec": v.Push.PollIntervalSec,
+		"db_path":           v.DBPath,
+		"archives_dir":      v.ArchivesDir,
+		"vprox_bin":         v.VProxBin,
+	}, nil
+}
+
+func importFleetFields(data []byte) (map[string]any, error) {
+	rawLower := strings.ToLower(string(data))
+	if !strings.Contains(rawLower, "[ssh]") {
+		return nil, fmt.Errorf("file does not look like fleet settings.toml")
+	}
+	var s fleetSettingsFile
+	if err := toml.Unmarshal(data, &s); err != nil {
+		return nil, fmt.Errorf("parse fleet TOML: %w", err)
+	}
+	return map[string]any{
+		"ssh_user":          s.SSH.User,
+		"ssh_key_path":      s.SSH.KeyPath,
+		"ssh_port":          s.SSH.Port,
+		"poll_interval_sec": s.Poll.IntervalSec,
+		"datacenter":        s.Defaults.Datacenter,
+	}, nil
+}
+
+func importInfraFields(path string, data []byte) (map[string]any, error) {
+	lowerPath := strings.ToLower(filepath.ToSlash(path))
+	if strings.HasSuffix(lowerPath, "/config/push/vms.toml") {
+		return importLegacyInfraFields(path)
+	}
+
+	var inf infraFile
+	if err := toml.Unmarshal(data, &inf); err != nil {
+		return nil, fmt.Errorf("parse infra TOML: %w", err)
+	}
+	vms := dedupeFleetVMs(inf.VMs)
+	for i, vm := range vms {
+		if strings.TrimSpace(vm.Name) == "" {
+			return nil, fmt.Errorf("infra vm[%d].name is required", i+1)
+		}
+		if strings.TrimSpace(vm.Host) == "" {
+			return nil, fmt.Errorf("infra vm[%d].host is required", i+1)
+		}
+		if vm.Port != 0 && (vm.Port < 1 || vm.Port > 65535) {
+			return nil, fmt.Errorf("infra vm[%d].port must be between 1 and 65535", i+1)
+		}
+		if vm.LanIP != "" && net.ParseIP(vm.LanIP) == nil {
+			return nil, fmt.Errorf("infra vm[%d].lan_ip must be a valid IP address", i+1)
+		}
+		if vm.PublicIP != "" && net.ParseIP(vm.PublicIP) == nil {
+			return nil, fmt.Errorf("infra vm[%d].public_ip must be a valid IP address", i+1)
+		}
+		if vm.Ping.Country != "" && !validCountries[strings.ToUpper(vm.Ping.Country)] {
+			return nil, fmt.Errorf("infra vm[%d].ping.country is unsupported: %q", i+1, vm.Ping.Country)
+		}
+	}
+
+	dc := strings.TrimSpace(inf.Host.Datacenter)
+	if dc == "" {
+		dc = strings.TrimSuffix(filepath.Base(path), ".toml")
+	}
+	vmMaps := vmsToMaps(vms)
+	vmJSON, err := json.Marshal(vmMaps)
+	if err != nil {
+		return nil, fmt.Errorf("encode infra VM payload: %w", err)
+	}
+	return map[string]any{
+		"datacenter":         strings.ToLower(strings.TrimSpace(dc)),
+		"host_name":          inf.Host.Name,
+		"host_lan_ip":        inf.Host.LanIP,
+		"host_public_ip":     inf.Host.PublicIP,
+		"host_datacenter":    inf.Host.Datacenter,
+		"host_user":          inf.Host.User,
+		"host_ssh_key_path":  inf.Host.SSHKeyPath,
+		"vprox_name":         inf.VProx.Name,
+		"vprox_lan_ip":       inf.VProx.LanIP,
+		"vprox_key":          inf.VProx.Key,
+		"vprox_ssh_key_path": inf.VProx.SSHKeyPath,
+		"vms_json":           string(vmJSON),
+		"vms":                vmMaps,
+	}, nil
+}
+
+func importLegacyInfraFields(path string) (map[string]any, error) {
+	cfg, err := fleetcfg.Load(path)
+	if err != nil || cfg == nil {
+		if err == nil {
+			err = fmt.Errorf("legacy vms.toml is empty or invalid")
+		}
+		return nil, fmt.Errorf("parse legacy infra TOML: %w", err)
+	}
+	var host fleetcfg.Host
+	if len(cfg.Hosts) > 0 {
+		host = cfg.Hosts[0]
+	}
+	vms := dedupeFleetVMs(cfg.VMs)
+	dc := strings.ToLower(strings.TrimSpace(host.Datacenter))
+	if dc == "" {
+		for _, vm := range vms {
+			if strings.TrimSpace(vm.Datacenter) != "" {
+				dc = strings.ToLower(strings.TrimSpace(vm.Datacenter))
+				break
+			}
+		}
+	}
+	if dc == "" {
+		dc = "migration"
+	}
+
+	vmMaps := vmsToMaps(vms)
+	vmJSON, err := json.Marshal(vmMaps)
+	if err != nil {
+		return nil, fmt.Errorf("encode legacy VM payload: %w", err)
+	}
+	return map[string]any{
+		"datacenter":         dc,
+		"host_name":          host.Name,
+		"host_lan_ip":        host.LanIP,
+		"host_public_ip":     host.PublicIP,
+		"host_datacenter":    host.Datacenter,
+		"host_user":          host.User,
+		"host_ssh_key_path":  host.SSHKeyPath,
+		"vprox_name":         "vProx",
+		"vprox_lan_ip":       "",
+		"vprox_key":          "",
+		"vprox_ssh_key_path": "",
+		"vms_json":           string(vmJSON),
+		"vms":                vmMaps,
+	}, nil
+}
+
+func importBackupFields(data []byte) (map[string]any, error) {
+	rawLower := strings.ToLower(string(data))
+	if !strings.Contains(rawLower, "[backup]") {
+		return nil, fmt.Errorf("file does not look like backup.toml")
+	}
+	var cfg backup.BackupConfig
+	if err := toml.Unmarshal(data, &cfg); err != nil {
+		return nil, fmt.Errorf("parse backup TOML: %w", err)
+	}
+	b := cfg.Backup
+	return map[string]any{
+		"automation":         b.Automation,
+		"interval_days":      b.IntervalDays,
+		"max_size_mb":        b.MaxSizeMB,
+		"check_interval_min": b.CheckIntervalMin,
+		"destination":        b.Destination,
+		"files_logs":         strings.Join(b.Files.Logs, ","),
+		"files_data":         strings.Join(b.Files.Data, ","),
+		"files_config":       strings.Join(b.Files.Config, ","),
+	}, nil
 }
 
 // runCmd executes an external command. Used for browser launch.
