@@ -382,43 +382,31 @@ func cmdStart(f flags) int {
 	}
 
 	// Fleet module — initialize from config/infra/*.toml and chain [management] sections.
-	// VM registry is sourced from config/infra/{datacenter}.toml files (qc.toml, rbx.toml, etc.)
-	// All *.toml files in infra/ are scanned automatically.
+	// VM registry is sourced from:
+	//   1) config/vprox/nodes/*.toml + config/infra/*.toml (preferred)
+	//   2) config/chains/*.toml [management] (legacy fallback)
+	// and enriched by config/vlog/chains/*.toml chain profiles.
 	var fleetSvc *fleet.Service
 	{
-		chainsDir := cfg.VLog.Push.ChainsDir
-		infraDir := cfg.VLog.Push.InfraDir
 		defs := fleetcfg.FleetDefaults{
 			User:    cfg.VLog.Push.Defaults.User,
 			KeyPath: cfg.VLog.Push.Defaults.KeyPath,
 		}
 
-		_, chainsErr := os.Stat(chainsDir)
-		_, infraErr := os.Stat(infraDir)
-		if chainsErr == nil || infraErr == nil {
+		runtimeCfg, err := fleetcfg.LoadRuntimeConfig(home, defs, cfg.VLog.Push.ChainsDir, cfg.VLog.Push.InfraDir)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "vlog: fleet config warning: %v\n", err)
+		} else if len(runtimeCfg.VMs) > 0 {
 			svc, err := fleet.NewEmpty(cfg.VLog.Push.DBPath)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "vlog: fleet db error: %v\n", err)
 			} else {
-				if chainsErr == nil {
-					if err := svc.AddChainConfigs(chainsDir, defs); err != nil {
-						fmt.Fprintf(os.Stderr, "vlog: chain management warning: %v\n", err)
-					}
-				}
-				if infraErr == nil {
-					if err := svc.AddInfraConfigs(infraDir); err != nil {
-						fmt.Fprintf(os.Stderr, "vlog: infra configs warning: %v\n", err)
-					}
-				}
-				if len(svc.VMs()) > 0 {
-					fleetSvc = svc
-					defer svc.Close()
-					go svc.StartPolling(context.Background(), time.Duration(cfg.VLog.Push.PollIntervalSec)*time.Second)
-					if !f.quiet {
-						fmt.Fprintf(os.Stdout, "  fleet:    chain management (%ds poll)\n", cfg.VLog.Push.PollIntervalSec)
-					}
-				} else {
-					svc.Close()
+				svc.SetConfig(runtimeCfg)
+				fleetSvc = svc
+				defer svc.Close()
+				go svc.StartPolling(context.Background(), time.Duration(cfg.VLog.Push.PollIntervalSec)*time.Second)
+				if !f.quiet {
+					fmt.Fprintf(os.Stdout, "  fleet:    chain management (%ds poll)\n", cfg.VLog.Push.PollIntervalSec)
 				}
 			}
 		}

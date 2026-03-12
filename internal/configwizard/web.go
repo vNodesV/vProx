@@ -231,32 +231,56 @@ func normalizeDeployMode(raw string) string {
 }
 
 func loadChains(home string) []map[string]any {
-	dir := configPath(home, "chains")
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil
+	chainDirs := []string{
+		configPath(home, "vlog", "chains"), // preferred layout
+		configPath(home, "chains"),         // legacy fallback
 	}
-	names := make([]string, 0, len(entries))
-	for _, e := range entries {
-		if e.IsDir() || !chainconfig.IsChainTOML(e.Name()) {
+
+	var dir string
+	var names []string
+	for _, candidate := range chainDirs {
+		entries, err := os.ReadDir(candidate)
+		if err != nil {
 			continue
 		}
-		names = append(names, e.Name())
+		tmp := make([]string, 0, len(entries))
+		for _, e := range entries {
+			if e.IsDir() || !chainconfig.IsChainTOML(e.Name()) {
+				continue
+			}
+			if strings.EqualFold(e.Name(), "ports.toml") {
+				continue
+			}
+			tmp = append(tmp, e.Name())
+		}
+		if len(tmp) == 0 {
+			continue
+		}
+		dir = candidate
+		names = tmp
+		break
 	}
-	sort.Strings(names)
+	if len(names) == 0 {
+		return nil
+	}
 
+	sort.Strings(names)
 	out := make([]map[string]any, 0, len(names))
 	for _, name := range names {
-		path := configPath(home, "chains", name)
+		path := filepath.Join(dir, name)
 		data, err := os.ReadFile(path)
 		if err != nil {
 			continue
 		}
-		out = append(out, map[string]any{
+		entry := map[string]any{
 			"file": name,
 			"name": strings.TrimSuffix(name, ".toml"),
 			"raw":  string(data),
-		})
+		}
+		if fields, err := importChainFields(data); err == nil {
+			entry["fields"] = fields
+		}
+		out = append(out, entry)
 	}
 	return out
 }

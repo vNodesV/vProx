@@ -18,6 +18,8 @@
     <a href="#sec-infra">Infra Datacenters</a>
     <a href="#sec-backup">Backups</a>
     <div id="settings-status" class="settings-status">Loading current configuration…</div>
+    <button id="settings-apply-btn" type="button" class="settings-pill settings-pill-save" disabled>APPLY CHANGES</button>
+    <p class="settings-apply-note">Turns green when saved changes need runtime apply/restart.</p>
   </aside>
 
   <section class="settings-content">
@@ -79,8 +81,8 @@
               <tr>
                 <th>Chain</th>
                 <th>Chain ID</th>
-                <th>Host</th>
-                <th>IP</th>
+                <th>Services</th>
+                <th>Explorers</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -216,52 +218,45 @@
       <label>chain_id <span class="required-dot">*</span><input name="chain_id" type="text" required></label>
       <label>dashboard_name<input name="dashboard_name" type="text"></label>
       <label>explorer_base<input name="explorer_base" type="text"></label>
-      <label>host <span class="required-dot">*</span><input name="host" type="text" required></label>
-      <label>ip <span class="required-dot">*</span><input name="ip" type="text" required></label>
-
-      <label class="check"><input name="expose_path" type="checkbox" checked> expose.path</label>
-      <label class="check"><input name="expose_vhost" type="checkbox" checked> expose.vhost</label>
-      <label>vhost_prefix_rpc<input name="vhost_prefix_rpc" type="text" value="rpc"></label>
-      <label>vhost_prefix_rest<input name="vhost_prefix_rest" type="text" value="api"></label>
-
-      <label class="check"><input name="svc_rpc" type="checkbox" checked> services.rpc</label>
-      <label class="check"><input name="svc_rest" type="checkbox" checked> services.rest</label>
-      <label class="check"><input name="svc_ws" type="checkbox" checked> services.websocket</label>
-      <label class="check"><input name="svc_grpc" type="checkbox" checked> services.grpc</label>
-      <label class="check"><input name="svc_grpcweb" type="checkbox" checked> services.grpc_web</label>
-      <label class="check"><input name="svc_apialias" type="checkbox" checked> services.api_alias</label>
-
-      <label class="check"><input name="default_ports" type="checkbox" checked> default_ports</label>
-      <label>port_rpc<input name="port_rpc" type="number" min="1" max="65535" value="26657"></label>
-      <label>port_rest<input name="port_rest" type="number" min="1" max="65535" value="1317"></label>
-      <label>port_grpc<input name="port_grpc" type="number" min="1" max="65535" value="9090"></label>
-      <label>port_grpc_web<input name="port_grpc_web" type="number" min="1" max="65535" value="9091"></label>
-      <label>port_api<input name="port_api" type="number" min="1" max="65535" value="1317"></label>
-
-      <label class="check"><input name="managed_host" type="checkbox"> management.managed_host</label>
-      <label>management_lan_ip<input name="management_lan_ip" type="text"></label>
-      <label>management_public_ip<input name="management_public_ip" type="text"></label>
-      <label>management_user<input name="management_user" type="text"></label>
-      <label>management_key_path<input name="management_key_path" type="text"></label>
-      <label>management_port<input name="management_port" type="number" min="0" max="65535" value="22"></label>
-      <label>management_datacenter<input name="management_datacenter" type="text"></label>
-      <label>management_type (comma-separated)<input name="management_type" type="text" placeholder="validator,sp"></label>
-      <label class="check"><input name="exposed_services" type="checkbox" checked> management.exposed_services</label>
-      <label>valoper<input name="valoper" type="text"></label>
-      <label>management_ping_country<input name="management_ping_country" type="text" value="CA"></label>
-      <label>management_ping_provider<input name="management_ping_provider" type="text"></label>
-
+      <label class="full">explorers (comma-separated)<input name="explorers" type="text" placeholder="https://mintscan.io/cheqd-mainnet"></label>
       <label>chain_ping_country<input name="chain_ping_country" type="text" value="CA"></label>
       <label>chain_ping_provider<input name="chain_ping_provider" type="text"></label>
-      <label>validator_mainnet_address<input name="validator_mainnet_address" type="text"></label>
-      <label>validator_testnet_address<input name="validator_testnet_address" type="text"></label>
-      <label>sp_mainnet_hostname<input name="sp_mainnet_hostname" type="text"></label>
-      <label>sp_mainnet_lan_ip<input name="sp_mainnet_lan_ip" type="text"></label>
-      <label>sp_testnet_hostname<input name="sp_testnet_hostname" type="text"></label>
-      <label>sp_testnet_lan_ip<input name="sp_testnet_lan_ip" type="text"></label>
     </div>
+    <section class="settings-vms">
+      <div class="settings-vms-head">
+        <strong>[[chain_services]]</strong>
+        <button id="settings-chain-add-service" type="button" class="outline">+ Add Service</button>
+      </div>
+      <div id="settings-chain-service-list" class="settings-vm-list"></div>
+      <input id="settings-chain-services-json" name="chain_services_json" type="hidden" value="[]">
+    </section>
     <div class="settings-actions"><button type="submit">Save chain profile</button></div>
   </form>
+
+  <template id="settings-chain-service-template">
+    <article class="settings-vm-row settings-chain-service-row">
+      <div class="settings-grid">
+        <label>service.name <span class="required-dot">*</span><input class="svc-field" data-field="name" type="text"></label>
+        <label>service_type <span class="required-dot">*</span>
+          <select class="svc-field" data-field="service_type">
+            <option value="">Select type</option>
+            <option value="node">node</option>
+            <option value="validator">validator</option>
+            <option value="relayer">relayer</option>
+            <option value="sp">sp</option>
+          </select>
+        </label>
+        <label>moniker<input class="svc-field" data-field="moniker" type="text"></label>
+        <label>valoper<input class="svc-field" data-field="valoper" type="text"></label>
+        <label>internal_ip (required when link_to_vm=true)<input class="svc-field" data-field="internal_ip" type="text"></label>
+        <label>host<input class="svc-field" data-field="host" type="text"></label>
+        <label class="check full"><input class="svc-field" data-field="link_to_vm" type="checkbox" checked> link_to_vm</label>
+      </div>
+      <div class="settings-actions">
+        <button type="button" class="danger settings-service-remove">− Remove Service</button>
+      </div>
+    </article>
+  </template>
 
   <form id="settings-form-vlog" data-step="vlog">
     <div class="settings-grid">
@@ -433,7 +428,7 @@
 
   const requiredByStep = {
     ports: ["rpc", "rest"],
-    chain: ["chain_name", "chain_id", "host", "ip"],
+    chain: ["chain_name", "chain_id"],
     vlog: ["username"],
     fleet: ["ssh_user", "ssh_key_path"],
     infra: ["datacenter"],
@@ -503,6 +498,7 @@
   const state = {
     chains: [],
     infras: [],
+    pendingSteps: new Set(),
     editor: {
       step: "",
       form: null,
@@ -522,6 +518,58 @@
     const box = $("#settings-status");
     box.textContent = message;
     box.className = `settings-status${kind ? " " + kind : ""}`;
+  }
+
+  function refreshApplyButton() {
+    const btn = $("#settings-apply-btn");
+    if (!btn) return;
+    const count = state.pendingSteps.size;
+    btn.disabled = count === 0;
+    btn.classList.toggle("is-ready", count > 0);
+    btn.textContent = count > 0 ? `APPLY CHANGES (${count})` : "APPLY CHANGES";
+  }
+
+  function markPending(step) {
+    const normalized = String(step || "").trim().toLowerCase();
+    if (!normalized) return;
+    state.pendingSteps.add(normalized);
+    refreshApplyButton();
+  }
+
+  async function applyPendingChanges() {
+    if (state.pendingSteps.size === 0) {
+      setStatus("No pending changes to apply.", "warn");
+      return;
+    }
+
+    const btn = $("#settings-apply-btn");
+    if (btn) btn.disabled = true;
+    const steps = Array.from(state.pendingSteps);
+    setStatus("Applying saved changes…");
+
+    try {
+      const resp = await fetch(apiPath("/settings/api/config/apply"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ steps })
+      });
+      const body = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(body.error || `HTTP ${resp.status}`);
+
+      const restartTargets = Array.isArray(body.requires_restart) ? body.requires_restart : [];
+      const baseMsg = String(body.message || "Apply completed.").trim();
+      if (restartTargets.length > 0) {
+        setStatus(`${baseMsg} Restart required: ${restartTargets.join(", ")}.`, "warn");
+      } else {
+        setStatus(baseMsg, "ok");
+      }
+
+      state.pendingSteps.clear();
+      refreshApplyButton();
+    } catch (err) {
+      setStatus(`Apply failed: ${err.message}`, "err");
+      refreshApplyButton();
+    }
   }
 
   function setFormBusy(form, busy) {
@@ -579,6 +627,17 @@
     return def;
   }
 
+  function toBool(v, def = false) {
+    if (typeof v === "boolean") return v;
+    if (typeof v === "number") return v !== 0;
+    if (typeof v === "string") {
+      const t = v.trim().toLowerCase();
+      if (["true", "1", "yes", "on"].includes(t)) return true;
+      if (["false", "0", "no", "off", ""].includes(t)) return false;
+    }
+    return def;
+  }
+
   function asList(v) {
     const t = String(v || "").trim();
     if (!t.startsWith("[") || !t.endsWith("]")) return "";
@@ -594,7 +653,88 @@
   function setCheck(form, name, value) {
     const el = $(`[name="${name}"]`, form);
     if (!el || el.type !== "checkbox") return;
-    el.checked = !!value;
+    el.checked = toBool(value, false);
+  }
+
+  function serviceKey(svc) {
+    return [svc.name, svc.service_type, svc.internal_ip].map((v) => String(v || "").trim().toLowerCase()).join("|");
+  }
+
+  function dedupeServices(services) {
+    const out = [];
+    const seen = new Set();
+    (services || []).forEach((svc) => {
+      const key = serviceKey(svc || {});
+      if (!key || seen.has(key)) return;
+      seen.add(key);
+      out.push(svc);
+    });
+    return out;
+  }
+
+  function addChainServiceRow(seed = {}) {
+    const tpl = $("#settings-chain-service-template");
+    const list = $("#settings-chain-service-list", forms.chain);
+    if (!tpl || !list) return;
+
+    const row = tpl.content.firstElementChild.cloneNode(true);
+    $$(".svc-field", row).forEach((el) => {
+      const key = el.dataset.field;
+      const value = seed[key];
+      if (el.type === "checkbox") {
+        el.checked = value === undefined ? true : toBool(value, true);
+      } else if (value !== undefined && value !== null && value !== "") {
+        el.value = String(value);
+      }
+      el.addEventListener("input", syncChainServicesJSON);
+      el.addEventListener("change", syncChainServicesJSON);
+    });
+
+    $(".settings-service-remove", row).addEventListener("click", () => {
+      row.remove();
+      syncChainServicesJSON();
+    });
+
+    list.appendChild(row);
+    syncChainServicesJSON();
+  }
+
+  function collectChainServices() {
+    const rows = $$("#settings-chain-service-list .settings-chain-service-row", forms.chain).map((row) => {
+      const svc = {};
+      $$(".svc-field", row).forEach((el) => {
+        const key = el.dataset.field;
+        if (el.type === "checkbox") {
+          svc[key] = !!el.checked;
+          return;
+        }
+        svc[key] = (el.value || "").trim();
+      });
+      const hasAny = ["name", "service_type", "moniker", "valoper", "internal_ip", "host"].some((k) => String(svc[k] || "").trim() !== "");
+      if (!hasAny) return null;
+      if (svc.service_type) svc.service_type = String(svc.service_type).toLowerCase();
+      if (svc.link_to_vm === undefined) svc.link_to_vm = true;
+      return svc;
+    }).filter(Boolean);
+    return dedupeServices(rows);
+  }
+
+  function syncChainServicesJSON() {
+    const hidden = $("#settings-chain-services-json", forms.chain);
+    if (!hidden) return;
+    hidden.value = JSON.stringify(collectChainServices());
+  }
+
+  function setChainServiceRows(services) {
+    const list = $("#settings-chain-service-list", forms.chain);
+    if (!list) return;
+    list.innerHTML = "";
+    const compact = dedupeServices(services || []);
+    if (compact.length === 0) {
+      addChainServiceRow({});
+      return;
+    }
+    compact.forEach((svc) => addChainServiceRow(svc));
   }
 
   function resetForm(form) {
@@ -758,50 +898,45 @@
 
   function prefillChain(entry) {
     resetForm(forms.chain);
-    if (!entry || !entry.raw) return;
-    const m = parseTomlMap(entry.raw);
-    setVal(forms.chain, "chain_name", unquote((m.root || {}).chain_name));
-    setVal(forms.chain, "chain_id", unquote((m.root || {}).chain_id));
-    setVal(forms.chain, "dashboard_name", unquote((m.root || {}).dashboard_name));
-    setVal(forms.chain, "explorer_base", unquote((m.root || {}).explorer_base));
-    setVal(forms.chain, "host", unquote((m.root || {}).host));
-    setVal(forms.chain, "ip", unquote((m.root || {}).ip));
-    setCheck(forms.chain, "expose_path", asBool((m.expose || {}).path, true));
-    setCheck(forms.chain, "expose_vhost", asBool((m.expose || {}).vhost, true));
-    setVal(forms.chain, "vhost_prefix_rpc", unquote((m["expose.vhost_prefix"] || {}).rpc));
-    setVal(forms.chain, "vhost_prefix_rest", unquote((m["expose.vhost_prefix"] || {}).rest));
-    setCheck(forms.chain, "svc_rpc", asBool((m.services || {}).rpc, true));
-    setCheck(forms.chain, "svc_rest", asBool((m.services || {}).rest, true));
-    setCheck(forms.chain, "svc_ws", asBool((m.services || {}).websocket, true));
-    setCheck(forms.chain, "svc_grpc", asBool((m.services || {}).grpc, true));
-    setCheck(forms.chain, "svc_grpcweb", asBool((m.services || {}).grpc_web, true));
-    setCheck(forms.chain, "svc_apialias", asBool((m.services || {}).api_alias, true));
-    setCheck(forms.chain, "default_ports", asBool((m.root || {}).default_ports, true));
-    setVal(forms.chain, "port_rpc", asNum((m.ports || {}).rpc, 26657));
-    setVal(forms.chain, "port_rest", asNum((m.ports || {}).rest, 1317));
-    setVal(forms.chain, "port_grpc", asNum((m.ports || {}).grpc, 9090));
-    setVal(forms.chain, "port_grpc_web", asNum((m.ports || {}).grpc_web, 9091));
-    setVal(forms.chain, "port_api", asNum((m.ports || {}).api, 1317));
-    setCheck(forms.chain, "managed_host", asBool((m.management || {}).managed_host, false));
-    setVal(forms.chain, "management_lan_ip", unquote((m.management || {}).lan_ip));
-    setVal(forms.chain, "management_public_ip", unquote((m.management || {}).public_ip));
-    setVal(forms.chain, "management_user", unquote((m.management || {}).user));
-    setVal(forms.chain, "management_key_path", unquote((m.management || {}).key_path));
-    setVal(forms.chain, "management_port", asNum((m.management || {}).port, 22));
-    setVal(forms.chain, "management_datacenter", unquote((m.management || {}).datacenter));
-    setVal(forms.chain, "management_type", asList((m.management || {}).type));
-    setCheck(forms.chain, "exposed_services", asBool((m.management || {}).exposed_services, true));
-    setVal(forms.chain, "valoper", unquote((m.management || {}).valoper));
-    setVal(forms.chain, "management_ping_country", unquote((m["management.ping"] || {}).country));
-    setVal(forms.chain, "management_ping_provider", unquote((m["management.ping"] || {}).provider));
-    setVal(forms.chain, "chain_ping_country", unquote((m.chain_ping || {}).country));
-    setVal(forms.chain, "chain_ping_provider", unquote((m.chain_ping || {}).provider));
-    setVal(forms.chain, "validator_mainnet_address", unquote((m["chain_services.validator.mainnet"] || {}).address));
-    setVal(forms.chain, "validator_testnet_address", unquote((m["chain_services.validator.testnet"] || {}).address));
-    setVal(forms.chain, "sp_mainnet_hostname", unquote((m["chain_services.sp.mainnet"] || {}).hostname));
-    setVal(forms.chain, "sp_mainnet_lan_ip", unquote((m["chain_services.sp.mainnet"] || {}).lan_ip));
-    setVal(forms.chain, "sp_testnet_hostname", unquote((m["chain_services.sp.testnet"] || {}).hostname));
-    setVal(forms.chain, "sp_testnet_lan_ip", unquote((m["chain_services.sp.testnet"] || {}).lan_ip));
+    if (!entry) {
+      setChainServiceRows([]);
+      syncChainServicesJSON();
+      return;
+    }
+
+    const fields = entry.fields && typeof entry.fields === "object" ? entry.fields : {};
+    if (Object.keys(fields).length === 0 && entry.raw) {
+      const m = parseTomlMap(entry.raw);
+      fields.chain_name = unquote((m.root || {}).chain_name);
+      fields.chain_id = unquote((m.root || {}).chain_id);
+      fields.dashboard_name = unquote((m.root || {}).dashboard_name);
+      fields.explorer_base = unquote((m.root || {}).explorer_base);
+      fields.explorers = asList((m.root || {}).explorers);
+      fields.chain_ping_country = unquote((m.chain_ping || {}).country);
+      fields.chain_ping_provider = unquote((m.chain_ping || {}).provider);
+    }
+
+    setVal(forms.chain, "chain_name", fields.chain_name || entry.name || "");
+    setVal(forms.chain, "chain_id", fields.chain_id || "");
+    setVal(forms.chain, "dashboard_name", fields.dashboard_name || "");
+    setVal(forms.chain, "explorer_base", fields.explorer_base || "");
+    setVal(forms.chain, "explorers", fields.explorers || "");
+    setVal(forms.chain, "chain_ping_country", fields.chain_ping_country || "CA");
+    setVal(forms.chain, "chain_ping_provider", fields.chain_ping_provider || "");
+
+    let services = [];
+    if (Array.isArray(fields.chain_services)) {
+      services = fields.chain_services;
+    } else if (typeof fields.chain_services_json === "string" && fields.chain_services_json.trim() !== "") {
+      try {
+        const parsed = JSON.parse(fields.chain_services_json);
+        services = Array.isArray(parsed) ? parsed : [];
+      } catch {
+        services = [];
+      }
+    }
+    setChainServiceRows(services);
+    syncChainServicesJSON();
   }
 
   function prefillInfra(entry) {
@@ -861,16 +996,20 @@
       return;
     }
     body.innerHTML = state.chains.map((entry) => {
-      const m = parseTomlMap(entry.raw || "");
-      const chain = unquote((m.root || {}).chain_name) || entry.name || entry.file;
-      const chainID = unquote((m.root || {}).chain_id);
-      const host = unquote((m.root || {}).host);
-      const ip = unquote((m.root || {}).ip);
+      const fields = entry.fields && typeof entry.fields === "object" ? entry.fields : {};
+      const chain = String(fields.chain_name || entry.name || entry.file || "").trim();
+      const chainID = String(fields.chain_id || "").trim();
+      const services = Array.isArray(fields.chain_services) ? fields.chain_services : [];
+      const serviceTypes = Array.from(new Set(services
+        .map((svc) => String((svc || {}).service_type || "").trim().toLowerCase())
+        .filter(Boolean)));
+      const serviceSummary = serviceTypes.length > 0 ? serviceTypes.join(", ") : "—";
+      const explorers = String(fields.explorers || fields.explorer_base || "").trim();
       return `<tr>
         <td class="settings-value">${escapeHTML(renderValue(chain))}</td>
         <td class="settings-value">${escapeHTML(renderValue(chainID))}</td>
-        <td class="settings-value">${escapeHTML(renderValue(host))}</td>
-        <td class="settings-value">${escapeHTML(renderValue(ip))}</td>
+        <td class="settings-value">${escapeHTML(renderValue(serviceSummary))}</td>
+        <td class="settings-value">${escapeHTML(renderValue(explorers))}</td>
         <td><div class="settings-row-buttons"><button type="button" class="outline" data-edit-chain="${escapeHTML(entry.file)}">Edit</button><button type="button" class="danger" data-remove-chain="${escapeHTML(entry.file)}">− Remove</button></div></td>
       </tr>`;
     }).join("");
@@ -976,6 +1115,19 @@
       }
     }
 
+    if (step === "chain") {
+      const services = collectChainServices();
+      if (services.length === 0) return false;
+      for (const svc of services) {
+        const svcType = String(svc.service_type || "").trim().toLowerCase();
+        const linkToVM = toBool(svc.link_to_vm, true);
+        if (!String(svc.name || "").trim()) return false;
+        if (!svcType) return false;
+        if (linkToVM && !String(svc.internal_ip || "").trim()) return false;
+        if (svcType === "validator" && !String(svc.valoper || "").trim()) return false;
+      }
+    }
+
     return true;
   }
 
@@ -1018,7 +1170,9 @@
     host.appendChild(forms[step]);
     $("#settings-editor-overlay").style.display = "flex";
 
-    if (step === "infra") {
+    if (step === "chain") {
+      syncChainServicesJSON();
+    } else if (step === "infra") {
       syncVMJSON();
     }
 
@@ -1065,6 +1219,7 @@
 
   async function submitForm(form) {
     const step = form.dataset.step;
+    if (step === "chain") syncChainServicesJSON();
     if (step === "infra") syncVMJSON();
 
     const payload = formToObject(form);
@@ -1079,6 +1234,7 @@
       const body = await resp.json().catch(() => ({}));
       if (!resp.ok) throw new Error(body.error || `HTTP ${resp.status}`);
       await loadCurrent();
+      markPending(step);
       setStatus(`Saved ${stepLabels[step] || step} successfully.`, "ok");
       return true;
     } catch (err) {
@@ -1108,6 +1264,7 @@
     if (step === "infra") setVMRows([]);
     const ok = await submitForm(forms[step]);
     if (ok) {
+      markPending(step);
       setStatus(`${label} reset to defaults.`, "ok");
     }
   }
@@ -1156,7 +1313,7 @@
       const el = $(`[name="${name}"]`, form);
       if (!el) return;
       if (el.type === "checkbox") {
-        el.checked = !!value;
+        el.checked = toBool(value, false);
         return;
       }
       if (value === undefined || value === null) {
@@ -1179,6 +1336,21 @@
         setVMRows([]);
       }
       syncVMJSON();
+    }
+    if (step === "chain") {
+      if (Array.isArray(fields.chain_services)) {
+        setChainServiceRows(fields.chain_services);
+      } else if (typeof fields.chain_services_json === "string" && fields.chain_services_json.trim() !== "") {
+        try {
+          const parsed = JSON.parse(fields.chain_services_json);
+          setChainServiceRows(Array.isArray(parsed) ? parsed : []);
+        } catch {
+          setChainServiceRows([]);
+        }
+      } else {
+        setChainServiceRows([]);
+      }
+      syncChainServicesJSON();
     }
   }
 
@@ -1233,6 +1405,8 @@
     state.infras = Array.isArray(current.infras) ? current.infras : [];
     if (state.chains.length > 0) {
       prefillChain(state.chains[0]);
+    } else {
+      prefillChain(null);
     }
     if (state.infras.length > 0) {
       prefillInfra(state.infras[0]);
@@ -1262,7 +1436,17 @@
     if (addVMBtn) {
       addVMBtn.addEventListener("click", () => addVMRow({}));
     }
+    const addServiceBtn = $("#settings-chain-add-service", forms.chain);
+    if (addServiceBtn) {
+      addServiceBtn.addEventListener("click", () => addChainServiceRow({ link_to_vm: true }));
+    }
+    const applyBtn = $("#settings-apply-btn");
+    if (applyBtn) {
+      applyBtn.addEventListener("click", () => applyPendingChanges());
+    }
     setVMRows([]);
+    setChainServiceRows([]);
+    refreshApplyButton();
   }
 
   function initImportFlow() {
@@ -1338,11 +1522,12 @@
       const removeChainBtn = ev.target.closest("button[data-remove-chain]");
       if (removeChainBtn) {
         const file = removeChainBtn.dataset.removeChain;
-        if (!confirm(`Remove chain profile ${file}?`)) return;
+        if (!confirm(`Remove chain profile ${file} and unregister linked runtime entries?`)) return;
         try {
           await removeVariable("chain", file);
           await loadCurrent();
-          setStatus(`Removed chain profile ${file}.`, "ok");
+          markPending("chain");
+          setStatus(`Removed chain profile ${file} and unregistered linked runtime entries.`, "ok");
         } catch (err) {
           setStatus(`Could not remove chain profile: ${err.message}`, "err");
         }
@@ -1366,7 +1551,8 @@
         try {
           await removeVariable("infra", file);
           await loadCurrent();
-          setStatus(`Removed infrastructure file ${file}.`, "ok");
+          markPending("infra");
+          setStatus(`Removed infrastructure file ${file} and unregistered linked runtime entries.`, "ok");
         } catch (err) {
           setStatus(`Could not remove infrastructure file: ${err.message}`, "err");
         }

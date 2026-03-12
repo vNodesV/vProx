@@ -49,6 +49,7 @@ type ChainStatus struct {
 	ChainName    string `json:"chain_name,omitempty"`   // short slug, e.g. "cheqd" — used for tree grouping
 	NetworkType  string `json:"network_type,omitempty"` // "mainnet" or "testnet" — used for tree grouping
 	ExplorerBase string `json:"explorer_url,omitempty"` // block explorer base URL for dashboard links
+	InternalIP   string `json:"internal_ip,omitempty"`  // VM LAN IP used for link-to-VM matching
 
 	// LAN ping (vProx → node direct)
 	LanPingMs int64 `json:"lan_ping_ms"` // round-trip ms; -1=unreachable, 0=not configured

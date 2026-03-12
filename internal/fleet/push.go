@@ -67,6 +67,18 @@ func NewEmpty(dbPath string) (*Service, error) {
 	}, nil
 }
 
+// SetConfig replaces the runtime fleet configuration and clears cached statuses.
+// The next Poll() repopulates chain status using the updated VM registry.
+func (s *Service) SetConfig(cfg *config.Config) {
+	if cfg == nil {
+		cfg = &config.Config{}
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.cfg = cfg
+	s.statuses = make(map[string]*status.ChainStatus)
+}
+
 // AddInfraConfigs loads per-datacenter host files from dir (config/infra/*.toml)
 // and merges their hosts and VMs into the service config.
 // Each infra file defines one physical host ([host]) and its child VMs ([[vm]]).
@@ -129,9 +141,21 @@ func (s *Service) StartPolling(ctx context.Context, interval time.Duration) {
 
 // pollAll refreshes status for all chains concurrently.
 func (s *Service) pollAll(ctx context.Context) {
+	s.mu.RLock()
+	cfg := s.cfg
+	if cfg == nil {
+		cfg = &config.Config{}
+	}
+	vms := append([]config.VM(nil), cfg.VMs...)
+	s.mu.RUnlock()
+
+	active := make(map[string]struct{}, len(vms)+8)
 	var wg sync.WaitGroup
-	for _, vm := range s.cfg.VMs {
+	for _, vm := range vms {
 		vm := vm
+		if vm.Name != "" {
+			active[vm.Name] = struct{}{}
+		}
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -146,8 +170,9 @@ func (s *Service) pollAll(ctx context.Context) {
 			// v1.3.0: chain identity + LAN ping + governance participation
 			st.ChainID = vm.ChainID
 			st.ExplorerBase = vm.Explorer
-			if vm.LanIP != "" {
-				st.LanPingMs = status.PingLanIP(ctx, vm.LanIP)
+			st.InternalIP = vm.DisplayLanIP()
+			if st.InternalIP != "" {
+				st.LanPingMs = status.PingLanIP(ctx, st.InternalIP)
 			}
 			if vm.Valoper != "" {
 				st.HasValidator = true
@@ -171,10 +196,13 @@ func (s *Service) pollAll(ctx context.Context) {
 		for _, rc := range registered {
 			// Skip if a VM already covers this chain (exact name or base-slug match).
 			// e.g. registered "cheqd-testnet" is skipped when VM "cheqd" (ChainName="cheqd") exists.
-			if s.cfg.FindVMForChain(rc.Chain) != nil {
+			if cfg.FindVMForChain(rc.Chain) != nil {
 				continue
 			}
 			rc := rc
+			if rc.Chain != "" {
+				active[rc.Chain] = struct{}{}
+			}
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
@@ -187,6 +215,15 @@ func (s *Service) pollAll(ctx context.Context) {
 		}
 	}
 	wg.Wait()
+
+	// Prune stale entries so removed/unregistered chains disappear after apply/poll.
+	s.mu.Lock()
+	for key := range s.statuses {
+		if _, ok := active[key]; !ok {
+			delete(s.statuses, key)
+		}
+	}
+	s.mu.Unlock()
 }
 
 // Poll triggers an immediate concurrent poll of all chains and blocks until complete.
@@ -220,13 +257,29 @@ func (s *Service) AllStatuses() []*status.ChainStatus {
 }
 
 // VMs returns the loaded VM registry.
-func (s *Service) VMs() []config.VM { return s.cfg.VMs }
+func (s *Service) VMs() []config.VM {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return append([]config.VM(nil), s.cfg.VMs...)
+}
 
 // Hosts returns all registered physical hosts from vms.toml and config/infra/*.toml.
-func (s *Service) Hosts() []config.Host { return s.cfg.Hosts }
+func (s *Service) Hosts() []config.Host {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return append([]config.Host(nil), s.cfg.Hosts...)
+}
 
 // Config exposes the full fleet configuration.
-func (s *Service) Config() *config.Config { return s.cfg }
+func (s *Service) Config() *config.Config {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := &config.Config{
+		Hosts: append([]config.Host(nil), s.cfg.Hosts...),
+		VMs:   append([]config.VM(nil), s.cfg.VMs...),
+	}
+	return out
+}
 
 // DB exposes the state database for use by API handlers.
 func (s *Service) DB() *state.DB { return s.db }
@@ -235,7 +288,17 @@ func (s *Service) DB() *state.DB { return s.db }
 func (s *Service) Runner() *runner.Runner { return s.runner }
 
 // FindVM looks up a VM by name.
-func (s *Service) FindVM(name string) *config.VM { return s.cfg.FindVM(name) }
+func (s *Service) FindVM(name string) *config.VM {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for i := range s.cfg.VMs {
+		if s.cfg.VMs[i].Name == name {
+			vm := s.cfg.VMs[i]
+			return &vm
+		}
+	}
+	return nil
+}
 
 // BestVM returns the healthiest VM registered for chain.
 // Selection criteria (in priority order):
@@ -246,17 +309,19 @@ func (s *Service) BestVM(chain string) *config.VM {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	var best *config.VM
+	var best config.VM
+	hasBest := false
 	var bestHeight int64
 
 	for i := range s.cfg.VMs {
-		vm := &s.cfg.VMs[i]
+		vm := s.cfg.VMs[i]
 		if vm.Name != chain {
 			continue
 		}
 		st := s.statuses[chain]
-		if best == nil {
+		if !hasBest {
 			best = vm
+			hasBest = true
 			if st != nil {
 				bestHeight = st.Height
 			}
@@ -267,7 +332,11 @@ func (s *Service) BestVM(chain string) *config.VM {
 			bestHeight = st.Height
 		}
 	}
-	return best
+	if !hasBest {
+		return nil
+	}
+	out := best
+	return &out
 }
 
 // RegisterVM adds or updates a VM entry in the in-memory config.

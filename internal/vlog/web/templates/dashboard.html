@@ -373,34 +373,41 @@
   var chainCdSec = CHAIN_INTERVAL;
   var chainPinging = false;
   var chainExpanded = false;
-  var chainCachedData = null; // {chains, registeredSet, tmap}
+  var chainCachedData = null; // {chains, vms}
   var chainTreeExpanded = {}; // per chain_name group: true=expanded (default true)
 
   function showLoading(panelId) { window.showLoading(panelId); }
 
   function statusCell(st) {
-    var online;
-    if (st === 'synced' || st === 'syncing')
-      online = '<span style="font-size:.68rem;padding:.06rem .32rem;border-radius:3px;border:1px solid rgba(0,255,0,0.5);color:#00ff00;font-weight:600">ONLINE</span>';
-    else
-      return '<span style="font-size:.68rem;padding:.06rem .32rem;border-radius:3px;border:1px solid rgba(239,83,80,0.5);color:#ef5350;font-weight:600">OFFLINE</span>';
-    var sync = (st === 'synced')
-      ? '<span style="font-size:.68rem;padding:.06rem .32rem;border-radius:3px;border:1px solid rgba(0,255,0,0.4);color:#00ff00;font-weight:600;margin-left:3px">SYNCED</span>'
-      : '<span style="font-size:.68rem;padding:.06rem .32rem;border-radius:3px;border:1px solid rgba(255,167,38,0.5);color:#ffa726;font-weight:600;margin-left:3px">CATCHING UP</span>';
-    return online + sync;
+    if (st === 'synced' || st === 'syncing') {
+      return '<span style="font-size:.68rem;padding:.06rem .32rem;border-radius:3px;border:1px solid rgba(0,255,0,0.5);color:#00ff00;font-weight:600">ONLINE</span>';
+    }
+    return '<span style="font-size:.68rem;padding:.06rem .32rem;border-radius:3px;border:1px solid rgba(239,83,80,0.5);color:#ef5350;font-weight:600">OFFLINE</span>';
   }
-  function lanPingCell(ms) {
-    if (ms === undefined || ms === null || ms === 0) return '<span style="opacity:.4;font-size:.7rem">—</span>';
-    if (ms < 0) return '<span style="color:#ef5350;font-size:.68rem">✗</span>';
-    return '<span style="color:#4caf50;font-size:.68rem">' + ms + 'ms</span>';
+  function syncedCell(st) {
+    if (st === 'synced') {
+      return '<span style="font-size:.68rem;padding:.06rem .32rem;border-radius:3px;border:1px solid rgba(0,255,0,0.4);color:#00ff00;font-weight:600">SYNCED</span>';
+    }
+    if (st === 'syncing') {
+      return '<span style="font-size:.68rem;padding:.06rem .32rem;border-radius:3px;border:1px solid rgba(255,167,38,0.5);color:#ffa726;font-weight:600">CATCHING UP</span>';
+    }
+    return '<span style="opacity:.35;font-size:.68rem">—</span>';
+  }
+  function linkedCell(entry, vmIndex) {
+    var ip = String(entry.internal_ip || '').trim().toLowerCase();
+    if (!ip) return '<span style="opacity:.35;font-size:.68rem">N/A</span>';
+    if (vmIndex[ip]) {
+      return '<span style="font-size:.68rem;padding:.06rem .32rem;border-radius:3px;border:1px solid rgba(76,175,80,0.45);color:#7ff0a3;font-weight:600">LINKED</span>';
+    }
+    return '<span style="font-size:.68rem;padding:.06rem .32rem;border-radius:3px;border:1px solid rgba(239,83,80,0.45);color:#ff9f9f;font-weight:600">UNLINKED</span>';
   }
   function servicesPills(type) {
-    var types = (type || '').toLowerCase().split(',').map(function(t){ return t.trim(); });
+    var types = (type || '').toLowerCase().split(',').map(function(t){ return t.trim(); }).filter(Boolean);
     return [
-      {keys:['node','sp'],        label:'NODE'},
-      {keys:['validator'],        label:'VAL'},
-      {keys:['sp','rpc','api'],   label:'API/RPC'},
-      {keys:['relayer'],          label:'RLYR'}
+      {keys:['node'],      label:'NODE'},
+      {keys:['validator'], label:'VAL'},
+      {keys:['sp'],        label:'SP'},
+      {keys:['relayer'],   label:'RLYR'}
     ].map(function(d) {
       var on = d.keys.some(function(k){ return types.indexOf(k) >= 0; });
       return '<span class="svc-pill' + (on ? ' svc-on' : '') + '">' + d.label + '</span>';
@@ -411,22 +418,15 @@
     if (!btn || chainPinging) return;
     btn.textContent = 'Refresh (' + chainCdSec + 's)';
   }
-  function buildTrafficMap(traffic) {
-    var m = {};
-    (traffic || []).forEach(function(t) { m[t.host.toLowerCase()] = t; });
-    return m;
-  }
-  function matchTraffic(tmap, chainName) {
-    var cn = chainName.toLowerCase();
-    if (tmap[cn]) return tmap[cn];
-    for (var h in tmap) {
-      if (h.indexOf(cn + '.') === 0 || h.indexOf(cn + '-') === 0) return tmap[h];
-    }
-    return null;
-  }
-  function extractHost(url) {
-    try { return new URL(url).hostname; }
-    catch(e) { return url.replace(/^https?:\/\//,'').split(/[/:?#]/)[0]; }
+  function buildVMIndex(vms) {
+    var out = {};
+    (vms || []).forEach(function(vm) {
+      ['lan_ip', 'host', 'public_ip'].forEach(function(key) {
+        var raw = String((vm || {})[key] || '').trim().toLowerCase();
+        if (raw) out[raw] = true;
+      });
+    });
+    return out;
   }
   function deriveChainBase(c) {
     if (c.chain_name) return c.chain_name;
@@ -442,8 +442,9 @@
   function renderChainTable(data) {
     var panel = document.getElementById('chain-status-panel');
     if (!panel) return;
-    var chains        = data.chains;
-    var ex            = chainExpanded;
+    var chains = data.chains || [];
+    var vmIndex = buildVMIndex(data.vms || []);
+    var ex = chainExpanded;
 
     if (!chains || chains.length === 0) {
       panel.innerHTML = '<p style="padding:.4rem;opacity:.5;font-size:.78rem">No chains configured.</p>';
@@ -455,85 +456,70 @@
     var tdNum    = 'text-align:left;font-variant-numeric:tabular-nums;padding:.22rem .35rem;vertical-align:middle;white-space:nowrap';
     var catStyle = 'text-align:left;padding:.2rem .35rem;font-size:.68rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase;opacity:.45;border-bottom:1px solid var(--vn-border)';
 
-    function netBadge(nt) {
-      if (!nt) return '';
-      if (nt === 'testnet')
-        return ' <span style="font-size:.58rem;padding:.02rem .18rem;border-radius:2px;border:1px solid rgba(255,167,38,.45);color:#ffa726">testnet</span>';
-      return ' <span style="font-size:.58rem;padding:.02rem .18rem;border-radius:2px;border:1px solid rgba(76,175,80,.35);color:#4caf50;opacity:.7">mainnet</span>';
-    }
-
-    function buildChainRow(c, isChild) {
-      var height       = c.height          ? Number(c.height).toLocaleString()          : '—';
-      var earliest     = c.earliest_height ? Number(c.earliest_height).toLocaleString() : '—';
+    function activePropCell(c) {
+      if (!(c.active_proposals > 0)) return '<span style="opacity:.35">—</span>';
       var explorerBase = c.explorer_url || '';
-      var activeProp;
-      if (c.active_proposals > 0) {
-        var govURL = explorerBase ? (explorerBase + '/gov') : ('https://ping.pub/' + encodeURIComponent(c.chain) + '/gov');
-        activeProp = '<a href="' + govURL + '" target="_blank" rel="noopener" style="color:#ffa726;font-weight:600;text-decoration:none" title="' + c.active_proposals + ' active">' + c.active_proposals + '</a>';
-      } else {
-        activeProp = '<span style="opacity:.4">—</span>';
-      }
+      var govURL = explorerBase ? (explorerBase + '/gov') : ('https://ping.pub/' + encodeURIComponent(c.chain || '') + '/gov');
+      return '<a href="' + govURL + '" target="_blank" rel="noopener" style="color:#ffa726;font-weight:600;text-decoration:none" title="' + c.active_proposals + ' active">' + c.active_proposals + '</a>';
+    }
+    function votingEndCell(c) {
       var votingEnds = '<span style="opacity:.3">—</span>';
       if (c.voting_end_time) {
         var d = new Date(c.voting_end_time);
         if (!isNaN(d)) votingEnds = d.toISOString().replace('T',' ').slice(0,16) + ' UTC';
       }
-      var upg;
-      if (c.upgrade_pending && c.upgrade_height) {
-        var upgURL = (c.upgrade_proposal_id && explorerBase)
-          ? explorerBase + '/gov/' + encodeURIComponent(c.upgrade_proposal_id)
-          : (explorerBase ? explorerBase + '/gov' : 'https://ping.pub/' + encodeURIComponent(c.chain) + '/gov');
-        upg = '<a href="' + upgURL + '" target="_blank" rel="noopener" style="color:#ef5350;font-weight:600;text-decoration:none" title="' + escH(c.upgrade_name || '') + '">@' + Number(c.upgrade_height).toLocaleString() + '</a>';
-      } else {
-        upg = '<span style="opacity:.3">—</span>';
-      }
-      var participation = c.val_participation
+      return votingEnds;
+    }
+    function participationCell(c) {
+      return c.val_participation
         ? '<span style="font-variant-numeric:tabular-nums;font-size:.72rem">' + escH(c.val_participation) + '</span>'
         : '<span style="opacity:.3">—</span>';
-
-      // Validator on-chain status cells (only when has_validator is set)
-      var valActive = '<span style="opacity:.3">—</span>';
-      var valJailed = '<span style="opacity:.3">—</span>';
-      var valMissed = '<span style="opacity:.3">—</span>';
-      if (c.has_validator) {
-        valActive = c.val_bonded
-          ? '<span style="color:#4caf50;font-size:.8rem" title="In active bonded set">✓</span>'
-          : '<span style="color:#ef5350;font-size:.8rem" title="Not in active set">✗</span>';
-        valJailed = c.val_jailed
-          ? '<span style="color:#ef5350;font-size:.72rem;font-weight:600">JAILED</span>'
-          : '<span style="color:#4caf50;font-size:.72rem;opacity:.7">OK</span>';
-        valMissed = '<span style="font-variant-numeric:tabular-nums;font-size:.72rem' +
-          (c.val_missed_blocks > 0 ? ';color:#ffa726;font-weight:600' : ';opacity:.65') + '">' +
-          Number(c.val_missed_blocks).toLocaleString() + '</span>';
-      }
-
+    }
+    function valActiveCell(c) {
+      if (!c.has_validator) return '<span style="opacity:.3">—</span>';
+      return c.val_bonded
+        ? '<span style="color:#4caf50;font-size:.8rem" title="In active bonded set">✓</span>'
+        : '<span style="color:#ef5350;font-size:.8rem" title="Not in active set">✗</span>';
+    }
+    function valJailedCell(c) {
+      if (!c.has_validator) return '<span style="opacity:.3">—</span>';
+      return c.val_jailed
+        ? '<span style="color:#ef5350;font-size:.72rem;font-weight:600">JAILED</span>'
+        : '<span style="color:#4caf50;font-size:.72rem;opacity:.7">OK</span>';
+    }
+    function valMissedCell(c) {
+      if (!c.has_validator) return '<span style="opacity:.3">—</span>';
+      var missed = Number(c.val_missed_blocks || 0);
+      return '<span style="font-variant-numeric:tabular-nums;font-size:.72rem' +
+        (missed > 0 ? ';color:#ffa726;font-weight:600' : ';opacity:.65') + '">' +
+        missed.toLocaleString() + '</span>';
+    }
+    function buildChainRow(c, isChild) {
+      var height = c.height ? Number(c.height).toLocaleString() : '—';
       var indentPfx = isChild ? 'padding-left:.9rem;' : '';
       var monikerPfx = isChild ? '<span style="opacity:.3;font-size:.65rem;margin-right:.25rem">└</span>' : '';
-      var monikerContent = monikerPfx + escH(c.dashboard_name || c.moniker || c.chain) + netBadge(isChild ? c.network_type : null);
+      var monikerContent = monikerPfx + escH(c.dashboard_name || c.moniker || c.chain || c.chain_name || 'unknown');
 
       var row = '<tr style="border-bottom:1px solid rgba(255,255,255,.04)">' +
         '<td style="' + tdStyle + ';white-space:nowrap;' + indentPfx + '">' + monikerContent + '</td>' +
         '<td style="' + tdStyle + '">' + servicesPills(c.type) + '</td>' +
         '<td style="' + tdStyle + '">' + statusCell(c.node_status) + '</td>' +
+        '<td style="' + tdStyle + '">' + syncedCell(c.node_status) + '</td>' +
         '<td style="' + tdNum  + '">' + height + '</td>';
       if (ex) {
-        row += '<td style="' + tdNum + '">' + earliest + '</td>';
-        row += '<td style="' + tdStyle + ';white-space:nowrap;opacity:.65;font-size:.75rem">' + escH(c.chain_id || c.chain) + '</td>';
-        row += '<td style="' + tdStyle + ';border-left:1px solid var(--vn-border)">' + activeProp + '</td>';
-        row += '<td style="' + tdNum + ';font-size:.7rem">' + votingEnds + '</td>';
-        row += '<td style="' + tdStyle + '">' + upg + '</td>';
-        row += '<td style="' + tdStyle + '">' + participation + '</td>';
-        row += '<td style="' + tdStyle + ';border-left:1px solid var(--vn-border);text-align:center">' + valActive + '</td>';
-        row += '<td style="' + tdStyle + ';text-align:center">' + valJailed + '</td>';
-        row += '<td style="' + tdNum + '">' + valMissed + '</td>';
+        row += '<td style="' + tdStyle + ';border-left:1px solid var(--vn-border)">' + activePropCell(c) + '</td>';
+        row += '<td style="' + tdNum + ';font-size:.7rem">' + votingEndCell(c) + '</td>';
+        row += '<td style="' + tdStyle + '">' + participationCell(c) + '</td>';
+        row += '<td style="' + tdStyle + ';border-left:1px solid var(--vn-border);text-align:center">' + valActiveCell(c) + '</td>';
+        row += '<td style="' + tdNum + '">' + valMissedCell(c) + '</td>';
+        row += '<td style="' + tdStyle + ';text-align:center">' + valJailedCell(c) + '</td>';
+        row += '<td style="' + tdStyle + ';border-left:1px solid var(--vn-border)">' + linkedCell(c, vmIndex) + '</td>';
       }
-      row +=
-        '<td style="' + tdStyle + ';border-left:1px solid var(--vn-border)">' + lanPingCell(c.lan_ping_ms) + '</td>' +
-        '</tr>';
+      row += '</tr>';
       return row;
     }
 
-    // Group chains by chain_name for mainnet/testnet tree
+    // Group chain services by chain slug for tree rendering.
     var groupMap = {};
     var groupOrder = [];
     chains.forEach(function(c) {
@@ -544,10 +530,9 @@
       }
       groupMap[key].entries.push(c);
     });
-    // Sort within group: mainnet first, testnet second
     groupOrder.forEach(function(key) {
       groupMap[key].entries.sort(function(a, b) {
-        return (a.network_type === 'testnet' ? 1 : 0) - (b.network_type === 'testnet' ? 1 : 0);
+        return String(a.moniker || a.chain || '').localeCompare(String(b.moniker || b.chain || ''));
       });
     });
 
@@ -565,7 +550,8 @@
                        : entries.some(function(e){ return e.node_status === 'syncing'; }) ? 'syncing' : 'synced';
       var maxHeight    = Math.max.apply(null, entries.map(function(e){ return Number(e.height) || 0; }));
       var combinedTypes = entries.map(function(e){ return e.type || ''; }).join(',');
-      var parentLabel  = entries[0].dashboard_name || group.label;
+      var parentEntry  = entries.find(function(e){ return e.has_validator; }) || entries[0];
+      var parentLabel  = parentEntry.dashboard_name || group.label;
 
       var headerRow = '<tr style="border-bottom:1px solid rgba(255,255,255,.06);cursor:pointer;background:rgba(255,255,255,.025)" onclick="toggleChainGroup(\'' + escH(key) + '\')">' +
         '<td style="' + tdStyle + ';white-space:nowrap">' +
@@ -574,49 +560,51 @@
         '</td>' +
         '<td style="' + tdStyle + '">' + servicesPills(combinedTypes) + '</td>' +
         '<td style="' + tdStyle + '">' + statusCell(worstStatus) + '</td>' +
+        '<td style="' + tdStyle + '">' + syncedCell(worstStatus) + '</td>' +
         '<td style="' + tdNum + '">' + (maxHeight > 0 ? Number(maxHeight).toLocaleString() : '—') + '</td>';
       if (ex) {
-        headerRow += '<td style="' + tdNum + ';opacity:.3">—</td>';
-        headerRow += '<td style="' + tdStyle + ';opacity:.3">—</td>';
-        headerRow += '<td colspan="4" style="' + tdStyle + ';opacity:.3;border-left:1px solid var(--vn-border)"></td>';
-        headerRow += '<td colspan="3" style="' + tdStyle + ';opacity:.3;border-left:1px solid var(--vn-border)"></td>';
+        headerRow += '<td style="' + tdStyle + ';border-left:1px solid var(--vn-border)">' + activePropCell(parentEntry) + '</td>';
+        headerRow += '<td style="' + tdNum + ';font-size:.7rem">' + votingEndCell(parentEntry) + '</td>';
+        headerRow += '<td style="' + tdStyle + '">' + participationCell(parentEntry) + '</td>';
+        headerRow += '<td style="' + tdStyle + ';border-left:1px solid var(--vn-border);text-align:center">' + valActiveCell(parentEntry) + '</td>';
+        headerRow += '<td style="' + tdNum + '">' + valMissedCell(parentEntry) + '</td>';
+        headerRow += '<td style="' + tdStyle + ';text-align:center">' + valJailedCell(parentEntry) + '</td>';
+        headerRow += '<td style="' + tdStyle + ';border-left:1px solid var(--vn-border)"></td>';
       }
-      headerRow += '<td style="' + tdStyle + ';border-left:1px solid var(--vn-border)"></td></tr>';
+      headerRow += '</tr>';
 
       var childRows = expanded ? entries.map(function(c) { return buildChainRow(c, true); }).join('') : '';
       return headerRow + childRows;
     }).join('');
 
     // Category row
-    var chainInfoCols = ex ? 6 : 4;
+    var chainInfoCols = ex ? 5 : 5;
     var catRow =
       '<tr>' +
       '<th colspan="' + chainInfoCols + '" style="' + catStyle + '">Services Statistics</th>';
     if (ex) {
-      catRow += '<th colspan="4" style="' + catStyle + ';border-left:1px solid var(--vn-border)">Governance</th>';
+      catRow += '<th colspan="3" style="' + catStyle + ';border-left:1px solid var(--vn-border)">Governance</th>';
       catRow += '<th colspan="3" style="' + catStyle + ';border-left:1px solid var(--vn-border)">Validator</th>';
+      catRow += '<th style="' + catStyle + ';border-left:1px solid var(--vn-border)">Link</th>';
     }
-    catRow +=
-      '<th style="' + catStyle + ';border-left:1px solid var(--vn-border)">Ping</th></tr>';
+    catRow += '</tr>';
     var colRow =
       '<tr style="font-size:.72rem;border-bottom:1px solid var(--vn-border)">' +
       '<th style="' + thStyle + '">Moniker</th>' +
       '<th style="' + thStyle + '">Services</th>' +
       '<th style="' + thStyle + '">Status</th>' +
+      '<th style="' + thStyle + '">Synced</th>' +
       '<th style="' + thStyle + '">Height</th>';
     if (ex) {
-      colRow += '<th style="' + thStyle + '">Earliest</th>';
-      colRow += '<th style="' + thStyle + '">Chain-ID</th>';
       colRow += '<th style="' + thStyle + ';border-left:1px solid var(--vn-border)">Active Prop</th>';
       colRow += '<th style="' + thStyle + '">Voting Ends</th>';
-      colRow += '<th style="' + thStyle + '">Upgrade</th>';
       colRow += '<th style="' + thStyle + '">Participation</th>';
       colRow += '<th style="' + thStyle + ';border-left:1px solid var(--vn-border);text-align:center">Active</th>';
-      colRow += '<th style="' + thStyle + ';text-align:center">Jailed</th>';
       colRow += '<th style="' + thStyle + '">Missed</th>';
+      colRow += '<th style="' + thStyle + ';text-align:center">Jailed</th>';
+      colRow += '<th style="' + thStyle + ';border-left:1px solid var(--vn-border)">Linked</th>';
     }
-    colRow +=
-      '<th style="' + thStyle + ';border-left:1px solid var(--vn-border)">Ping</th></tr>';
+    colRow += '</tr>';
 
     panel.innerHTML = '<table style="width:100%;border-collapse:collapse"><thead>' +
       catRow + colRow + '</thead><tbody>' + rows + '</tbody></table>';
@@ -629,12 +617,16 @@
     if (!chainCachedData) showLoading('chain-status-panel');
     Promise.all([
       fetch(BASE + '/api/v1/fleet/chains').then(function(r){ return r.json(); }),
-      fetch(BASE + '/api/v1/fleet/chains/traffic').then(function(r){ return r.json(); }).catch(function(){ return {traffic:[]}; })
+      fetch(BASE + '/api/v1/fleet/vms/status').then(function(r){ return r.json(); }).catch(function(){ return {vms:[]}; })
     ]).then(function(results) {
       var chains   = results[0].chains || [];
-      var tmap     = buildTrafficMap((results[1].traffic) || []);
-      chains.sort(function(a,b){ return a.chain.localeCompare(b.chain); });
-      chainCachedData = {chains: chains, tmap: tmap};
+      var vms      = results[1].vms || [];
+      chains.sort(function(a,b){
+        var aa = String(a.chain || a.chain_name || '');
+        var bb = String(b.chain || b.chain_name || '');
+        return aa.localeCompare(bb);
+      });
+      chainCachedData = {chains: chains, vms: vms};
       renderChainTable(chainCachedData);
     }).catch(function() {
       if (panel) panel.innerHTML = '<p style="padding:.4rem;color:#ef4444;font-size:.78rem">fleet module not configured or unreachable.</p>';

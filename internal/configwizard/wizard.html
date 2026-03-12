@@ -577,7 +577,7 @@
     <section class="panel" id="panel-chain">
       <div class="helper-blob">
         <strong>Helper — Chain</strong>
-        <p>Writes one chain file: <code>config/chains/&lt;chain_name&gt;.toml</code>. Minimum identity fields: <code>chain_name</code>, <code>chain_id</code>, <code>host</code>, and <code>ip</code>.</p>
+        <p>Writes one chain profile file: <code>config/vlog/chains/&lt;chain_name&gt;.toml</code>. Required identity fields are <code>chain_name</code> and <code>chain_id</code>, plus at least one <code>[[chain_services]]</code> entry.</p>
       </div>
       <div class="import-toggle">
         <label><input class="wizard-import-check" data-step="chain" type="checkbox"> I want to convert an existing toml files</label>
@@ -588,52 +588,51 @@
           <label>chain_id<span class="required-mark">*</span><input name="chain_id" type="text" placeholder="cheqd-mainnet-1" required></label>
           <label>dashboard_name<input name="dashboard_name" type="text"></label>
           <label>explorer_base<input name="explorer_base" type="text"></label>
-          <label>host<span class="required-mark">*</span><input name="host" type="text" placeholder="api.example.net" required></label>
-          <label>ip<span class="required-mark">*</span><input name="ip" type="text" placeholder="10.0.0.10" required></label>
-          <label class="check"><input name="expose_path" type="checkbox" checked> expose.path</label>
-          <label class="check"><input name="expose_vhost" type="checkbox" checked> expose.vhost</label>
-          <label>vhost_prefix_rpc<input name="vhost_prefix_rpc" type="text" value="rpc"></label>
-          <label>vhost_prefix_rest<input name="vhost_prefix_rest" type="text" value="api"></label>
-          <label class="check"><input name="svc_rpc" type="checkbox" checked> services.rpc</label>
-          <label class="check"><input name="svc_rest" type="checkbox" checked> services.rest</label>
-          <label class="check"><input name="svc_ws" type="checkbox" checked> services.websocket</label>
-          <label class="check"><input name="svc_grpc" type="checkbox" checked> services.grpc</label>
-          <label class="check"><input name="svc_grpcweb" type="checkbox" checked> services.grpc_web</label>
-          <label class="check"><input name="svc_apialias" type="checkbox" checked> services.api_alias</label>
-          <label class="check"><input name="default_ports" type="checkbox" checked> default_ports</label>
-          <label>port_rpc<input name="port_rpc" type="number" min="1" max="65535" value="26657"></label>
-          <label>port_rest<input name="port_rest" type="number" min="1" max="65535" value="1317"></label>
-          <label>port_grpc<input name="port_grpc" type="number" min="1" max="65535" value="9090"></label>
-          <label>port_grpc_web<input name="port_grpc_web" type="number" min="1" max="65535" value="9091"></label>
-          <label>port_api<input name="port_api" type="number" min="1" max="65535" value="1317"></label>
-          <label class="check"><input name="managed_host" type="checkbox"> management.managed_host</label>
-          <label>management_lan_ip<input name="management_lan_ip" type="text"></label>
-          <label>management_public_ip<input name="management_public_ip" type="text"></label>
-          <label>management_user<input name="management_user" type="text"></label>
-          <label>management_key_path<input name="management_key_path" type="text"></label>
-          <label>management_port<input name="management_port" type="number" min="0" max="65535" value="22"></label>
-          <label>management_datacenter<input name="management_datacenter" type="text"></label>
-          <label>management_type (comma-separated)<input name="management_type" type="text" placeholder="validator,sp"></label>
-          <label class="check"><input name="exposed_services" type="checkbox" checked> management.exposed_services</label>
-          <label>valoper<input name="valoper" type="text"></label>
-          <label>management_ping_country<input name="management_ping_country" type="text" value="CA"></label>
-          <label>management_ping_provider<input name="management_ping_provider" type="text"></label>
+          <label class="full">explorers (comma-separated)<input name="explorers" type="text" placeholder="https://mintscan.io/cheqd-mainnet"></label>
           <label>chain_ping_country<input name="chain_ping_country" type="text" value="CA"></label>
           <label>chain_ping_provider<input name="chain_ping_provider" type="text"></label>
-          <label>validator_mainnet_address<input name="validator_mainnet_address" type="text" placeholder="...valoper..."></label>
-          <label>validator_testnet_address<input name="validator_testnet_address" type="text" placeholder="...valoper..."></label>
-          <label>sp_mainnet_hostname<input name="sp_mainnet_hostname" type="text"></label>
-          <label>sp_mainnet_lan_ip<input name="sp_mainnet_lan_ip" type="text"></label>
-          <label>sp_testnet_hostname<input name="sp_testnet_hostname" type="text"></label>
-          <label>sp_testnet_lan_ip<input name="sp_testnet_lan_ip" type="text"></label>
         </div>
+        <section class="infra-vms full" aria-label="chain services">
+          <div class="infra-vms-head">
+            <strong>[[chain_services]] Managed Services</strong>
+            <button id="btn-chain-add-service" type="button">+ Add Service</button>
+          </div>
+          <div id="chain-service-list" class="infra-vm-list"></div>
+          <input id="chain-services-json" name="chain_services_json" type="hidden" value="[]">
+          <p class="hint mini">Each service row requires <code>name</code> and <code>service_type</code>. <code>validator</code> rows require <code>valoper</code>, and <code>internal_ip</code> is required when <code>link_to_vm</code> is enabled.</p>
+        </section>
         <div class="actions">
           <button type="submit">Save Chain</button>
           <button type="button" class="wizard-save-next">Save &amp; Next</button>
         </div>
       </form>
-      <details><summary>Tip</summary><pre>Chain and infra files may be multiple. This form writes one chain file based on chain_name.</pre></details>
+      <details><summary>Tip</summary><pre>Chain and infra files may be multiple. This form writes one chain profile file under config/vlog/chains based on chain_name.</pre></details>
     </section>
+
+    <template id="chain-service-template">
+      <article class="infra-vm-row">
+        <div class="grid">
+          <label>service.name<span class="required-mark">*</span><input class="chain-svc-field" data-field="name" type="text" required></label>
+          <label>service_type<span class="required-mark">*</span>
+            <select class="chain-svc-field" data-field="service_type" required>
+              <option value="">Select type</option>
+              <option value="node">node</option>
+              <option value="validator">validator</option>
+              <option value="relayer">relayer</option>
+              <option value="sp">sp</option>
+            </select>
+          </label>
+          <label>moniker<input class="chain-svc-field" data-field="moniker" type="text"></label>
+          <label>valoper<input class="chain-svc-field" data-field="valoper" type="text"></label>
+          <label>internal_ip (required when link_to_vm=true)<input class="chain-svc-field" data-field="internal_ip" type="text"></label>
+          <label>host<input class="chain-svc-field" data-field="host" type="text"></label>
+          <label class="check full"><input class="chain-svc-field" data-field="link_to_vm" type="checkbox" checked> link_to_vm</label>
+        </div>
+        <div class="actions">
+          <button type="button" class="danger chain-svc-remove">− Remove Service</button>
+        </div>
+      </article>
+    </template>
 
     <section class="panel" id="panel-vlog">
       <div class="helper-blob">
@@ -871,6 +870,9 @@
     async function submitForm(form, moveNext = false) {
       const endpoint = form.dataset.endpoint;
       const step = formStep(form);
+      if (step === "chain") {
+        syncChainServicesJSON();
+      }
       if (step === "infra") {
         syncInfraVMJSON();
       }
@@ -983,6 +985,88 @@
       return out;
     }
 
+    function chainSvcKey(svc) {
+      return [svc.name, svc.service_type, svc.internal_ip].map((v) => String(v || "").trim().toLowerCase()).join("|");
+    }
+
+    function dedupeChainServices(services) {
+      if (!Array.isArray(services) || services.length <= 1) return Array.isArray(services) ? services : [];
+      const seen = new Set();
+      const out = [];
+      services.forEach((svc) => {
+        const key = chainSvcKey(svc || {});
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+        out.push(svc);
+      });
+      return out;
+    }
+
+    function addChainServiceRow(seed = {}) {
+      const tpl = $("#chain-service-template");
+      const list = $("#chain-service-list");
+      if (!tpl || !list) return;
+
+      const row = tpl.content.firstElementChild.cloneNode(true);
+      $$(".chain-svc-field", row).forEach((el) => {
+        const key = el.dataset.field;
+        const value = seed[key];
+        if (el.type === "checkbox") {
+          el.checked = value === undefined ? true : !!value;
+        } else if (value !== undefined && value !== null && value !== "") {
+          el.value = String(value);
+        }
+        el.addEventListener("input", () => syncChainServicesJSON());
+        el.addEventListener("change", () => syncChainServicesJSON());
+      });
+      $(".chain-svc-remove", row).addEventListener("click", () => {
+        row.remove();
+        syncChainServicesJSON();
+      });
+      list.appendChild(row);
+      syncChainServicesJSON();
+    }
+
+    function collectChainServices() {
+      const rows = $$("#chain-service-list .infra-vm-row").map((row) => {
+        const svc = {};
+        $$(".chain-svc-field", row).forEach((el) => {
+          const key = el.dataset.field;
+          if (el.type === "checkbox") {
+            svc[key] = !!el.checked;
+            return;
+          }
+          svc[key] = (el.value || "").trim();
+        });
+        const hasAny = ["name", "service_type", "moniker", "valoper", "internal_ip", "host"]
+          .some((k) => String(svc[k] || "").trim() !== "");
+        if (!hasAny) return null;
+        if (svc.service_type) svc.service_type = String(svc.service_type).toLowerCase();
+        if (svc.link_to_vm === undefined) svc.link_to_vm = true;
+        return svc;
+      }).filter(Boolean);
+      return dedupeChainServices(rows);
+    }
+
+    function syncChainServicesJSON() {
+      const hidden = $("#chain-services-json");
+      if (!hidden) return;
+      hidden.value = JSON.stringify(collectChainServices());
+    }
+
+    function setChainServices(services) {
+      const list = $("#chain-service-list");
+      if (!list) return;
+      list.innerHTML = "";
+      const compact = dedupeChainServices(Array.isArray(services) ? services : []);
+      if (compact.length > 0) {
+        compact.forEach((svc) => addChainServiceRow(svc || {}));
+      } else {
+        addChainServiceRow({ link_to_vm: true });
+      }
+      syncChainServicesJSON();
+    }
+
     function addInfraVMRow(seed = {}) {
       const tpl = $("#infra-vm-template");
       const list = $("#infra-vm-list");
@@ -1085,50 +1169,42 @@
         setVal("settings", "debug_port", asNum((m.debug || {}).port, 6060));
       }
 
-      if (current.chain && current.chain.raw) {
-        const m = parseTomlMap(current.chain.raw);
-        setVal("chain", "chain_name", unquote((m.root || {}).chain_name));
-        setVal("chain", "chain_id", unquote((m.root || {}).chain_id));
-        setVal("chain", "dashboard_name", unquote((m.root || {}).dashboard_name));
-        setVal("chain", "explorer_base", unquote((m.root || {}).explorer_base));
-        setVal("chain", "host", unquote((m.root || {}).host));
-        setVal("chain", "ip", unquote((m.root || {}).ip));
-        setCheck("chain", "expose_path", asBool((m.expose || {}).path, true));
-        setCheck("chain", "expose_vhost", asBool((m.expose || {}).vhost, true));
-        setVal("chain", "vhost_prefix_rpc", unquote((m["expose.vhost_prefix"] || {}).rpc));
-        setVal("chain", "vhost_prefix_rest", unquote((m["expose.vhost_prefix"] || {}).rest));
-        setCheck("chain", "svc_rpc", asBool((m.services || {}).rpc, true));
-        setCheck("chain", "svc_rest", asBool((m.services || {}).rest, true));
-        setCheck("chain", "svc_ws", asBool((m.services || {}).websocket, true));
-        setCheck("chain", "svc_grpc", asBool((m.services || {}).grpc, true));
-        setCheck("chain", "svc_grpcweb", asBool((m.services || {}).grpc_web, true));
-        setCheck("chain", "svc_apialias", asBool((m.services || {}).api_alias, true));
-        setCheck("chain", "default_ports", asBool((m.root || {}).default_ports, true));
-        setVal("chain", "port_rpc", asNum((m.ports || {}).rpc, 26657));
-        setVal("chain", "port_rest", asNum((m.ports || {}).rest, 1317));
-        setVal("chain", "port_grpc", asNum((m.ports || {}).grpc, 9090));
-        setVal("chain", "port_grpc_web", asNum((m.ports || {}).grpc_web, 9091));
-        setVal("chain", "port_api", asNum((m.ports || {}).api, 1317));
-        setCheck("chain", "managed_host", asBool((m.management || {}).managed_host, false));
-        setVal("chain", "management_lan_ip", unquote((m.management || {}).lan_ip));
-        setVal("chain", "management_public_ip", unquote((m.management || {}).public_ip));
-        setVal("chain", "management_user", unquote((m.management || {}).user));
-        setVal("chain", "management_key_path", unquote((m.management || {}).key_path));
-        setVal("chain", "management_port", asNum((m.management || {}).port, 22));
-        setVal("chain", "management_datacenter", unquote((m.management || {}).datacenter));
-        setVal("chain", "management_type", asList((m.management || {}).type));
-        setCheck("chain", "exposed_services", asBool((m.management || {}).exposed_services, true));
-        setVal("chain", "valoper", unquote((m.management || {}).valoper));
-        setVal("chain", "management_ping_country", unquote((m["management.ping"] || {}).country));
-        setVal("chain", "management_ping_provider", unquote((m["management.ping"] || {}).provider));
-        setVal("chain", "chain_ping_country", unquote((m.chain_ping || {}).country));
-        setVal("chain", "chain_ping_provider", unquote((m.chain_ping || {}).provider));
-        setVal("chain", "validator_mainnet_address", unquote((m["chain_services.validator.mainnet"] || {}).address));
-        setVal("chain", "validator_testnet_address", unquote((m["chain_services.validator.testnet"] || {}).address));
-        setVal("chain", "sp_mainnet_hostname", unquote((m["chain_services.sp.mainnet"] || {}).hostname));
-        setVal("chain", "sp_mainnet_lan_ip", unquote((m["chain_services.sp.mainnet"] || {}).lan_ip));
-        setVal("chain", "sp_testnet_hostname", unquote((m["chain_services.sp.testnet"] || {}).hostname));
-        setVal("chain", "sp_testnet_lan_ip", unquote((m["chain_services.sp.testnet"] || {}).lan_ip));
+      if (current.chain) {
+        const entry = current.chain || {};
+        const fields = entry.fields && typeof entry.fields === "object" ? entry.fields : {};
+        if (Object.keys(fields).length === 0 && entry.raw) {
+          const m = parseTomlMap(entry.raw);
+          fields.chain_name = unquote((m.root || {}).chain_name);
+          fields.chain_id = unquote((m.root || {}).chain_id);
+          fields.dashboard_name = unquote((m.root || {}).dashboard_name);
+          fields.explorer_base = unquote((m.root || {}).explorer_base);
+          fields.explorers = asList((m.root || {}).explorers);
+          fields.chain_ping_country = unquote((m.chain_ping || {}).country);
+          fields.chain_ping_provider = unquote((m.chain_ping || {}).provider);
+        }
+
+        setVal("chain", "chain_name", fields.chain_name || "");
+        setVal("chain", "chain_id", fields.chain_id || "");
+        setVal("chain", "dashboard_name", fields.dashboard_name || "");
+        setVal("chain", "explorer_base", fields.explorer_base || "");
+        setVal("chain", "explorers", fields.explorers || "");
+        setVal("chain", "chain_ping_country", fields.chain_ping_country || "CA");
+        setVal("chain", "chain_ping_provider", fields.chain_ping_provider || "");
+
+        let services = [];
+        if (Array.isArray(fields.chain_services)) {
+          services = fields.chain_services;
+        } else if (typeof fields.chain_services_json === "string" && fields.chain_services_json.trim() !== "") {
+          try {
+            const parsed = JSON.parse(fields.chain_services_json);
+            services = Array.isArray(parsed) ? parsed : [];
+          } catch {
+            services = [];
+          }
+        }
+        setChainServices(services);
+      } else {
+        setChainServices([]);
       }
 
       if (current.vlog) {
@@ -1272,6 +1348,21 @@
         }
         syncInfraVMJSON();
       }
+      if (step === "chain") {
+        if (Array.isArray(fields.chain_services)) {
+          setChainServices(fields.chain_services);
+        } else if (typeof fields.chain_services_json === "string" && fields.chain_services_json.trim() !== "") {
+          try {
+            const parsed = JSON.parse(fields.chain_services_json);
+            setChainServices(Array.isArray(parsed) ? parsed : []);
+          } catch {
+            setChainServices([]);
+          }
+        } else {
+          setChainServices([]);
+        }
+        syncChainServicesJSON();
+      }
     }
 
     async function validateImportPath() {
@@ -1353,6 +1444,14 @@
       }
     }
 
+    function initChain() {
+      const addBtn = $("#btn-chain-add-service");
+      if (addBtn) {
+        addBtn.addEventListener("click", () => addChainServiceRow({ link_to_vm: true }));
+      }
+      setChainServices([]);
+    }
+
     function initInfra() {
       const addBtn = $("#btn-infra-add-vm");
       if (addBtn) {
@@ -1390,6 +1489,7 @@
     }
 
     initTabs();
+    initChain();
     initInfra();
     initForms();
     initImportFlow();

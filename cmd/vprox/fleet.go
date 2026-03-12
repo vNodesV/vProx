@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/pelletier/go-toml/v2"
-	chainconfig "github.com/vNodesV/vProx/internal/config"
 	"github.com/vNodesV/vProx/internal/fleet/config"
 	fleetssh "github.com/vNodesV/vProx/internal/fleet/ssh"
 	"github.com/vNodesV/vProx/internal/fleet/state"
@@ -66,83 +65,19 @@ func runFleetCmd(home string, args []string) {
 //
 // VMs are enriched with chain identity from config/vlog/chains/*.toml.
 func loadFleetVMsCfg(home string) (*config.Config, error) {
-	merged := &config.Config{}
-	nodesDir := filepath.Join(home, "config", "vprox", "nodes")
-	vlogChainsDir := filepath.Join(home, "config", "vlog", "chains")
-
-	// 1. config/vprox/nodes/*.toml — managed nodes.
-	if nodeCfg, err := config.LoadFromNodeConfigs(nodesDir, config.FleetDefaults{}); err == nil && len(nodeCfg.VMs) > 0 {
-		merged = config.MergeConfigs(merged, nodeCfg)
+	merged, err := config.LoadRuntimeConfig(
+		home,
+		config.FleetDefaults{},
+		filepath.Join(home, "config", "chains"),
+		filepath.Join(home, "config", "infra"),
+	)
+	if err != nil {
+		return nil, err
 	}
-
-	// 2. config/infra/*.toml — physical host registry (highest priority).
-	infraDir := filepath.Join(home, "config", "infra")
-	if infraCfg, err := config.LoadFromInfraFiles(infraDir); err == nil && (len(infraCfg.VMs) > 0 || len(infraCfg.Hosts) > 0) {
-		merged = config.MergeInfraConfig(merged, infraCfg)
-	}
-
-	enrichVMsFromVLogChains(merged.VMs, vlogChainsDir)
-
 	if len(merged.VMs) == 0 && len(merged.Hosts) == 0 {
 		return nil, fmt.Errorf("no VMs registered — add entries to config/infra/*.toml or set managed_host=true in config/vprox/nodes/*.toml")
 	}
 	return merged, nil
-}
-
-// enrichVMsFromVLogChains populates missing chain identity fields on VMs from
-// config/vlog/chains/*.toml (v1.4.0 layout). Only fills fields not already set
-// by enrichVMsFromChains or infra config.
-// Lookup order: vm.Name → ChainIdentity.BaseName, then vm.ChainName → ChainIdentity.TreeName.
-func enrichVMsFromVLogChains(vms []config.VM, vlogChainsDir string) {
-	chains, err := chainconfig.LoadChains(vlogChainsDir)
-	if err != nil || len(chains) == 0 {
-		return
-	}
-
-	// Build lookup indexes.
-	byBase := make(map[string]*chainconfig.ChainIdentity, len(chains))
-	byTree := make(map[string]*chainconfig.ChainIdentity, len(chains))
-	for i := range chains {
-		byBase[chains[i].BaseName] = &chains[i]
-		if chains[i].TreeName != "" {
-			byTree[chains[i].TreeName] = &chains[i]
-		}
-	}
-
-	for i := range vms {
-		if vms[i].ChainID != "" {
-			continue // already enriched by legacy path
-		}
-		var ci *chainconfig.ChainIdentity
-		if v, ok := byBase[vms[i].Name]; ok {
-			ci = v
-		} else if v, ok := byTree[vms[i].ChainName]; ok {
-			ci = v
-		}
-		if ci == nil {
-			continue
-		}
-		vms[i].ChainID = ci.ChainID
-		if vms[i].ChainName == "" {
-			vms[i].ChainName = ci.ChainName
-		}
-		if vms[i].DashboardName == "" {
-			vms[i].DashboardName = ci.DashboardName
-		}
-		if vms[i].NetworkType == "" {
-			vms[i].NetworkType = ci.NetworkType
-		}
-		if vms[i].Explorer == "" {
-			vms[i].Explorer = ci.ExplorerBase
-		}
-		if vms[i].Valoper == "" {
-			vms[i].Valoper = ci.ChainServices.Validator.Mainnet.Address
-		}
-		if vms[i].Ping.Country == "" {
-			vms[i].Ping.Country = ci.ChainPing.Country
-			vms[i].Ping.Provider = ci.ChainPing.Provider
-		}
-	}
 }
 
 // fleetHosts prints the VM registry as a text table.
