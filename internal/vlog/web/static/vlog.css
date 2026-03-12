@@ -864,3 +864,13 @@ summary { list-style: none; }
   margin: 0 1px;
 }
 .svc-pill.svc-on { border-color: rgba(76,175,80,.65); color: #4caf50; }
+
+/* ── Settings page ── */
+.settings-wizard-frame {
+  width: 100%;
+  min-height: 1640px;
+  border: 1px solid var(--vn-green-border, rgba(0,255,0,.2));
+  border-radius: 8px;
+  background: #000;
+  box-shadow: inset 0 1px 0 rgba(0,255,0,.08);
+}

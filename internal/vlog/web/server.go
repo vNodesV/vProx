@@ -59,6 +59,7 @@ type Server struct {
 	enricher *intel.Enricher
 	ingester *ingest.Ingester
 	cfg      config.Config
+	home     string
 	httpSrv  *http.Server
 	pages    map[string]*template.Template
 	fleet    *api.Handlers // nil when fleet module is not configured
@@ -75,7 +76,7 @@ type Server struct {
 func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg config.Config, fleetSvc *fleet.Service) (*Server, error) {
 	// Each page template is parsed together with the base layout so
 	// that block overrides (title, content) are scoped per page.
-	pageFiles := []string{"dashboard.html", "accounts.html", "account.html"}
+	pageFiles := []string{"dashboard.html", "accounts.html", "account.html", "settings.html"}
 	pages := make(map[string]*template.Template, len(pageFiles))
 	for _, pf := range pageFiles {
 		t, err := template.New("").Funcs(templateFuncs).ParseFS(
@@ -105,6 +106,7 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 		enricher:   enricher,
 		ingester:   ingester,
 		cfg:        cfg,
+		home:       config.FindHome(),
 		pages:      pages,
 		sessions:   make(map[string]time.Time),
 		sessionKey: sessionKey,
@@ -132,6 +134,17 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 	mux.Handle("GET /", s.requireSession(http.HandlerFunc(s.handleDashboard)))
 	mux.Handle("GET /accounts", s.requireSession(http.HandlerFunc(s.handleAccountList)))
 	mux.Handle("GET /accounts/{ip}", s.requireSession(http.HandlerFunc(s.handleAccountDetail)))
+	mux.Handle("GET /settings", s.requireSession(http.HandlerFunc(s.handleSettingsPage)))
+	mux.Handle("GET /settings/wizard", s.requireSession(http.HandlerFunc(s.handleSettingsWizard)))
+	mux.Handle("GET /settings/api/config/current", s.requireSession(http.HandlerFunc(s.handleAPISettingsCurrent)))
+	mux.Handle("POST /settings/api/config/ports", s.requireSession(http.HandlerFunc(s.handleAPISettingsSave("ports"))))
+	mux.Handle("POST /settings/api/config/settings", s.requireSession(http.HandlerFunc(s.handleAPISettingsSave("settings"))))
+	mux.Handle("POST /settings/api/config/chain", s.requireSession(http.HandlerFunc(s.handleAPISettingsSave("chain"))))
+	mux.Handle("POST /settings/api/config/vlog", s.requireSession(http.HandlerFunc(s.handleAPISettingsSave("vlog"))))
+	mux.Handle("POST /settings/api/config/fleet", s.requireSession(http.HandlerFunc(s.handleAPISettingsSave("fleet"))))
+	mux.Handle("POST /settings/api/config/infra", s.requireSession(http.HandlerFunc(s.handleAPISettingsSave("infra"))))
+	mux.Handle("POST /settings/api/config/backup", s.requireSession(http.HandlerFunc(s.handleAPISettingsSave("backup"))))
+	mux.Handle("POST /settings/api/config/done", s.requireSession(http.HandlerFunc(s.handleAPISettingsDone)))
 
 	// API routes — session-protected.
 	mux.Handle("POST /api/v1/ingest", s.requireSession(http.HandlerFunc(s.handleAPIIngest)))

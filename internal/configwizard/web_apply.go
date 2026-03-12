@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -14,6 +15,12 @@ import (
 	fleetcfg "github.com/vNodesV/vProx/internal/fleet/config"
 	vlogcfg "github.com/vNodesV/vProx/internal/vlog/config"
 )
+
+// ApplyFields applies one web wizard step payload to disk.
+// Exported for reuse by the dashboard Settings page.
+func ApplyFields(home, step string, f map[string]any) error {
+	return applyWebFields(home, step, f)
+}
 
 // applyWebFields processes a JSON field map from the browser and writes the resulting TOML file.
 // It reuses the same struct types as the terminal wizard.
@@ -104,12 +111,31 @@ func applyChain(home string, f map[string]any) error {
 	c.DefaultPorts = fieldBool(f, "default_ports", true)
 	c.Management.ManagedHost = fieldBool(f, "managed_host", false)
 	c.Management.LanIP = fieldStr(f, "management_lan_ip", "")
+	c.Management.PublicIP = fieldStr(f, "management_public_ip", "")
 	c.Management.User = fieldStr(f, "management_user", "")
 	c.Management.KeyPath = fieldStr(f, "management_key_path", "")
+	c.Management.Port = fieldInt(f, "management_port", 0)
+	c.Management.Datacenter = fieldStr(f, "management_datacenter", "")
+	c.Management.Type = splitList(fieldStr(f, "management_type", ""))
 	c.Management.ExposedServices = fieldBool(f, "exposed_services", true)
 	c.Management.Valoper = fieldStr(f, "valoper", "")
-	c.Management.Ping.Country = fieldStr(f, "ping_country", "")
-	c.Management.Ping.Provider = fieldStr(f, "ping_provider", "")
+	c.Management.Ping.Country = strings.ToUpper(fieldStrAny(f, "", "management_ping_country", "ping_country"))
+	c.Management.Ping.Provider = fieldStrAny(f, "", "management_ping_provider", "ping_provider")
+	c.ChainPing.Country = strings.ToUpper(fieldStr(f, "chain_ping_country", ""))
+	c.ChainPing.Provider = fieldStr(f, "chain_ping_provider", "")
+	c.ChainServices.Validator.Mainnet.Address = fieldStr(f, "validator_mainnet_address", "")
+	c.ChainServices.Validator.Testnet.Address = fieldStr(f, "validator_testnet_address", "")
+	c.ChainServices.SP.Mainnet.Hostname = fieldStr(f, "sp_mainnet_hostname", "")
+	c.ChainServices.SP.Mainnet.LanIP = fieldStr(f, "sp_mainnet_lan_ip", "")
+	c.ChainServices.SP.Testnet.Hostname = fieldStr(f, "sp_testnet_hostname", "")
+	c.ChainServices.SP.Testnet.LanIP = fieldStr(f, "sp_testnet_lan_ip", "")
+	if !c.DefaultPorts {
+		c.Ports.RPC = fieldInt(f, "port_rpc", 26657)
+		c.Ports.REST = fieldInt(f, "port_rest", 1317)
+		c.Ports.GRPC = fieldInt(f, "port_grpc", 9090)
+		c.Ports.GRPCWeb = fieldInt(f, "port_grpc_web", 9091)
+		c.Ports.API = fieldInt(f, "port_api", 1317)
+	}
 
 	if err := chainconfig.ValidateConfig(&c); err != nil {
 		return fmt.Errorf("validation: %w", err)
@@ -202,7 +228,16 @@ func applyInfra(home string, f map[string]any) error {
 	if err != nil {
 		return err
 	}
-	inf.VMs = vms
+	seen := loadExistingInfraVMKeys(home, dc)
+	inf.VMs = make([]fleetcfg.VM, 0, len(vms))
+	for _, vm := range vms {
+		key := vmIdentityKey(vm)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		inf.VMs = append(inf.VMs, vm)
+	}
 
 	return writeConfigNoPrompt(configPath(home, "infra", dc+".toml"), inf)
 }
@@ -219,13 +254,15 @@ func parseInfraVMs(raw string) ([]fleetcfg.VM, error) {
 	}
 
 	vms := make([]fleetcfg.VM, 0, len(rows))
+	seen := make(map[string]struct{}, len(rows))
 	for i, row := range rows {
+		port := fieldInt(row, "port", 0)
 		vm := fleetcfg.VM{
 			Name:       fieldStr(row, "name", ""),
 			Host:       fieldStr(row, "host", ""),
 			LanIP:      fieldStr(row, "lan_ip", ""),
 			PublicIP:   fieldStr(row, "public_ip", ""),
-			Port:       fieldInt(row, "port", 22),
+			Port:       port,
 			User:       fieldStr(row, "user", ""),
 			KeyPath:    fieldStr(row, "key_path", ""),
 			Datacenter: fieldStr(row, "datacenter", ""),
@@ -236,7 +273,7 @@ func parseInfraVMs(raw string) ([]fleetcfg.VM, error) {
 		vm.Ping.Provider = fieldStr(row, "ping_provider", "")
 
 		hasAny := vm.Name != "" || vm.Host != "" || vm.LanIP != "" || vm.PublicIP != "" ||
-			vm.Port != 0 || vm.User != "" || vm.KeyPath != "" || vm.Datacenter != "" ||
+			port != 0 || vm.User != "" || vm.KeyPath != "" || vm.Datacenter != "" ||
 			vm.Type != "" || vm.ChainName != "" || vm.Ping.Country != "" || vm.Ping.Provider != ""
 		if !hasAny {
 			continue
@@ -263,6 +300,11 @@ func parseInfraVMs(raw string) ([]fleetcfg.VM, error) {
 			return nil, fmt.Errorf("vm[%d].ping_country is unsupported: %q", i+1, vm.Ping.Country)
 		}
 
+		key := vmIdentityKey(vm)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
 		vms = append(vms, vm)
 	}
 
@@ -350,6 +392,52 @@ func splitList(s string) []string {
 		}
 	}
 	return out
+}
+
+func fieldStrAny(f map[string]any, def string, keys ...string) string {
+	for _, key := range keys {
+		if v := fieldStr(f, key, ""); strings.TrimSpace(v) != "" {
+			return v
+		}
+	}
+	return def
+}
+
+func vmIdentityKey(vm fleetcfg.VM) string {
+	return strings.ToLower(strings.TrimSpace(vm.Name)) + "|" +
+		strings.ToLower(strings.TrimSpace(vm.Host)) + "|" +
+		strings.ToLower(strings.TrimSpace(vm.ChainName)) + "|" +
+		strings.ToLower(strings.TrimSpace(vm.Datacenter))
+}
+
+func loadExistingInfraVMKeys(home, targetDC string) map[string]struct{} {
+	keys := make(map[string]struct{})
+	dir := configPath(home, "infra")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return keys
+	}
+	target := strings.ToLower(strings.TrimSpace(targetDC)) + ".toml"
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(strings.ToLower(e.Name()), ".toml") {
+			continue
+		}
+		if strings.EqualFold(e.Name(), target) {
+			continue
+		}
+		data, err := os.ReadFile(configPath(home, "infra", e.Name()))
+		if err != nil {
+			continue
+		}
+		var inf infraFile
+		if err := toml.Unmarshal(data, &inf); err != nil {
+			continue
+		}
+		for _, vm := range inf.VMs {
+			keys[vmIdentityKey(vm)] = struct{}{}
+		}
+	}
+	return keys
 }
 
 // runCmd executes an external command. Used for browser launch.

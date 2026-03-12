@@ -91,6 +91,40 @@
       font-size: 0.9rem;
     }
 
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: end;
+      justify-content: space-between;
+      gap: 0.65rem;
+      margin-top: 0.75rem;
+      padding-top: 0.65rem;
+      border-top: 1px solid var(--vn-green-border);
+    }
+
+    .mode-switch {
+      display: grid;
+      gap: 0.25rem;
+      min-width: 220px;
+    }
+
+    .mode-switch span {
+      font-size: 0.78rem;
+      color: var(--vn-text-muted);
+      letter-spacing: 0.01em;
+    }
+
+    .required-note {
+      font-size: 0.78rem;
+      color: var(--vn-text-muted);
+    }
+
+    .required-mark {
+      color: #ff8484;
+      font-weight: 700;
+      margin-left: 0.15rem;
+    }
+
     .status {
       margin-top: 0.6rem;
       border: 1px solid var(--line);
@@ -331,6 +365,30 @@
       grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 
+    .helper-blob {
+      margin: 0 0 0.8rem;
+      padding: 0.6rem 0.7rem;
+      border: 1px solid var(--vn-green-border);
+      border-radius: 8px;
+      background: rgba(0, 255, 0, 0.06);
+      box-shadow: inset 0 1px 0 rgba(0, 255, 0, 0.08);
+    }
+
+    .helper-blob strong {
+      display: block;
+      color: var(--vn-green);
+      font-size: 0.82rem;
+      margin-bottom: 0.2rem;
+      letter-spacing: 0.01em;
+    }
+
+    .helper-blob p {
+      margin: 0;
+      font-size: 0.8rem;
+      color: var(--vn-text);
+      line-height: 1.35;
+    }
+
     .mini {
       margin: 0.55rem 0 0;
       font-size: 0.78rem;
@@ -341,6 +399,7 @@
       .tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .grid { grid-template-columns: 1fr; }
       .infra-vm-row .grid { grid-template-columns: 1fr; }
+      .toolbar { align-items: stretch; }
     }
   </style>
 </head>
@@ -349,6 +408,17 @@
     <section class="header">
       <h1>vProx Configuration Wizard — Dual Mode (Web)</h1>
       <div class="hint">Save each step in any order. Files are written with backup behavior from the shared wizard backend.</div>
+      <div class="toolbar">
+        <label class="mode-switch" for="deploy-mode">
+          <span>Workflow mode</span>
+          <select id="deploy-mode">
+            <option value="upgrade" selected>Upgrade (import current TOMLs)</option>
+            <option value="migration">Migration (import + convert legacy TOMLs)</option>
+            <option value="new">New deployment (start from defaults)</option>
+          </select>
+        </label>
+        <div class="required-note"><span class="required-mark">*</span> mandatory field</div>
+      </div>
       <div class="status" id="status">Ready.</div>
     </section>
 
@@ -363,10 +433,14 @@
     </nav>
 
     <section class="panel active" id="panel-ports">
-      <form id="form-ports" data-endpoint="/api/config/ports">
+      <div class="helper-blob">
+        <strong>Helper — Ports</strong>
+        <p>Writes <code>config/chains/ports.toml</code>. Keep <code>rpc</code> and <code>rest</code> valid; use <code>0</code> for optional ports you want disabled.</p>
+      </div>
+      <form id="form-ports" data-endpoint="api/config/ports">
         <div class="grid">
-          <label>rpc<input name="rpc" type="number" min="1" max="65535" value="26657"></label>
-          <label>rest<input name="rest" type="number" min="1" max="65535" value="1317"></label>
+          <label>rpc<span class="required-mark">*</span><input name="rpc" type="number" min="1" max="65535" value="26657" required></label>
+          <label>rest<span class="required-mark">*</span><input name="rest" type="number" min="1" max="65535" value="1317" required></label>
           <label>grpc<input name="grpc" type="number" min="0" max="65535" value="0"></label>
           <label>grpc_web<input name="grpc_web" type="number" min="0" max="65535" value="0"></label>
           <label>api<input name="api" type="number" min="0" max="65535" value="0"></label>
@@ -381,7 +455,11 @@
     </section>
 
     <section class="panel" id="panel-settings">
-      <form id="form-settings" data-endpoint="/api/config/settings">
+      <div class="helper-blob">
+        <strong>Helper — Settings</strong>
+        <p>Writes <code>config/vprox/settings.toml</code>. Tune global rate limiting, quarantine thresholds, and debug listener values.</p>
+      </div>
+      <form id="form-settings" data-endpoint="api/config/settings">
         <div class="grid">
           <label>rps<input name="rps" type="number" step="0.1" min="0.1" value="25"></label>
           <label>burst<input name="burst" type="number" min="1" value="100"></label>
@@ -400,14 +478,18 @@
     </section>
 
     <section class="panel" id="panel-chain">
-      <form id="form-chain" data-endpoint="/api/config/chain">
+      <div class="helper-blob">
+        <strong>Helper — Chain</strong>
+        <p>Writes one chain file: <code>config/chains/&lt;chain_name&gt;.toml</code>. Minimum identity fields: <code>chain_name</code>, <code>chain_id</code>, <code>host</code>, and <code>ip</code>.</p>
+      </div>
+      <form id="form-chain" data-endpoint="api/config/chain">
         <div class="grid">
-          <label>chain_name<input name="chain_name" type="text" placeholder="cheqd"></label>
-          <label>chain_id<input name="chain_id" type="text" placeholder="cheqd-mainnet-1"></label>
+          <label>chain_name<span class="required-mark">*</span><input name="chain_name" type="text" placeholder="cheqd" required></label>
+          <label>chain_id<span class="required-mark">*</span><input name="chain_id" type="text" placeholder="cheqd-mainnet-1" required></label>
           <label>dashboard_name<input name="dashboard_name" type="text"></label>
           <label>explorer_base<input name="explorer_base" type="text"></label>
-          <label>host<input name="host" type="text" placeholder="api.example.net"></label>
-          <label>ip<input name="ip" type="text" placeholder="10.0.0.10"></label>
+          <label>host<span class="required-mark">*</span><input name="host" type="text" placeholder="api.example.net" required></label>
+          <label>ip<span class="required-mark">*</span><input name="ip" type="text" placeholder="10.0.0.10" required></label>
           <label class="check"><input name="expose_path" type="checkbox" checked> expose.path</label>
           <label class="check"><input name="expose_vhost" type="checkbox" checked> expose.vhost</label>
           <label>vhost_prefix_rpc<input name="vhost_prefix_rpc" type="text" value="rpc"></label>
@@ -419,14 +501,31 @@
           <label class="check"><input name="svc_grpcweb" type="checkbox" checked> services.grpc_web</label>
           <label class="check"><input name="svc_apialias" type="checkbox" checked> services.api_alias</label>
           <label class="check"><input name="default_ports" type="checkbox" checked> default_ports</label>
+          <label>port_rpc<input name="port_rpc" type="number" min="1" max="65535" value="26657"></label>
+          <label>port_rest<input name="port_rest" type="number" min="1" max="65535" value="1317"></label>
+          <label>port_grpc<input name="port_grpc" type="number" min="1" max="65535" value="9090"></label>
+          <label>port_grpc_web<input name="port_grpc_web" type="number" min="1" max="65535" value="9091"></label>
+          <label>port_api<input name="port_api" type="number" min="1" max="65535" value="1317"></label>
           <label class="check"><input name="managed_host" type="checkbox"> management.managed_host</label>
           <label>management_lan_ip<input name="management_lan_ip" type="text"></label>
+          <label>management_public_ip<input name="management_public_ip" type="text"></label>
           <label>management_user<input name="management_user" type="text"></label>
           <label>management_key_path<input name="management_key_path" type="text"></label>
+          <label>management_port<input name="management_port" type="number" min="0" max="65535" value="22"></label>
+          <label>management_datacenter<input name="management_datacenter" type="text"></label>
+          <label>management_type (comma-separated)<input name="management_type" type="text" placeholder="validator,sp"></label>
           <label class="check"><input name="exposed_services" type="checkbox" checked> management.exposed_services</label>
           <label>valoper<input name="valoper" type="text"></label>
-          <label>ping_country<input name="ping_country" type="text" value="CA"></label>
-          <label>ping_provider<input name="ping_provider" type="text"></label>
+          <label>management_ping_country<input name="management_ping_country" type="text" value="CA"></label>
+          <label>management_ping_provider<input name="management_ping_provider" type="text"></label>
+          <label>chain_ping_country<input name="chain_ping_country" type="text" value="CA"></label>
+          <label>chain_ping_provider<input name="chain_ping_provider" type="text"></label>
+          <label>validator_mainnet_address<input name="validator_mainnet_address" type="text" placeholder="...valoper..."></label>
+          <label>validator_testnet_address<input name="validator_testnet_address" type="text" placeholder="...valoper..."></label>
+          <label>sp_mainnet_hostname<input name="sp_mainnet_hostname" type="text"></label>
+          <label>sp_mainnet_lan_ip<input name="sp_mainnet_lan_ip" type="text"></label>
+          <label>sp_testnet_hostname<input name="sp_testnet_hostname" type="text"></label>
+          <label>sp_testnet_lan_ip<input name="sp_testnet_lan_ip" type="text"></label>
         </div>
         <div class="actions"><button type="submit">Save Chain</button></div>
       </form>
@@ -434,13 +533,17 @@
     </section>
 
     <section class="panel" id="panel-vlog">
-      <form id="form-vlog" data-endpoint="/api/config/vlog">
+      <div class="helper-blob">
+        <strong>Helper — vLog</strong>
+        <p>Writes <code>config/vlog/vlog.toml</code>. Password input expects a bcrypt hash value; keep it empty only if you intentionally disable auth.</p>
+      </div>
+      <form id="form-vlog" data-endpoint="api/config/vlog">
         <div class="grid">
           <label>port<input name="port" type="number" min="1" max="65535" value="8889"></label>
           <label>bind_address<input name="bind_address" type="text" value="127.0.0.1"></label>
           <label>base_path<input name="base_path" type="text"></label>
           <label>api_key<input name="api_key" type="text"></label>
-          <label>username<input name="username" type="text" value="admin"></label>
+          <label>username<span class="required-mark">*</span><input name="username" type="text" value="admin" required></label>
           <label>password_hash (already hashed)<input name="password_hash" type="text"></label>
           <label class="check full"><input name="auto_enrich" type="checkbox" checked> intel.auto_enrich</label>
           <label>cache_ttl_hours<input name="cache_ttl_hours" type="number" min="1" value="24"></label>
@@ -461,10 +564,14 @@
     </section>
 
     <section class="panel" id="panel-fleet">
-      <form id="form-fleet" data-endpoint="/api/config/fleet">
+      <div class="helper-blob">
+        <strong>Helper — Fleet</strong>
+        <p>Writes <code>config/fleet/settings.toml</code>. These SSH values become operational defaults for managed hosts.</p>
+      </div>
+      <form id="form-fleet" data-endpoint="api/config/fleet">
         <div class="grid">
-          <label>ssh_user<input name="ssh_user" type="text" value="ubuntu"></label>
-          <label>ssh_key_path<input name="ssh_key_path" type="text"></label>
+          <label>ssh_user<span class="required-mark">*</span><input name="ssh_user" type="text" value="ubuntu" required></label>
+          <label>ssh_key_path<span class="required-mark">*</span><input name="ssh_key_path" type="text" required></label>
           <label>ssh_port<input name="ssh_port" type="number" min="1" max="65535" value="22"></label>
           <label>poll_interval_sec<input name="poll_interval_sec" type="number" min="1" value="60"></label>
           <label>datacenter (default)<input name="datacenter" type="text"></label>
@@ -475,9 +582,13 @@
     </section>
 
     <section class="panel" id="panel-infra">
-      <form id="form-infra" data-endpoint="/api/config/infra">
+      <div class="helper-blob">
+        <strong>Helper — Infra</strong>
+        <p>Writes <code>config/infra/&lt;datacenter&gt;.toml</code>. <code>[host]</code> is optional; each VM row should include at least <code>name</code> and <code>host</code>.</p>
+      </div>
+      <form id="form-infra" data-endpoint="api/config/infra">
         <div class="grid">
-          <label>datacenter<input name="datacenter" type="text" placeholder="qc"></label>
+          <label>datacenter<span class="required-mark">*</span><input name="datacenter" type="text" placeholder="qc" required></label>
         </div>
         <fieldset class="infra-group full">
           <legend>[host] Physical Server (optional)</legend>
@@ -519,8 +630,8 @@
     <template id="infra-vm-template">
       <article class="infra-vm-row">
         <div class="grid">
-          <label>vm.name<input class="vm-field" data-field="name" type="text" placeholder="validator-1"></label>
-          <label>vm.host (SSH target)<input class="vm-field" data-field="host" type="text" placeholder="10.0.0.21"></label>
+            <label>vm.name<span class="required-mark">*</span><input class="vm-field" data-field="name" type="text" placeholder="validator-1" required></label>
+            <label>vm.host (SSH target)<span class="required-mark">*</span><input class="vm-field" data-field="host" type="text" placeholder="10.0.0.21" required></label>
           <label>vm.port<input class="vm-field" data-field="port" type="number" min="1" max="65535" value="22"></label>
           <label>vm.lan_ip<input class="vm-field" data-field="lan_ip" type="text"></label>
           <label>vm.public_ip<input class="vm-field" data-field="public_ip" type="text"></label>
@@ -539,7 +650,11 @@
     </template>
 
     <section class="panel" id="panel-backup">
-      <form id="form-backup" data-endpoint="/api/config/backup">
+      <div class="helper-blob">
+        <strong>Helper — Backup</strong>
+        <p>Writes <code>config/backup/backup.toml</code>. File lists are comma-separated; toggle <code>automation</code> to enable scheduled backups.</p>
+      </div>
+      <form id="form-backup" data-endpoint="api/config/backup">
         <div class="grid">
           <label class="check full"><input name="automation" type="checkbox"> automation</label>
           <label>interval_days<input name="interval_days" type="number" min="0" value="7"></label>
@@ -564,6 +679,7 @@
   <script>
     const $ = (s, r = document) => r.querySelector(s);
     const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+    const initialState = new Map();
 
     function setStatus(msg, kind = "") {
       const box = $("#status");
@@ -573,6 +689,10 @@
 
     function setBusy(form, busy) {
       $$("button", form).forEach((b) => { b.disabled = busy; });
+    }
+
+    function getDeployMode() {
+      return ($("#deploy-mode")?.value || "upgrade").trim().toLowerCase();
     }
 
     function formToObject(form) {
@@ -591,6 +711,7 @@
         syncInfraVMJSON();
       }
       const body = formToObject(form);
+      body.mode = getDeployMode();
       setBusy(form, true);
       setStatus(`Saving ${endpoint}...`);
       try {
@@ -638,6 +759,7 @@
       if (typeof v !== "string") return "";
       const t = v.trim();
       if (t.startsWith('"') && t.endsWith('"')) return t.slice(1, -1);
+      if (t.startsWith("'") && t.endsWith("'")) return t.slice(1, -1);
       return t;
     }
 
@@ -675,6 +797,23 @@
       return ($("#form-infra [name='datacenter']")?.value || "").trim().toUpperCase();
     }
 
+    function vmDedupKey(vm) {
+      return [vm.name, vm.host, vm.chain_name, vm.datacenter].map((v) => String(v || "").trim().toLowerCase()).join("|");
+    }
+
+    function dedupeVMs(vms) {
+      if (!Array.isArray(vms) || vms.length <= 1) return Array.isArray(vms) ? vms : [];
+      const seen = new Set();
+      const out = [];
+      vms.forEach((vm) => {
+        const key = vmDedupKey(vm || {});
+        if (seen.has(key)) return;
+        seen.add(key);
+        out.push(vm);
+      });
+      return out;
+    }
+
     function addInfraVMRow(seed = {}) {
       const tpl = $("#infra-vm-template");
       const list = $("#infra-vm-list");
@@ -702,7 +841,7 @@
     }
 
     function collectInfraVMs() {
-      return $$("#infra-vm-list .infra-vm-row").map((row) => {
+      const rows = $$("#infra-vm-list .infra-vm-row").map((row) => {
         const vm = {};
         $$(".vm-field", row).forEach((el) => {
           const key = el.dataset.field;
@@ -723,6 +862,7 @@
         if (!vm.datacenter) vm.datacenter = currentInfraDatacenter();
         return vm;
       }).filter(Boolean);
+      return dedupeVMs(rows);
     }
 
     function syncInfraVMJSON() {
@@ -735,12 +875,35 @@
       const list = $("#infra-vm-list");
       if (!list) return;
       list.innerHTML = "";
-      if (Array.isArray(vms) && vms.length > 0) {
-        vms.forEach((vm) => addInfraVMRow(vm || {}));
+      const compact = dedupeVMs(Array.isArray(vms) ? vms : []);
+      if (compact.length > 0) {
+        compact.forEach((vm) => addInfraVMRow(vm || {}));
       } else {
         addInfraVMRow({});
       }
       syncInfraVMJSON();
+    }
+
+    function snapshotDefaults() {
+      $$("form[data-endpoint] input, form[data-endpoint] textarea, form[data-endpoint] select").forEach((el) => {
+        if (!el.name) return;
+        initialState.set(el, el.type === "checkbox" ? !!el.checked : (el.value || ""));
+      });
+    }
+
+    function resetToDefaults() {
+      initialState.forEach((value, el) => {
+        if (el.type === "checkbox") {
+          el.checked = !!value;
+          return;
+        }
+        el.value = String(value);
+      });
+      setInfraVMs([]);
+      ["ports", "settings", "vlog", "fleet", "backup"].forEach((k) => {
+        const pre = $(`#raw-${k}`);
+        if (pre) pre.textContent = "(new deployment mode)";
+      });
     }
 
     function prefillFromCurrent(current) {
@@ -773,6 +936,52 @@
         setVal("settings", "aq_ttl_sec", asNum((m.auto_quarantine || {}).ttl_sec, 900));
         setCheck("settings", "debug_enabled", asBool((m.debug || {}).enabled, false));
         setVal("settings", "debug_port", asNum((m.debug || {}).port, 6060));
+      }
+
+      if (current.chain && current.chain.raw) {
+        const m = parseTomlMap(current.chain.raw);
+        setVal("chain", "chain_name", unquote((m.root || {}).chain_name));
+        setVal("chain", "chain_id", unquote((m.root || {}).chain_id));
+        setVal("chain", "dashboard_name", unquote((m.root || {}).dashboard_name));
+        setVal("chain", "explorer_base", unquote((m.root || {}).explorer_base));
+        setVal("chain", "host", unquote((m.root || {}).host));
+        setVal("chain", "ip", unquote((m.root || {}).ip));
+        setCheck("chain", "expose_path", asBool((m.expose || {}).path, true));
+        setCheck("chain", "expose_vhost", asBool((m.expose || {}).vhost, true));
+        setVal("chain", "vhost_prefix_rpc", unquote((m["expose.vhost_prefix"] || {}).rpc));
+        setVal("chain", "vhost_prefix_rest", unquote((m["expose.vhost_prefix"] || {}).rest));
+        setCheck("chain", "svc_rpc", asBool((m.services || {}).rpc, true));
+        setCheck("chain", "svc_rest", asBool((m.services || {}).rest, true));
+        setCheck("chain", "svc_ws", asBool((m.services || {}).websocket, true));
+        setCheck("chain", "svc_grpc", asBool((m.services || {}).grpc, true));
+        setCheck("chain", "svc_grpcweb", asBool((m.services || {}).grpc_web, true));
+        setCheck("chain", "svc_apialias", asBool((m.services || {}).api_alias, true));
+        setCheck("chain", "default_ports", asBool((m.root || {}).default_ports, true));
+        setVal("chain", "port_rpc", asNum((m.ports || {}).rpc, 26657));
+        setVal("chain", "port_rest", asNum((m.ports || {}).rest, 1317));
+        setVal("chain", "port_grpc", asNum((m.ports || {}).grpc, 9090));
+        setVal("chain", "port_grpc_web", asNum((m.ports || {}).grpc_web, 9091));
+        setVal("chain", "port_api", asNum((m.ports || {}).api, 1317));
+        setCheck("chain", "managed_host", asBool((m.management || {}).managed_host, false));
+        setVal("chain", "management_lan_ip", unquote((m.management || {}).lan_ip));
+        setVal("chain", "management_public_ip", unquote((m.management || {}).public_ip));
+        setVal("chain", "management_user", unquote((m.management || {}).user));
+        setVal("chain", "management_key_path", unquote((m.management || {}).key_path));
+        setVal("chain", "management_port", asNum((m.management || {}).port, 22));
+        setVal("chain", "management_datacenter", unquote((m.management || {}).datacenter));
+        setVal("chain", "management_type", asList((m.management || {}).type));
+        setCheck("chain", "exposed_services", asBool((m.management || {}).exposed_services, true));
+        setVal("chain", "valoper", unquote((m.management || {}).valoper));
+        setVal("chain", "management_ping_country", unquote((m["management.ping"] || {}).country));
+        setVal("chain", "management_ping_provider", unquote((m["management.ping"] || {}).provider));
+        setVal("chain", "chain_ping_country", unquote((m.chain_ping || {}).country));
+        setVal("chain", "chain_ping_provider", unquote((m.chain_ping || {}).provider));
+        setVal("chain", "validator_mainnet_address", unquote((m["chain_services.validator.mainnet"] || {}).address));
+        setVal("chain", "validator_testnet_address", unquote((m["chain_services.validator.testnet"] || {}).address));
+        setVal("chain", "sp_mainnet_hostname", unquote((m["chain_services.sp.mainnet"] || {}).hostname));
+        setVal("chain", "sp_mainnet_lan_ip", unquote((m["chain_services.sp.mainnet"] || {}).lan_ip));
+        setVal("chain", "sp_testnet_hostname", unquote((m["chain_services.sp.testnet"] || {}).hostname));
+        setVal("chain", "sp_testnet_lan_ip", unquote((m["chain_services.sp.testnet"] || {}).lan_ip));
       }
 
       if (current.vlog) {
@@ -839,7 +1048,8 @@
 
     async function loadCurrent() {
       try {
-        const resp = await fetch("/api/config/current", { method: "GET" });
+        const mode = encodeURIComponent(getDeployMode());
+        const resp = await fetch(`api/config/current?mode=${mode}`, { method: "GET" });
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const current = await resp.json();
         prefillFromCurrent(current || {});
@@ -861,7 +1071,7 @@
     async function finishWizard() {
       setStatus("Finishing wizard...");
       try {
-        const resp = await fetch("/api/config/done", {
+        const resp = await fetch("api/config/done", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: "{}"
@@ -905,9 +1115,31 @@
       $("#btn-done").addEventListener("click", () => finishWizard());
     }
 
+    function initModeSwitch() {
+      const modeEl = $("#deploy-mode");
+      if (!modeEl) return;
+      modeEl.addEventListener("change", async () => {
+        const mode = getDeployMode();
+        if (mode === "new") {
+          resetToDefaults();
+          setStatus("Mode: new deployment — forms reset to defaults.", "warn");
+          return;
+        }
+        resetToDefaults();
+        await loadCurrent();
+        if (mode === "migration") {
+          setStatus("Mode: migration — imported current + legacy TOMLs.", "ok");
+          return;
+        }
+        setStatus("Mode: upgrade — imported current TOMLs.", "ok");
+      });
+    }
+
     initTabs();
     initInfra();
     initForms();
+    snapshotDefaults();
+    initModeSwitch();
     loadCurrent();
   </script>
 </body>

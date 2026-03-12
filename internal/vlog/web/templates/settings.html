@@ -1,0 +1,26 @@
+{{define "title"}}Settings{{end}}
+{{define "content"}}
+<nav class="page-nav">
+  <a href="{{.BasePath}}/">Dashboard</a>
+  <a href="{{.BasePath}}/accounts">Intel</a>
+  <a href="{{.BasePath}}/settings" class="active">Settings</a>
+</nav>
+
+<article class="v-block">
+  <details open>
+    <summary><span class="v-block-title">Configuration Settings</span></summary>
+    <div class="v-block-body">
+      <p style="margin:0 0 .6rem 0;opacity:.86">
+        Select a mode in the wizard (<strong>upgrade</strong>, <strong>migration</strong>, or <strong>new deployment</strong>), then save each section.
+        Fields marked with <code>*</code> are mandatory. Infra VM rows are auto-deduplicated on import/save.
+      </p>
+      <iframe
+        class="settings-wizard-frame"
+        title="vProx configuration settings wizard"
+        src="{{.BasePath}}/settings/wizard"
+        loading="lazy"></iframe>
+    </div>
+  </details>
+</article>
+{{end}}
+
