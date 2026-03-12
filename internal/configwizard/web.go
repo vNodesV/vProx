@@ -9,8 +9,11 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"sort"
 	"strings"
 	"time"
+
+	"github.com/pelletier/go-toml/v2"
 )
 
 //go:embed wizard.html
@@ -146,14 +149,51 @@ func (w *Web) handleGetCurrent(rw http.ResponseWriter, r *http.Request) {
 		"fleet":    configPath(w.home, "fleet", "settings.toml"),
 		"backup":   configPath(w.home, "backup", "backup.toml"),
 	}
-	out := make(map[string]string, len(files))
+	out := make(map[string]any, len(files)+1)
 	for k, path := range files {
 		data, err := os.ReadFile(path)
 		if err == nil {
 			out[k] = string(data)
 		}
 	}
+	if infra := loadFirstInfra(w.home); infra != nil {
+		out["infra"] = infra
+	}
 	writeJSON(rw, out)
+}
+
+func loadFirstInfra(home string) map[string]any {
+	dir := configPath(home, "infra")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+	names := make([]string, 0, len(entries))
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(strings.ToLower(e.Name()), ".toml") {
+			continue
+		}
+		names = append(names, e.Name())
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		path := configPath(home, "infra", name)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		var inf infraFile
+		if err := toml.Unmarshal(data, &inf); err != nil {
+			continue
+		}
+		return map[string]any{
+			"datacenter": strings.TrimSuffix(name, ".toml"),
+			"host":       inf.Host,
+			"vprox":      inf.VProx,
+			"vms":        inf.VMs,
+		}
+	}
+	return nil
 }
 
 // saveStep returns a handler that writes the POSTed form fields to the appropriate TOML file.

@@ -4,31 +4,59 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>vProx Config Wizard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #050805;
-      --bg-soft: rgba(8, 20, 8, 0.72);
-      --card: rgba(6, 28, 10, 0.72);
-      --text: #d6ffd6;
-      --muted: #78b478;
+      --vn-bg: #000000;
+      --vn-bg-card: rgba(0, 6, 0, 0.78);
+      --vn-green: #00ff00;
+      --vn-green-hover: #6df36d;
+      --vn-green-dim: rgba(0, 255, 0, 0.08);
+      --vn-green-border: rgba(0, 255, 0, 0.18);
+      --vn-green-glow: rgba(0, 255, 0, 0.18);
+      --vn-text: #c8c8c8;
+      --vn-text-muted: #888888;
+      --vn-border: rgba(0, 255, 0, 0.10);
+      --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
       --ok: #00ff7f;
       --warn: #ffd166;
       --err: #ff6b6b;
-      --line: rgba(0, 255, 0, 0.35);
-      --glow: 0 0 20px rgba(0, 255, 0, 0.25);
+      --line: var(--vn-green-border);
+      --glow: 0 0 28px var(--vn-green-glow), inset 0 1px 0 rgba(0, 255, 0, 0.06), 0 4px 20px rgba(0, 0, 0, 0.6);
     }
 
     * { box-sizing: border-box; }
+    html { height: 100%; }
+
     body {
       margin: 0;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-      color: var(--text);
-      background:
-        radial-gradient(circle at 20% 20%, rgba(0, 255, 0, 0.08), transparent 40%),
-        radial-gradient(circle at 80% 0%, rgba(0, 255, 0, 0.06), transparent 50%),
-        var(--bg);
+      font-family: var(--font-sans);
+      font-size: 0.9rem;
+      line-height: 1.45;
+      color: var(--vn-text);
+      background: var(--vn-bg);
       min-height: 100vh;
       overflow-x: hidden;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(circle at 20% 20%, rgba(0, 255, 0, 0.08), transparent 42%),
+        radial-gradient(circle at 80% 0%, rgba(0, 255, 0, 0.06), transparent 52%),
+        rgba(0, 0, 0, 0.5);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    body > * {
+      position: relative;
+      z-index: 1;
     }
 
     .wrap {
@@ -36,11 +64,16 @@
       margin: 1rem auto 2rem;
     }
 
-    .header {
+    .header, .panel, .infra-vm-row, fieldset {
       border: 1px solid var(--line);
       box-shadow: var(--glow);
       border-radius: 10px;
-      background: var(--bg-soft);
+      background: var(--vn-bg-card);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
+
+    .header {
       padding: 1rem;
       margin-bottom: 0.9rem;
     }
@@ -48,12 +81,12 @@
     h1 {
       margin: 0;
       font-size: 1.1rem;
-      color: var(--ok);
+      color: var(--vn-green);
       letter-spacing: 0.03em;
     }
 
     .hint {
-      color: var(--muted);
+      color: var(--vn-text-muted);
       margin-top: 0.4rem;
       font-size: 0.9rem;
     }
@@ -82,27 +115,30 @@
     .tab {
       border: 1px solid var(--line);
       border-radius: 8px;
-      background: rgba(0, 0, 0, 0.28);
-      color: var(--text);
+      background: rgba(0, 0, 0, 0.32);
+      color: var(--vn-text-muted);
       padding: 0.55rem;
       cursor: pointer;
       font-size: 0.82rem;
       text-align: center;
+      font-weight: 600;
+      transition: color 0.15s, background 0.15s, border-color 0.15s;
+    }
+
+    .tab:hover {
+      color: var(--vn-text);
+      background: var(--vn-green-dim);
     }
 
     .tab.active {
-      background: rgba(0, 255, 0, 0.14);
-      color: var(--ok);
-      box-shadow: var(--glow);
+      background: rgba(0, 255, 0, 0.12);
+      color: var(--vn-green);
+      border-color: rgba(0, 255, 0, 0.4);
     }
 
     .panel {
       display: none;
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      background: var(--card);
       padding: 0.9rem;
-      box-shadow: var(--glow);
       position: relative;
       overflow: clip;
     }
@@ -122,21 +158,30 @@
       display: grid;
       gap: 0.3rem;
       font-size: 0.85rem;
-      color: var(--muted);
+      color: var(--vn-text-muted);
     }
 
     input:not([type="checkbox"]), textarea, select {
       width: 100%;
-      border: 1px solid var(--line);
+      border: 1px solid var(--vn-border);
       border-radius: 7px;
-      background: rgba(0, 0, 0, 0.35);
-      color: var(--text);
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--vn-text);
       padding: 0.5rem 0.55rem;
       font: inherit;
       line-height: 1.25;
       background-clip: padding-box;
       -webkit-appearance: none;
       appearance: none;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+
+    input:not([type="checkbox"]):focus,
+    textarea:focus,
+    select:focus {
+      border-color: var(--vn-green);
+      box-shadow: 0 0 0 2px rgba(0, 255, 0, 0.2);
+      outline: none;
     }
 
     textarea {
@@ -148,7 +193,7 @@
       display: flex;
       align-items: center;
       gap: 0.5rem;
-      color: var(--text);
+      color: var(--vn-text);
       font-size: 0.9rem;
       border: 1px solid var(--line);
       border-radius: 7px;
@@ -159,7 +204,7 @@
     .check input {
       width: auto;
       margin: 0;
-      accent-color: #00ff88;
+      accent-color: var(--vn-green);
       border: 0;
       padding: 0;
       background: transparent;
@@ -168,7 +213,7 @@
 
     select option, select optgroup {
       background: #071107;
-      color: var(--text);
+      color: var(--vn-text);
     }
 
     input:-webkit-autofill,
@@ -193,7 +238,7 @@
     summary {
       cursor: pointer;
       padding: 0.45rem 0.55rem;
-      color: var(--muted);
+      color: var(--vn-text-muted);
       user-select: none;
     }
 
@@ -217,25 +262,85 @@
     }
 
     button {
-      border: 1px solid var(--line);
+      border: 1px solid var(--vn-green);
       border-radius: 8px;
-      background: rgba(0, 255, 0, 0.12);
-      color: var(--text);
+      background: #001700;
+      color: var(--vn-green);
       padding: 0.48rem 0.8rem;
       font: inherit;
       cursor: pointer;
+      box-shadow: 0 0 8px rgba(0, 255, 0, 0.15);
+      transition: background 0.15s, box-shadow 0.15s, border-color 0.15s, color 0.15s;
     }
 
-    button:hover { background: rgba(0, 255, 0, 0.2); }
+    button:hover {
+      background: rgba(0, 255, 0, 0.08);
+      box-shadow: 0 0 14px rgba(0, 255, 0, 0.3);
+      color: var(--vn-green-hover);
+    }
+
     button[disabled] { opacity: 0.6; cursor: wait; }
+
     .danger {
       border-color: rgba(255, 107, 107, 0.45);
       background: rgba(255, 107, 107, 0.12);
+      color: #ff9f9f;
+      box-shadow: none;
+    }
+
+    .infra-group {
+      margin: 0.65rem 0;
+      padding: 0.8rem;
+    }
+
+    .infra-group legend {
+      color: var(--vn-green);
+      font-weight: 600;
+      font-size: 0.82rem;
+      padding: 0 0.35rem;
+    }
+
+    .infra-vms {
+      margin-top: 0.6rem;
+    }
+
+    .infra-vms-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.6rem;
+      margin-bottom: 0.6rem;
+    }
+
+    .infra-vms-head strong {
+      color: var(--vn-green);
+      font-size: 0.88rem;
+    }
+
+    .infra-vm-list {
+      display: grid;
+      gap: 0.65rem;
+    }
+
+    .infra-vm-row {
+      padding: 0.75rem;
+      border-radius: 8px;
+    }
+
+    .infra-vm-row .grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .mini {
+      margin: 0.55rem 0 0;
+      font-size: 0.78rem;
+      opacity: 0.9;
     }
 
     @media (max-width: 980px) {
       .tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .grid { grid-template-columns: 1fr; }
+      .infra-vm-row .grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -373,25 +478,65 @@
       <form id="form-infra" data-endpoint="/api/config/infra">
         <div class="grid">
           <label>datacenter<input name="datacenter" type="text" placeholder="qc"></label>
-          <label class="full">toml_raw (full infra TOML content)
-            <textarea name="toml_raw" placeholder="[host]
-name = &quot;host-a&quot;
-lan_ip = &quot;10.0.0.2&quot;
-
-[vprox]
-name = &quot;vProx&quot;
-lan_ip = &quot;10.0.0.10&quot;
-
-[[vm]]
-name = &quot;vm1&quot;
-host = &quot;10.0.0.21&quot;
-chain_name = &quot;cheqd&quot;"></textarea>
-          </label>
         </div>
+        <fieldset class="infra-group full">
+          <legend>[host] Physical Server (optional)</legend>
+          <div class="grid">
+            <label>host_name<input name="host_name" type="text" placeholder="host-a"></label>
+            <label>host_lan_ip<input name="host_lan_ip" type="text" placeholder="10.0.0.2"></label>
+            <label>host_public_ip<input name="host_public_ip" type="text" placeholder="203.0.113.10"></label>
+            <label>host_datacenter<input name="host_datacenter" type="text" placeholder="QC"></label>
+            <label>host_user<input name="host_user" type="text" placeholder="ubuntu"></label>
+            <label>host_ssh_key_path<input name="host_ssh_key_path" type="text" placeholder="~/.ssh/vprox_fleet"></label>
+          </div>
+        </fieldset>
+
+        <fieldset class="infra-group full">
+          <legend>[vprox] vProx Instance</legend>
+          <div class="grid">
+            <label>vprox_name<input name="vprox_name" type="text" value="vProx"></label>
+            <label>vprox_lan_ip<input name="vprox_lan_ip" type="text" placeholder="10.0.0.10"></label>
+            <label>vprox_key<input name="vprox_key" type="text" placeholder="~/.ssh/vprox"></label>
+            <label>vprox_ssh_key_path<input name="vprox_ssh_key_path" type="text" placeholder="~/.ssh/vprox_fleet"></label>
+          </div>
+        </fieldset>
+
+        <section class="infra-vms full" aria-label="vm entries">
+          <div class="infra-vms-head">
+            <strong>[[vm]] Virtual Machines</strong>
+            <button id="btn-infra-add-vm" type="button">+ Add VM</button>
+          </div>
+          <div id="infra-vm-list" class="infra-vm-list"></div>
+          <input id="infra-vms-json" name="vms_json" type="hidden" value="[]">
+          <p class="hint mini">Each VM row requires <code>name</code> and <code>host</code>. Empty rows are ignored.</p>
+        </section>
+
         <div class="actions"><button type="submit">Save Infra</button></div>
       </form>
-      <details><summary>Tip</summary><pre>This step accepts full TOML in toml_raw and writes config/infra/&lt;datacenter&gt;.toml.</pre></details>
+      <details><summary>Tip</summary><pre>This step writes config/infra/&lt;datacenter&gt;.toml using [host], [vprox], and [[vm]] entries.</pre></details>
     </section>
+
+    <template id="infra-vm-template">
+      <article class="infra-vm-row">
+        <div class="grid">
+          <label>vm.name<input class="vm-field" data-field="name" type="text" placeholder="validator-1"></label>
+          <label>vm.host (SSH target)<input class="vm-field" data-field="host" type="text" placeholder="10.0.0.21"></label>
+          <label>vm.port<input class="vm-field" data-field="port" type="number" min="1" max="65535" value="22"></label>
+          <label>vm.lan_ip<input class="vm-field" data-field="lan_ip" type="text"></label>
+          <label>vm.public_ip<input class="vm-field" data-field="public_ip" type="text"></label>
+          <label>vm.user<input class="vm-field" data-field="user" type="text"></label>
+          <label>vm.key_path<input class="vm-field" data-field="key_path" type="text"></label>
+          <label>vm.datacenter<input class="vm-field" data-field="datacenter" type="text"></label>
+          <label>vm.type<input class="vm-field" data-field="type" type="text" placeholder="validator,sp"></label>
+          <label>vm.chain_name<input class="vm-field" data-field="chain_name" type="text" placeholder="cheqd"></label>
+          <label>vm.ping.country<input class="vm-field" data-field="ping_country" type="text" value="CA"></label>
+          <label>vm.ping.provider<input class="vm-field" data-field="ping_provider" type="text"></label>
+        </div>
+        <div class="actions">
+          <button type="button" class="danger infra-vm-remove">Remove VM</button>
+        </div>
+      </article>
+    </template>
 
     <section class="panel" id="panel-backup">
       <form id="form-backup" data-endpoint="/api/config/backup">
@@ -442,6 +587,9 @@ chain_name = &quot;cheqd&quot;"></textarea>
 
     async function submitForm(form) {
       const endpoint = form.dataset.endpoint;
+      if (form.id === "form-infra") {
+        syncInfraVMJSON();
+      }
       const body = formToObject(form);
       setBusy(form, true);
       setStatus(`Saving ${endpoint}...`);
@@ -523,6 +671,78 @@ chain_name = &quot;cheqd&quot;"></textarea>
       el.checked = !!value;
     }
 
+    function currentInfraDatacenter() {
+      return ($("#form-infra [name='datacenter']")?.value || "").trim().toUpperCase();
+    }
+
+    function addInfraVMRow(seed = {}) {
+      const tpl = $("#infra-vm-template");
+      const list = $("#infra-vm-list");
+      if (!tpl || !list) return;
+
+      const row = tpl.content.firstElementChild.cloneNode(true);
+      const defaultDC = currentInfraDatacenter();
+      $$(".vm-field", row).forEach((el) => {
+        const key = el.dataset.field;
+        let value = seed[key];
+        if ((value === undefined || value === null || value === "") && key === "port") value = 22;
+        if ((value === undefined || value === null || value === "") && key === "ping_country") value = "CA";
+        if ((value === undefined || value === null || value === "") && key === "datacenter") value = defaultDC;
+        if (value !== undefined && value !== null && value !== "") {
+          el.value = String(value);
+        }
+        el.addEventListener("input", () => syncInfraVMJSON());
+      });
+      $(".infra-vm-remove", row).addEventListener("click", () => {
+        row.remove();
+        syncInfraVMJSON();
+      });
+      list.appendChild(row);
+      syncInfraVMJSON();
+    }
+
+    function collectInfraVMs() {
+      return $$("#infra-vm-list .infra-vm-row").map((row) => {
+        const vm = {};
+        $$(".vm-field", row).forEach((el) => {
+          const key = el.dataset.field;
+          const raw = (el.value || "").trim();
+          if (key === "port") {
+            const p = Number(raw);
+            vm[key] = Number.isFinite(p) && p > 0 ? Math.trunc(p) : 22;
+            return;
+          }
+          vm[key] = raw;
+        });
+
+        const hasAny = ["name", "host", "lan_ip", "public_ip", "user", "key_path", "datacenter", "type", "chain_name", "ping_country", "ping_provider"]
+          .some((k) => String(vm[k] || "").trim() !== "");
+        if (!hasAny) return null;
+        if (!vm.port) vm.port = 22;
+        if (vm.ping_country) vm.ping_country = String(vm.ping_country).toUpperCase();
+        if (!vm.datacenter) vm.datacenter = currentInfraDatacenter();
+        return vm;
+      }).filter(Boolean);
+    }
+
+    function syncInfraVMJSON() {
+      const hidden = $("#infra-vms-json");
+      if (!hidden) return;
+      hidden.value = JSON.stringify(collectInfraVMs());
+    }
+
+    function setInfraVMs(vms) {
+      const list = $("#infra-vm-list");
+      if (!list) return;
+      list.innerHTML = "";
+      if (Array.isArray(vms) && vms.length > 0) {
+        vms.forEach((vm) => addInfraVMRow(vm || {}));
+      } else {
+        addInfraVMRow({});
+      }
+      syncInfraVMJSON();
+    }
+
     function prefillFromCurrent(current) {
       const rawKeys = ["ports", "settings", "vlog", "fleet", "backup"];
       rawKeys.forEach((k) => {
@@ -586,6 +806,24 @@ chain_name = &quot;cheqd&quot;"></textarea>
         setVal("fleet", "datacenter", unquote((m.defaults || {}).datacenter));
       }
 
+      if (current.infra) {
+        const infra = current.infra || {};
+        const host = infra.host || {};
+        const vprox = infra.vprox || {};
+        setVal("infra", "datacenter", infra.datacenter || "");
+        setVal("infra", "host_name", host.name || "");
+        setVal("infra", "host_lan_ip", host.lan_ip || "");
+        setVal("infra", "host_public_ip", host.public_ip || "");
+        setVal("infra", "host_datacenter", host.datacenter || "");
+        setVal("infra", "host_user", host.user || "");
+        setVal("infra", "host_ssh_key_path", host.ssh_key_path || "");
+        setVal("infra", "vprox_name", vprox.name || "vProx");
+        setVal("infra", "vprox_lan_ip", vprox.lan_ip || "");
+        setVal("infra", "vprox_key", vprox.key || "");
+        setVal("infra", "vprox_ssh_key_path", vprox.ssh_key_path || "");
+        setInfraVMs(Array.isArray(infra.vms) ? infra.vms : []);
+      }
+
       if (current.backup) {
         const m = parseTomlMap(current.backup);
         setCheck("backup", "automation", asBool((m.backup || {}).automation, false));
@@ -635,6 +873,27 @@ chain_name = &quot;cheqd&quot;"></textarea>
       }
     }
 
+    function initInfra() {
+      const addBtn = $("#btn-infra-add-vm");
+      if (addBtn) {
+        addBtn.addEventListener("click", () => addInfraVMRow({}));
+      }
+      const dcField = $("#form-infra [name='datacenter']");
+      if (dcField) {
+        dcField.addEventListener("input", () => {
+          const nextDC = currentInfraDatacenter();
+          $$("#infra-vm-list .infra-vm-row").forEach((row) => {
+            const dcInput = $(".vm-field[data-field='datacenter']", row);
+            if (dcInput && (dcInput.value || "").trim() === "") {
+              dcInput.value = nextDC;
+            }
+          });
+          syncInfraVMJSON();
+        });
+      }
+      setInfraVMs([]);
+    }
+
     function initForms() {
       $$("form[data-endpoint]").forEach((form) => {
         form.addEventListener("submit", (ev) => {
@@ -647,6 +906,7 @@ chain_name = &quot;cheqd&quot;"></textarea>
     }
 
     initTabs();
+    initInfra();
     initForms();
     loadCurrent();
   </script>

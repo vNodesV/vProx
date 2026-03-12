@@ -1,6 +1,7 @@
 package configwizard
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"os/exec"
@@ -10,6 +11,7 @@ import (
 	"github.com/pelletier/go-toml/v2"
 	"github.com/vNodesV/vProx/internal/backup"
 	chainconfig "github.com/vNodesV/vProx/internal/config"
+	fleetcfg "github.com/vNodesV/vProx/internal/fleet/config"
 	vlogcfg "github.com/vNodesV/vProx/internal/vlog/config"
 )
 
@@ -150,19 +152,121 @@ func applyFleet(home string, f map[string]any) error {
 }
 
 func applyInfra(home string, f map[string]any) error {
-	dc := fieldStr(f, "datacenter", "")
+	dc := strings.ToLower(strings.TrimSpace(fieldStr(f, "datacenter", "")))
 	if dc == "" {
 		return fmt.Errorf("datacenter name is required")
 	}
-	tomlRaw := fieldStr(f, "toml_raw", "")
-	if tomlRaw == "" {
-		return fmt.Errorf("toml_raw field required for infra step")
+
+	// Backward compatibility: accept raw TOML payload from older wizard pages.
+	if tomlRaw := strings.TrimSpace(fieldStr(f, "toml_raw", "")); tomlRaw != "" {
+		var inf infraFile
+		if err := toml.Unmarshal([]byte(tomlRaw), &inf); err != nil {
+			return fmt.Errorf("parse infra TOML: %w", err)
+		}
+		return writeConfigNoPrompt(configPath(home, "infra", dc+".toml"), inf)
 	}
+
 	var inf infraFile
-	if err := toml.Unmarshal([]byte(tomlRaw), &inf); err != nil {
-		return fmt.Errorf("parse infra TOML: %w", err)
+	inf.Host.Name = fieldStr(f, "host_name", "")
+	inf.Host.LanIP = fieldStr(f, "host_lan_ip", "")
+	inf.Host.PublicIP = fieldStr(f, "host_public_ip", "")
+	inf.Host.Datacenter = fieldStr(f, "host_datacenter", "")
+	inf.Host.User = fieldStr(f, "host_user", "")
+	inf.Host.SSHKeyPath = fieldStr(f, "host_ssh_key_path", "")
+
+	if inf.Host.Name == "" {
+		if inf.Host.LanIP != "" || inf.Host.PublicIP != "" || inf.Host.Datacenter != "" || inf.Host.User != "" || inf.Host.SSHKeyPath != "" {
+			return fmt.Errorf("host_name is required when host fields are set")
+		}
+	} else {
+		if inf.Host.Datacenter == "" {
+			inf.Host.Datacenter = strings.ToUpper(dc)
+		}
+		if inf.Host.LanIP != "" && net.ParseIP(inf.Host.LanIP) == nil {
+			return fmt.Errorf("host_lan_ip must be a valid IP address")
+		}
+		if inf.Host.PublicIP != "" && net.ParseIP(inf.Host.PublicIP) == nil {
+			return fmt.Errorf("host_public_ip must be a valid IP address")
+		}
 	}
+
+	inf.VProx.Name = fieldStr(f, "vprox_name", "vProx")
+	inf.VProx.LanIP = fieldStr(f, "vprox_lan_ip", "")
+	inf.VProx.Key = fieldStr(f, "vprox_key", "")
+	inf.VProx.SSHKeyPath = fieldStr(f, "vprox_ssh_key_path", "")
+	if inf.VProx.LanIP != "" && net.ParseIP(inf.VProx.LanIP) == nil {
+		return fmt.Errorf("vprox_lan_ip must be a valid IP address")
+	}
+
+	vms, err := parseInfraVMs(fieldStr(f, "vms_json", ""))
+	if err != nil {
+		return err
+	}
+	inf.VMs = vms
+
 	return writeConfigNoPrompt(configPath(home, "infra", dc+".toml"), inf)
+}
+
+func parseInfraVMs(raw string) ([]fleetcfg.VM, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, nil
+	}
+
+	var rows []map[string]any
+	if err := json.Unmarshal([]byte(raw), &rows); err != nil {
+		return nil, fmt.Errorf("invalid vms_json payload: %w", err)
+	}
+
+	vms := make([]fleetcfg.VM, 0, len(rows))
+	for i, row := range rows {
+		vm := fleetcfg.VM{
+			Name:       fieldStr(row, "name", ""),
+			Host:       fieldStr(row, "host", ""),
+			LanIP:      fieldStr(row, "lan_ip", ""),
+			PublicIP:   fieldStr(row, "public_ip", ""),
+			Port:       fieldInt(row, "port", 22),
+			User:       fieldStr(row, "user", ""),
+			KeyPath:    fieldStr(row, "key_path", ""),
+			Datacenter: fieldStr(row, "datacenter", ""),
+			Type:       fieldStr(row, "type", ""),
+			ChainName:  fieldStr(row, "chain_name", ""),
+		}
+		vm.Ping.Country = strings.ToUpper(fieldStr(row, "ping_country", ""))
+		vm.Ping.Provider = fieldStr(row, "ping_provider", "")
+
+		hasAny := vm.Name != "" || vm.Host != "" || vm.LanIP != "" || vm.PublicIP != "" ||
+			vm.Port != 0 || vm.User != "" || vm.KeyPath != "" || vm.Datacenter != "" ||
+			vm.Type != "" || vm.ChainName != "" || vm.Ping.Country != "" || vm.Ping.Provider != ""
+		if !hasAny {
+			continue
+		}
+		if vm.Name == "" {
+			return nil, fmt.Errorf("vm[%d].name is required", i+1)
+		}
+		if vm.Host == "" {
+			return nil, fmt.Errorf("vm[%d].host is required", i+1)
+		}
+		if vm.Port == 0 {
+			vm.Port = 22
+		}
+		if vm.Port < 1 || vm.Port > 65535 {
+			return nil, fmt.Errorf("vm[%d].port must be 1-65535", i+1)
+		}
+		if vm.LanIP != "" && net.ParseIP(vm.LanIP) == nil {
+			return nil, fmt.Errorf("vm[%d].lan_ip must be a valid IP address", i+1)
+		}
+		if vm.PublicIP != "" && net.ParseIP(vm.PublicIP) == nil {
+			return nil, fmt.Errorf("vm[%d].public_ip must be a valid IP address", i+1)
+		}
+		if vm.Ping.Country != "" && !validCountries[vm.Ping.Country] {
+			return nil, fmt.Errorf("vm[%d].ping_country is unsupported: %q", i+1, vm.Ping.Country)
+		}
+
+		vms = append(vms, vm)
+	}
+
+	return vms, nil
 }
 
 func applyBackup(home string, f map[string]any) error {
