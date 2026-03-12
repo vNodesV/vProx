@@ -19,18 +19,6 @@ func (s *Server) handleSettingsPage(w http.ResponseWriter, _ *http.Request) {
 	}
 }
 
-func (s *Server) handleSettingsWizard(w http.ResponseWriter, _ *http.Request) {
-	page, err := configwizard.WizardHTML()
-	if err != nil {
-		http.Error(w, "settings wizard unavailable", http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-store")
-	w.Header().Set("X-Frame-Options", "SAMEORIGIN")
-	_, _ = w.Write(page)
-}
-
 func (s *Server) handleAPISettingsCurrent(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, configwizard.CurrentSnapshot(s.home, r.URL.Query().Get("mode")))
 }
@@ -49,8 +37,4 @@ func (s *Server) handleAPISettingsSave(step string) http.HandlerFunc {
 		}
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	}
-}
-
-func (s *Server) handleAPISettingsDone(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }

@@ -161,8 +161,10 @@ func CurrentSnapshot(home, mode string) map[string]any {
 		"fleet":    configPath(home, "fleet", "settings.toml"),
 		"backup":   configPath(home, "backup", "backup.toml"),
 	}
-	out := make(map[string]any, len(files)+2)
+	out := make(map[string]any, len(files)+5)
 	out["mode"] = mode
+	out["chains"] = []map[string]any{}
+	out["infras"] = []map[string]any{}
 	if mode == "new" {
 		return out
 	}
@@ -173,23 +175,21 @@ func CurrentSnapshot(home, mode string) map[string]any {
 		}
 	}
 
-	if chain := loadFirstChain(home); chain != nil {
-		out["chain"] = chain
+	chains := loadChains(home)
+	out["chains"] = chains
+	if len(chains) > 0 {
+		out["chain"] = chains[0]
 	}
 
-	infra := loadFirstInfra(home)
+	infras := loadInfras(home)
 	if mode == "migration" {
-		legacy := loadLegacyInfra(home)
-		switch {
-		case infra == nil:
-			infra = legacy
-		case legacy != nil:
-			infra["vms"] = mergeInfraVMs(infra["vms"], legacy["vms"])
-		}
+		infras = mergeLegacyIntoInfras(infras, loadLegacyInfra(home))
 	}
-	if infra != nil {
-		out["infra"] = infra
+	out["infras"] = infras
+	if len(infras) > 0 {
+		out["infra"] = infras[0]
 	}
+
 	return out
 }
 
@@ -204,7 +204,7 @@ func normalizeDeployMode(raw string) string {
 	}
 }
 
-func loadFirstChain(home string) map[string]any {
+func loadChains(home string) []map[string]any {
 	dir := configPath(home, "chains")
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -218,25 +218,24 @@ func loadFirstChain(home string) map[string]any {
 		names = append(names, e.Name())
 	}
 	sort.Strings(names)
+
+	out := make([]map[string]any, 0, len(names))
 	for _, name := range names {
 		path := configPath(home, "chains", name)
 		data, err := os.ReadFile(path)
 		if err != nil {
 			continue
 		}
-		var c chainconfig.ChainConfig
-		if err := toml.Unmarshal(data, &c); err != nil {
-			continue
-		}
-		return map[string]any{
+		out = append(out, map[string]any{
 			"file": name,
+			"name": strings.TrimSuffix(name, ".toml"),
 			"raw":  string(data),
-		}
+		})
 	}
-	return nil
+	return out
 }
 
-func loadFirstInfra(home string) map[string]any {
+func loadInfras(home string) []map[string]any {
 	dir := configPath(home, "infra")
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -250,6 +249,7 @@ func loadFirstInfra(home string) map[string]any {
 		names = append(names, e.Name())
 	}
 	sort.Strings(names)
+	out := make([]map[string]any, 0, len(names))
 	for _, name := range names {
 		path := configPath(home, "infra", name)
 		data, err := os.ReadFile(path)
@@ -261,14 +261,15 @@ func loadFirstInfra(home string) map[string]any {
 			continue
 		}
 		inf.VMs = dedupeFleetVMs(inf.VMs)
-		return map[string]any{
+		out = append(out, map[string]any{
+			"file":       name,
 			"datacenter": strings.TrimSuffix(name, ".toml"),
-			"host":       inf.Host,
-			"vprox":      inf.VProx,
-			"vms":        inf.VMs,
-		}
+			"host":       hostToMap(inf.Host),
+			"vprox":      vproxToMap(inf.VProx),
+			"vms":        vmsToMaps(inf.VMs),
+		})
 	}
-	return nil
+	return out
 }
 
 func loadLegacyInfra(home string) map[string]any {
@@ -298,11 +299,70 @@ func loadLegacyInfra(home string) map[string]any {
 		dc = strings.TrimSuffix(filepath.Base(path), ".toml")
 	}
 	return map[string]any{
+		"file":       filepath.Base(path),
 		"datacenter": dc,
-		"host":       host,
-		"vprox":      vproxEntry{Name: "vProx"},
-		"vms":        vms,
+		"host":       hostToMap(host),
+		"vprox":      vproxToMap(vproxEntry{Name: "vProx"}),
+		"vms":        vmsToMaps(vms),
 	}
+}
+
+func mergeLegacyIntoInfras(infras []map[string]any, legacy map[string]any) []map[string]any {
+	if legacy == nil {
+		return infras
+	}
+	if len(infras) == 0 {
+		return []map[string]any{legacy}
+	}
+
+	target := 0
+	legacyDC := strings.ToLower(strings.TrimSpace(infraDatacenter(legacy)))
+	if legacyDC != "" {
+		for i := range infras {
+			if strings.EqualFold(infraDatacenter(infras[i]), legacyDC) {
+				target = i
+				break
+			}
+		}
+	}
+
+	out := append([]map[string]any{}, infras...)
+	out[target] = mergeInfraEntry(out[target], legacy)
+	return out
+}
+
+func infraDatacenter(entry map[string]any) string {
+	if entry == nil {
+		return ""
+	}
+	if dc, ok := entry["datacenter"].(string); ok {
+		return dc
+	}
+	return ""
+}
+
+func mergeInfraEntry(primary, fallback map[string]any) map[string]any {
+	if primary == nil {
+		return fallback
+	}
+	if fallback == nil {
+		return primary
+	}
+	out := make(map[string]any, len(primary)+2)
+	for k, v := range primary {
+		out[k] = v
+	}
+	if strings.TrimSpace(infraDatacenter(out)) == "" {
+		out["datacenter"] = infraDatacenter(fallback)
+	}
+	if _, ok := out["host"]; !ok {
+		out["host"] = fallback["host"]
+	}
+	if _, ok := out["vprox"]; !ok {
+		out["vprox"] = fallback["vprox"]
+	}
+	out["vms"] = mergeInfraVMs(out["vms"], fallback["vms"])
+	return out
 }
 
 func dedupeFleetVMs(vms []fleetcfg.VM) []fleetcfg.VM {
@@ -339,6 +399,27 @@ func toFleetVMs(raw any) []fleetcfg.VM {
 	switch v := raw.(type) {
 	case []fleetcfg.VM:
 		return v
+	case []map[string]any:
+		out := make([]fleetcfg.VM, 0, len(v))
+		for _, m := range v {
+			out = append(out, fleetcfg.VM{
+				Name:       fieldStr(m, "name", ""),
+				Host:       fieldStr(m, "host", ""),
+				LanIP:      fieldStr(m, "lan_ip", ""),
+				PublicIP:   fieldStr(m, "public_ip", ""),
+				Port:       fieldInt(m, "port", 0),
+				User:       fieldStr(m, "user", ""),
+				KeyPath:    fieldStr(m, "key_path", ""),
+				Datacenter: fieldStr(m, "datacenter", ""),
+				Type:       fieldStr(m, "type", ""),
+				ChainName:  fieldStr(m, "chain_name", ""),
+				Ping: fleetcfg.VMPing{
+					Country:  strings.ToUpper(fieldStr(m, "ping_country", "")),
+					Provider: fieldStr(m, "ping_provider", ""),
+				},
+			})
+		}
+		return out
 	case []any:
 		out := make([]fleetcfg.VM, 0, len(v))
 		for _, row := range v {
@@ -366,6 +447,47 @@ func toFleetVMs(raw any) []fleetcfg.VM {
 	default:
 		return nil
 	}
+}
+
+func hostToMap(h fleetcfg.Host) map[string]any {
+	return map[string]any{
+		"name":         h.Name,
+		"public_ip":    h.PublicIP,
+		"lan_ip":       h.LanIP,
+		"datacenter":   h.Datacenter,
+		"user":         h.User,
+		"ssh_key_path": h.SSHKeyPath,
+	}
+}
+
+func vproxToMap(v vproxEntry) map[string]any {
+	return map[string]any{
+		"name":         v.Name,
+		"lan_ip":       v.LanIP,
+		"key":          v.Key,
+		"ssh_key_path": v.SSHKeyPath,
+	}
+}
+
+func vmsToMaps(vms []fleetcfg.VM) []map[string]any {
+	out := make([]map[string]any, 0, len(vms))
+	for _, vm := range vms {
+		out = append(out, map[string]any{
+			"name":          vm.Name,
+			"host":          vm.Host,
+			"lan_ip":        vm.LanIP,
+			"public_ip":     vm.PublicIP,
+			"port":          vm.Port,
+			"user":          vm.User,
+			"key_path":      vm.KeyPath,
+			"datacenter":    vm.Datacenter,
+			"type":          vm.Type,
+			"chain_name":    vm.ChainName,
+			"ping_country":  vm.Ping.Country,
+			"ping_provider": vm.Ping.Provider,
+		})
+	}
+	return out
 }
 
 // saveStep returns a handler that writes the POSTed form fields to the appropriate TOML file.

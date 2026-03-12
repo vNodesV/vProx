@@ -135,7 +135,6 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 	mux.Handle("GET /accounts", s.requireSession(http.HandlerFunc(s.handleAccountList)))
 	mux.Handle("GET /accounts/{ip}", s.requireSession(http.HandlerFunc(s.handleAccountDetail)))
 	mux.Handle("GET /settings", s.requireSession(http.HandlerFunc(s.handleSettingsPage)))
-	mux.Handle("GET /settings/wizard", s.requireSession(http.HandlerFunc(s.handleSettingsWizard)))
 	mux.Handle("GET /settings/api/config/current", s.requireSession(http.HandlerFunc(s.handleAPISettingsCurrent)))
 	mux.Handle("POST /settings/api/config/ports", s.requireSession(http.HandlerFunc(s.handleAPISettingsSave("ports"))))
 	mux.Handle("POST /settings/api/config/settings", s.requireSession(http.HandlerFunc(s.handleAPISettingsSave("settings"))))
@@ -144,7 +143,6 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 	mux.Handle("POST /settings/api/config/fleet", s.requireSession(http.HandlerFunc(s.handleAPISettingsSave("fleet"))))
 	mux.Handle("POST /settings/api/config/infra", s.requireSession(http.HandlerFunc(s.handleAPISettingsSave("infra"))))
 	mux.Handle("POST /settings/api/config/backup", s.requireSession(http.HandlerFunc(s.handleAPISettingsSave("backup"))))
-	mux.Handle("POST /settings/api/config/done", s.requireSession(http.HandlerFunc(s.handleAPISettingsDone)))
 
 	// API routes — session-protected.
 	mux.Handle("POST /api/v1/ingest", s.requireSession(http.HandlerFunc(s.handleAPIIngest)))
