@@ -1143,3 +1143,205 @@ summary { list-style: none; }
   .settings-grid { grid-template-columns: 1fr; }
   .settings-vm-row .settings-grid { grid-template-columns: 1fr; }
 }
+
+/* ── Settings dashboard-native refresh ── */
+.settings-content {
+  display: grid;
+  gap: 1rem;
+}
+
+.settings-block {
+  margin-bottom: 0;
+}
+
+.settings-block .v-block-body {
+  padding-top: .65rem;
+}
+
+.settings-list-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .78rem;
+}
+
+.settings-list-table th,
+.settings-list-table td {
+  padding: .3rem .45rem;
+  border-bottom: 1px solid var(--vn-border);
+  vertical-align: middle;
+}
+
+.settings-list-table th {
+  text-align: left;
+  color: var(--vn-text-muted);
+  font-size: .7rem;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.settings-name {
+  width: 34%;
+  color: var(--vn-text-muted);
+  font-family: var(--font-mono);
+  font-size: .72rem;
+  letter-spacing: .04em;
+}
+
+.settings-value {
+  color: var(--vn-text);
+  font-size: .78rem;
+}
+
+.settings-actions-row td {
+  padding-top: .48rem;
+  padding-bottom: .48rem;
+  border-bottom: none;
+}
+
+.settings-row-buttons {
+  display: flex;
+  gap: .45rem;
+  flex-wrap: wrap;
+}
+
+.settings-row-buttons button {
+  padding: .2rem .55rem;
+  border-radius: 999px;
+  font-size: .69rem;
+  line-height: 1.25;
+  letter-spacing: .03em;
+}
+
+.settings-empty {
+  text-align: center;
+  color: var(--vn-text-muted);
+  font-style: italic;
+}
+
+.settings-form-store {
+  display: none !important;
+}
+
+.settings-editor-popup {
+  width: min(980px, 96vw);
+}
+
+.settings-editor-copy {
+  margin: 0 0 .7rem;
+  font-size: .8rem;
+  color: var(--vn-text-muted);
+  line-height: 1.4;
+}
+
+.settings-editor-host {
+  max-height: 62vh;
+  overflow: auto;
+  border: 1px solid var(--vn-green-border);
+  border-radius: 7px;
+  background: rgba(0,0,0,.26);
+  padding: .65rem;
+}
+
+.settings-editor-host .settings-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .45rem .6rem;
+}
+
+.settings-editor-host .settings-vm-row .settings-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.settings-editor-host .settings-grid label {
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+  font-size: .74rem;
+  color: var(--vn-text-muted);
+}
+
+.settings-editor-host .settings-grid label.check {
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+  padding: .35rem .45rem;
+}
+
+.settings-editor-host .settings-grid label input[type="checkbox"] {
+  width: auto;
+}
+
+.settings-editor-host input[type="text"],
+.settings-editor-host input[type="number"],
+.settings-editor-host input[type="password"],
+.settings-editor-host select {
+  width: min(26ch, 100%);
+  min-width: 10ch;
+  max-width: 32ch;
+  padding: .2rem .38rem;
+  font-size: .74rem;
+}
+
+.settings-editor-host textarea {
+  width: min(46ch, 100%);
+  min-height: 90px;
+  font-size: .74rem;
+}
+
+.settings-editor-host .settings-actions {
+  display: none !important;
+}
+
+.settings-editor-pillbar {
+  display: flex;
+  gap: .5rem;
+  justify-content: flex-end;
+  margin-top: .8rem;
+  flex-wrap: wrap;
+}
+
+.settings-pill {
+  border-radius: 999px;
+  padding: .28rem .78rem;
+  font-size: .72rem;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  border: 1px solid var(--vn-border);
+  background: rgba(255,255,255,.04);
+  color: var(--vn-text-muted);
+  cursor: pointer;
+  transition: all .15s ease;
+}
+
+.settings-pill:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+.settings-pill-dismiss {
+  color: rgba(255,255,255,.72);
+  border-color: rgba(255,255,255,.2);
+}
+
+.settings-pill-validate.is-ready,
+.settings-pill-save.is-ready {
+  border-color: rgba(76,175,80,.55);
+  color: #7ff0a3;
+  background: rgba(76,175,80,.14);
+}
+
+@media (max-width: 980px) {
+  .settings-list-table th,
+  .settings-list-table td {
+    font-size: .73rem;
+  }
+
+  .settings-editor-host .settings-grid,
+  .settings-editor-host .settings-vm-row .settings-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-editor-host .settings-grid label {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

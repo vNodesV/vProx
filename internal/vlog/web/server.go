@@ -137,6 +137,7 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 	mux.Handle("GET /settings", s.requireSession(http.HandlerFunc(s.handleSettingsPage)))
 	mux.Handle("GET /settings/api/config/current", s.requireSession(http.HandlerFunc(s.handleAPISettingsCurrent)))
 	mux.Handle("POST /settings/api/config/import", s.requireSession(http.HandlerFunc(s.handleAPISettingsImport)))
+	mux.Handle("POST /settings/api/config/remove", s.requireSession(http.HandlerFunc(s.handleAPISettingsRemove)))
 	mux.Handle("POST /settings/api/config/ports", s.requireSession(http.HandlerFunc(s.handleAPISettingsSave("ports"))))
 	mux.Handle("POST /settings/api/config/settings", s.requireSession(http.HandlerFunc(s.handleAPISettingsSave("settings"))))
 	mux.Handle("POST /settings/api/config/chain", s.requireSession(http.HandlerFunc(s.handleAPISettingsSave("chain"))))

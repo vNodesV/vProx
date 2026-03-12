@@ -46,6 +46,23 @@ func (s *Server) handleAPISettingsImport(w http.ResponseWriter, r *http.Request)
 	})
 }
 
+func (s *Server) handleAPISettingsRemove(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 256*1024)
+	var req struct {
+		Step   string `json:"step"`
+		Target string `json:"target"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON payload"})
+		return
+	}
+	if err := configwizard.RemoveStepEntry(s.home, req.Step, req.Target); err != nil {
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
 func (s *Server) handleAPISettingsSave(step string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		r.Body = http.MaxBytesReader(w, r.Body, 512*1024)

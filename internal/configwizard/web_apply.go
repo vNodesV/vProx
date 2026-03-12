@@ -27,6 +27,65 @@ func ApplyFields(home, step string, f map[string]any) error {
 	return applyWebFields(home, step, f)
 }
 
+// RemoveStepEntry removes a variable-size config file managed by web editors.
+// Supported steps: chain, infra.
+func RemoveStepEntry(home, step, target string) error {
+	step = strings.ToLower(strings.TrimSpace(step))
+	target = strings.TrimSpace(target)
+	if target == "" {
+		return fmt.Errorf("target is required")
+	}
+
+	switch step {
+	case "chain":
+		name, err := normalizeConfigFilename(target)
+		if err != nil {
+			return err
+		}
+		if !chainconfig.IsChainTOML(name) {
+			return fmt.Errorf("invalid chain target: %q", target)
+		}
+		if strings.EqualFold(name, "ports.toml") {
+			return fmt.Errorf("ports.toml cannot be removed from this endpoint")
+		}
+		path := configPath(home, "chains", name)
+		if err := os.Remove(path); err != nil {
+			return fmt.Errorf("remove chain file: %w", err)
+		}
+		return nil
+	case "infra":
+		name, err := normalizeConfigFilename(target)
+		if err != nil {
+			return err
+		}
+		path := configPath(home, "infra", name)
+		if err := os.Remove(path); err != nil {
+			return fmt.Errorf("remove infra file: %w", err)
+		}
+		return nil
+	default:
+		return fmt.Errorf("remove is only supported for chain and infra")
+	}
+}
+
+func normalizeConfigFilename(target string) (string, error) {
+	name := strings.TrimSpace(target)
+	if name == "" {
+		return "", fmt.Errorf("target is required")
+	}
+	name = filepath.Clean(name)
+	if filepath.Base(name) != name {
+		return "", fmt.Errorf("target must be a file name, not a path")
+	}
+	if !strings.HasSuffix(strings.ToLower(name), ".toml") {
+		name += ".toml"
+	}
+	if len(name) <= len(".toml") {
+		return "", fmt.Errorf("invalid target file name")
+	}
+	return name, nil
+}
+
 // applyWebFields processes a JSON field map from the browser and writes the resulting TOML file.
 // It reuses the same struct types as the terminal wizard.
 func applyWebFields(home, step string, f map[string]any) error {
