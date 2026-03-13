@@ -239,9 +239,6 @@ func patchLegacyChainSettings(home, chainName string, f map[string]any) error {
 		"ws_idle_timeout_sec", "ws_max_lifetime_sec",
 		"feature_rpc_address_masking", "feature_mask_rpc", "feature_swagger_masking", "feature_absolute_links",
 		"logging_file", "logging_format",
-		"management_managed_host", "management_lan_ip", "management_public_ip", "management_user",
-		"management_key_path", "management_port", "management_type", "management_datacenter",
-		"management_exposed_services", "management_valoper",
 		"proxy_sp_prefixes", "proxy_sp_suffixes",
 		"chain_ping_country", "chain_ping_provider",
 	}
@@ -258,16 +255,23 @@ func patchLegacyChainSettings(home, chainName string, f map[string]any) error {
 
 	path := configPath(home, "chains", chainName+".toml")
 	data, err := os.ReadFile(path)
+	var legacy chainconfig.ChainConfig
 	if err != nil {
-		if os.IsNotExist(err) {
+		if !os.IsNotExist(err) {
+			return fmt.Errorf("read legacy chain file: %w", err)
+		}
+		seed, ok, seedErr := seedLegacyChainConfig(chainName, f)
+		if seedErr != nil {
+			return seedErr
+		}
+		if !ok {
 			return nil
 		}
-		return fmt.Errorf("read legacy chain file: %w", err)
-	}
-
-	var legacy chainconfig.ChainConfig
-	if err := toml.Unmarshal(data, &legacy); err != nil {
-		return fmt.Errorf("parse legacy chain TOML: %w", err)
+		legacy = seed
+	} else {
+		if err := toml.Unmarshal(data, &legacy); err != nil {
+			return fmt.Errorf("parse legacy chain TOML: %w", err)
+		}
 	}
 
 	fieldText := func(key string) (string, bool) {
@@ -490,43 +494,6 @@ func patchLegacyChainSettings(home, chainName string, f map[string]any) error {
 		legacy.Logging.Format = format
 	}
 
-	if _, ok := f["management_managed_host"]; ok {
-		legacy.Management.ManagedHost = fieldBool(f, "management_managed_host", legacy.Management.ManagedHost)
-	}
-	if ip, ok, err := parseIPField("management_lan_ip"); err != nil {
-		return err
-	} else if ok {
-		legacy.Management.LanIP = ip
-	}
-	if ip, ok, err := parseIPField("management_public_ip"); err != nil {
-		return err
-	} else if ok {
-		legacy.Management.PublicIP = ip
-	}
-	if v, ok := fieldText("management_user"); ok {
-		legacy.Management.User = v
-	}
-	if v, ok := fieldText("management_key_path"); ok {
-		legacy.Management.KeyPath = v
-	}
-	if n, ok, err := parsePortField("management_port"); err != nil {
-		return err
-	} else if ok {
-		legacy.Management.Port = n
-	}
-	if v, ok := fieldText("management_type"); ok {
-		legacy.Management.Type = splitList(v)
-	}
-	if v, ok := fieldText("management_datacenter"); ok {
-		legacy.Management.Datacenter = strings.ToUpper(v)
-	}
-	if _, ok := f["management_exposed_services"]; ok {
-		legacy.Management.ExposedServices = fieldBool(f, "management_exposed_services", legacy.Management.ExposedServices)
-	}
-	if v, ok := fieldText("management_valoper"); ok {
-		legacy.Management.Valoper = v
-	}
-
 	if country, ok := fieldText("chain_ping_country"); ok {
 		country = strings.ToUpper(country)
 		if country != "" && !validCountries[country] {
@@ -541,6 +508,64 @@ func patchLegacyChainSettings(home, chainName string, f map[string]any) error {
 	}
 
 	return writeConfigNoPrompt(path, legacy)
+}
+
+func seedLegacyChainConfig(chainName string, f map[string]any) (chainconfig.ChainConfig, bool, error) {
+	host := strings.ToLower(strings.TrimSpace(fieldStr(f, "host", "")))
+	ip := strings.TrimSpace(fieldStr(f, "ip", ""))
+	if host == "" || ip == "" {
+		return chainconfig.ChainConfig{}, false, nil
+	}
+	if !chainconfig.IsValidHostname(host) {
+		return chainconfig.ChainConfig{}, false, fmt.Errorf("host must be a valid hostname")
+	}
+	if net.ParseIP(ip) == nil {
+		return chainconfig.ChainConfig{}, false, fmt.Errorf("ip must be a valid IP address")
+	}
+
+	cfg := chainconfig.ChainConfig{
+		SchemaVersion: 1,
+		ChainName:     strings.ToLower(strings.TrimSpace(chainName)),
+		Host:          host,
+		IP:            ip,
+		ChainID:       strings.TrimSpace(fieldStr(f, "chain_id", "")),
+		DashboardName: strings.TrimSpace(fieldStr(f, "dashboard_name", "")),
+		ExplorerBase:  strings.TrimSpace(fieldStr(f, "explorer_base", "")),
+		Explorers:     splitList(fieldStr(f, "explorers", "")),
+		Expose: chainconfig.Expose{
+			Path:  true,
+			VHost: true,
+			VHostPrefix: chainconfig.VHostPrefix{
+				RPC:  "rpc",
+				REST: "api",
+			},
+		},
+		Services: chainconfig.Services{
+			RPC:       true,
+			REST:      true,
+			WebSocket: true,
+			GRPC:      true,
+			GRPCWeb:   true,
+			APIAlias:  true,
+		},
+		DefaultPorts: true,
+		WS: chainconfig.WSConfig{
+			IdleTimeoutSec: 3600,
+			MaxLifetimeSec: 0,
+		},
+		Features: chainconfig.Features{
+			RPCAddressMasking: true,
+			AbsoluteLinks:     "auto",
+		},
+		Logging: chainconfig.LoggingCfg{
+			Format: "summary",
+		},
+		Management: chainconfig.Management{
+			Port:            22,
+			ExposedServices: true,
+		},
+	}
+	return cfg, true, nil
 }
 
 func applyVLog(home string, f map[string]any) error {
@@ -1059,7 +1084,7 @@ func legacyChainServiceRowsFromFields(f map[string]any) []map[string]any {
 			"name":         "validator",
 			"service_type": "validator",
 			"valoper":      valoper,
-			"internal_ip":  strings.TrimSpace(fieldStrAny(f, "", "management_lan_ip", "sp_mainnet_lan_ip")),
+			"internal_ip":  strings.TrimSpace(fieldStrAny(f, "", "ip", "sp_mainnet_lan_ip", "sp_testnet_lan_ip")),
 			"link_to_vm":   true,
 		})
 	}
@@ -1437,6 +1462,10 @@ func importChainFields(path string, data []byte) (map[string]any, error) {
 }
 
 func mergeLegacyChainFields(fields map[string]any, data []byte) {
+	if !looksLikeLegacyChainConfig(data) {
+		return
+	}
+
 	var legacy chainconfig.ChainConfig
 	if err := toml.Unmarshal(data, &legacy); err != nil {
 		return
@@ -1475,24 +1504,43 @@ func mergeLegacyChainFields(fields map[string]any, data []byte) {
 	fields["feature_absolute_links"] = strings.TrimSpace(legacy.Features.AbsoluteLinks)
 	fields["logging_file"] = strings.TrimSpace(legacy.Logging.File)
 	fields["logging_format"] = strings.TrimSpace(legacy.Logging.Format)
-	fields["management_managed_host"] = legacy.Management.ManagedHost
-	fields["management_lan_ip"] = strings.TrimSpace(legacy.Management.LanIP)
-	fields["management_public_ip"] = strings.TrimSpace(legacy.Management.PublicIP)
-	fields["management_user"] = strings.TrimSpace(legacy.Management.User)
-	fields["management_key_path"] = strings.TrimSpace(legacy.Management.KeyPath)
-	fields["management_port"] = legacy.Management.Port
-	fields["management_type"] = strings.Join(legacy.Management.Type, ",")
-	fields["management_datacenter"] = strings.TrimSpace(legacy.Management.Datacenter)
-	fields["management_exposed_services"] = legacy.Management.ExposedServices
-	fields["management_valoper"] = strings.TrimSpace(legacy.Management.Valoper)
 	fields["proxy_sp_prefixes"] = strings.Join(legacy.ChainServices.SP.Mainnet.Prefixes, ",")
 	fields["proxy_sp_suffixes"] = strings.Join(legacy.ChainServices.SP.Mainnet.Suffixes, ",")
-	if strings.TrimSpace(legacy.ChainPing.Country) != "" {
-		fields["chain_ping_country"] = strings.ToUpper(strings.TrimSpace(legacy.ChainPing.Country))
+	country := strings.TrimSpace(legacy.ChainPing.Country)
+	if country == "" {
+		country = strings.TrimSpace(legacy.Management.Ping.Country)
 	}
-	if strings.TrimSpace(legacy.ChainPing.Provider) != "" {
-		fields["chain_ping_provider"] = strings.TrimSpace(legacy.ChainPing.Provider)
+	if country != "" {
+		fields["chain_ping_country"] = strings.ToUpper(country)
 	}
+	provider := strings.TrimSpace(legacy.ChainPing.Provider)
+	if provider == "" {
+		provider = strings.TrimSpace(legacy.Management.Ping.Provider)
+	}
+	if provider != "" {
+		fields["chain_ping_provider"] = provider
+	}
+}
+
+func looksLikeLegacyChainConfig(data []byte) bool {
+	raw := strings.ToLower(string(data))
+	markers := []string{
+		"[expose]",
+		"[services]",
+		"[ports]",
+		"[features]",
+		"[logging]",
+		"[management]",
+		"default_ports",
+		"msg_rpc",
+		"msg_api",
+	}
+	for _, marker := range markers {
+		if strings.Contains(raw, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func legacyChainCompanionPath(path, chainName string) string {
