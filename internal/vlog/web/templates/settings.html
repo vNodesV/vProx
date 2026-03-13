@@ -802,6 +802,61 @@
     form.reset();
   }
 
+  const checkboxSnapshots = new WeakMap();
+
+  function checkboxTargetFromEvent(ev) {
+    const target = ev && ev.target;
+    if (!target || target.tagName !== "INPUT") return null;
+    if (String(target.type || "").toLowerCase() !== "checkbox") return null;
+    return target;
+  }
+
+  function captureCheckboxSnapshot(form) {
+    if (!form) return;
+    const snapshot = new Map();
+    $$('input[type="checkbox"]', form).forEach((box) => {
+      snapshot.set(box, !!box.checked);
+    });
+    checkboxSnapshots.set(form, snapshot);
+  }
+
+  function restoreUnexpectedCheckboxReset(form, changed) {
+    const snapshot = checkboxSnapshots.get(form);
+    if (!(snapshot instanceof Map)) return;
+    snapshot.forEach((wasChecked, box) => {
+      if (box === changed) return;
+      if (wasChecked && !box.checked) {
+        box.checked = true;
+      }
+    });
+  }
+
+  function wireCheckboxIndependence(form) {
+    if (!form || form.dataset.checkboxGuardWired === "1") return;
+    form.dataset.checkboxGuardWired = "1";
+    captureCheckboxSnapshot(form);
+
+    form.addEventListener("pointerdown", (ev) => {
+      if (!checkboxTargetFromEvent(ev)) return;
+      captureCheckboxSnapshot(form);
+    }, true);
+
+    form.addEventListener("keydown", (ev) => {
+      const checkbox = checkboxTargetFromEvent(ev);
+      if (!checkbox) return;
+      if (ev.key === " " || ev.key === "Spacebar" || ev.key === "Enter") {
+        captureCheckboxSnapshot(form);
+      }
+    }, true);
+
+    form.addEventListener("change", (ev) => {
+      const checkbox = checkboxTargetFromEvent(ev);
+      if (!checkbox) return;
+      restoreUnexpectedCheckboxReset(form, checkbox);
+      captureCheckboxSnapshot(form);
+    }, true);
+  }
+
   function vmKey(vm) {
     return [vm.name, vm.host, vm.chain_name, vm.datacenter].map((v) => String(v || "").trim().toLowerCase()).join("|");
   }
@@ -1672,6 +1727,8 @@
   }
 
   function initForms() {
+    Object.values(forms).forEach((form) => wireCheckboxIndependence(form));
+
     Object.values(forms).forEach((form) => {
       form.addEventListener("submit", (ev) => {
         ev.preventDefault();

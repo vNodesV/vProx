@@ -984,9 +984,10 @@ summary { list-style: none; }
 .settings-grid label {
   display: flex;
   align-items: center;
-  gap: .45rem;
-  font-size: .9rem;
-  line-height: 1.22;
+  justify-content: flex-start;
+  gap: .38rem;
+  font-size: .95rem;
+  line-height: 1.18;
   color: var(--vn-text-muted);
 }
 .settings-grid label .required-dot {
@@ -997,18 +998,22 @@ summary { list-style: none; }
 .settings-grid label > input[type="password"],
 .settings-grid label > select,
 .settings-grid label > textarea {
-  width: 100%;
+  width: clamp(180px, 44vw, 360px);
   min-width: 0;
-  flex: 1 1 auto;
-  max-width: 430px;
-  margin-left: auto;
+  flex: 0 1 360px;
+  max-width: 360px;
+  margin-left: 0;
+  padding: .16rem .44rem;
+  min-height: 1.5rem;
+  line-height: 1.15;
+  font-size: .95rem;
 }
 .settings-grid label.check {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: .55rem;
-  padding: .42rem .55rem;
+  justify-content: flex-start;
+  gap: .42rem;
+  padding: .26rem .5rem;
   border: 1px solid var(--vn-green-border);
   border-radius: 6px;
   color: var(--vn-text);
@@ -1016,8 +1021,9 @@ summary { list-style: none; }
 }
 .settings-grid label.check input {
   margin: 0;
-  width: auto;
-  min-width: 0;
+  width: .95rem;
+  height: .95rem;
+  min-width: .95rem;
   accent-color: var(--vn-green);
 }
 .settings-actions {
@@ -1180,7 +1186,16 @@ summary { list-style: none; }
   .settings-side { position: static; }
   .settings-grid { grid-template-columns: 1fr; }
   .settings-grid label { flex-direction: column; align-items: flex-start; gap: .3rem; }
-  .settings-grid label.check { flex-direction: row; align-items: center; justify-content: space-between; }
+  .settings-grid label.check { flex-direction: row; align-items: center; justify-content: flex-start; }
+  .settings-grid label > input[type="text"],
+  .settings-grid label > input[type="number"],
+  .settings-grid label > input[type="password"],
+  .settings-grid label > select,
+  .settings-grid label > textarea {
+    width: 100%;
+    max-width: none;
+    flex: 1 1 auto;
+  }
   .settings-vm-row .settings-grid { grid-template-columns: 1fr; }
 }
 
@@ -1334,6 +1349,7 @@ summary { list-style: none; }
   border-radius: 8px;
   background: rgba(0,0,0,.30);
   padding: .75rem;
+  width: min(100%, 920px);
 }
 
 .settings-inline-editor[hidden] {
@@ -1362,6 +1378,7 @@ summary { list-style: none; }
   border-radius: 7px;
   background: rgba(0,0,0,.26);
   padding: .55rem;
+  width: min(100%, 900px);
 }
 
 .settings-editor-host .settings-grid {
@@ -1376,19 +1393,20 @@ summary { list-style: none; }
 .settings-editor-host .settings-grid label {
   display: flex;
   align-items: center;
-  gap: .45rem;
-  font-size: .9rem;
-  line-height: 1.22;
+  justify-content: flex-start;
+  gap: .38rem;
+  font-size: .95rem;
+  line-height: 1.18;
   color: var(--vn-text-muted);
 }
 
 .settings-editor-host .settings-grid label.check {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: .55rem;
-  padding: .45rem .55rem;
-  font-size: .9rem;
+  justify-content: flex-start;
+  gap: .42rem;
+  padding: .26rem .5rem;
+  font-size: .95rem;
   border: 1px solid var(--vn-green-border);
   border-radius: 6px;
   color: var(--vn-text);
@@ -1396,9 +1414,9 @@ summary { list-style: none; }
 }
 
 .settings-editor-host .settings-grid label input[type="checkbox"] {
-  width: auto;
-  height: auto;
-  min-width: 0;
+  width: .95rem;
+  height: .95rem;
+  min-width: .95rem;
   margin: 0;
   accent-color: var(--vn-green);
 }
@@ -1407,21 +1425,22 @@ summary { list-style: none; }
 .settings-editor-host input[type="number"],
 .settings-editor-host input[type="password"],
 .settings-editor-host select {
-  width: 100%;
+  width: clamp(180px, 44vw, 360px);
   min-width: 0;
-  max-width: none;
-  padding: .45rem .55rem;
-  min-height: 1.95rem;
-  line-height: 1.25;
-  font-size: .9rem;
+  max-width: 360px;
+  flex: 0 1 360px;
+  padding: .16rem .44rem;
+  min-height: 1.5rem;
+  line-height: 1.15;
+  font-size: .95rem;
 }
 
 .settings-editor-host textarea {
-  width: 100%;
-  min-height: 84px;
-  padding: .45rem .55rem;
-  line-height: 1.25;
-  font-size: .9rem;
+  width: min(100%, 520px);
+  min-height: 72px;
+  padding: .22rem .44rem;
+  line-height: 1.2;
+  font-size: .95rem;
 }
 
 .settings-editor-host input.is-disabled {
@@ -1524,5 +1543,15 @@ summary { list-style: none; }
 
   .settings-editor-host .settings-grid label.check {
     justify-content: flex-start;
+  }
+
+  .settings-editor-host input[type="text"],
+  .settings-editor-host input[type="number"],
+  .settings-editor-host input[type="password"],
+  .settings-editor-host select,
+  .settings-editor-host textarea {
+    width: 100%;
+    max-width: none;
+    flex: 1 1 auto;
   }
 }
