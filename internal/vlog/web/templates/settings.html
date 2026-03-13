@@ -9,7 +9,7 @@
 <div class="settings-shell">
   <aside class="settings-side">
     <h3>Configuration</h3>
-    <p>Manage vProx and vLog settings in one place using dashboard-native blocks and inline editing.</p>
+    <p>Manage vProx and vLog settings in one place using dashboard-native blocks and compact popup editing.</p>
     <a href="#sec-ports">vProx Ports</a>
     <a href="#sec-settings">vProx Proxy Controls</a>
     <a href="#sec-chain">Chain Profiles</a>
@@ -432,17 +432,19 @@
   </div>
 </div>
 
-<section id="settings-editor-inline" class="settings-inline-editor" hidden>
-  <h4 id="settings-editor-title">Edit Settings</h4>
-  <p class="settings-editor-copy">Fill mandatory fields, click <strong>Validate</strong>, then click <strong>Save</strong>.</p>
-  <div id="settings-editor-host" class="settings-editor-host"></div>
-  <div id="settings-editor-log" class="enrich-log"></div>
-  <div class="settings-editor-pillbar">
-    <button id="settings-editor-dismiss" type="button" class="settings-pill settings-pill-dismiss">Dismiss</button>
-    <button id="settings-editor-validate" type="button" class="settings-pill settings-pill-validate" disabled>Validate</button>
-    <button id="settings-editor-save" type="button" class="settings-pill settings-pill-save" disabled>Save</button>
-  </div>
-</section>
+<div id="settings-editor-overlay" class="enrich-overlay settings-editor-overlay" style="display:none;">
+  <section id="settings-editor-inline" class="enrich-popup settings-editor-popup" hidden role="dialog" aria-modal="true" aria-labelledby="settings-editor-title">
+    <h4 id="settings-editor-title">Edit Settings</h4>
+    <p class="settings-editor-copy">Fill mandatory fields, click <strong>Validate</strong>, then click <strong>Save</strong>.</p>
+    <div id="settings-editor-host" class="settings-editor-host"></div>
+    <div id="settings-editor-log" class="enrich-log"></div>
+    <div class="settings-editor-pillbar">
+      <button id="settings-editor-dismiss" type="button" class="settings-pill settings-pill-dismiss">Dismiss</button>
+      <button id="settings-editor-validate" type="button" class="settings-pill settings-pill-validate" disabled>Validate</button>
+      <button id="settings-editor-save" type="button" class="settings-pill settings-pill-save" disabled>Save</button>
+    </div>
+  </section>
+</div>
 
 <script>
 (() => {
@@ -804,11 +806,29 @@
 
   const checkboxSnapshots = new WeakMap();
 
-  function checkboxTargetFromEvent(ev) {
+  function eventElementFromEvent(ev) {
     const target = ev && ev.target;
-    if (!target || target.tagName !== "INPUT") return null;
-    if (String(target.type || "").toLowerCase() !== "checkbox") return null;
-    return target;
+    if (!target) return null;
+    if (target.nodeType === Node.TEXT_NODE) {
+      return target.parentElement || null;
+    }
+    if (target.nodeType === Node.ELEMENT_NODE) {
+      return target;
+    }
+    return null;
+  }
+
+  function checkboxTargetFromEvent(ev) {
+    const el = eventElementFromEvent(ev);
+    if (!el) return null;
+    if (el.tagName === "INPUT" && String(el.type || "").toLowerCase() === "checkbox") {
+      return el;
+    }
+    if (typeof el.closest !== "function") return null;
+    const label = el.closest("label");
+    if (!label) return null;
+    const box = $('input[type="checkbox"]', label);
+    return box || null;
   }
 
   function captureCheckboxSnapshot(form) {
@@ -836,10 +856,13 @@
     form.dataset.checkboxGuardWired = "1";
     captureCheckboxSnapshot(form);
 
-    form.addEventListener("pointerdown", (ev) => {
+    const primeSnapshot = (ev) => {
       if (!checkboxTargetFromEvent(ev)) return;
       captureCheckboxSnapshot(form);
-    }, true);
+    };
+    form.addEventListener("pointerdown", primeSnapshot, true);
+    form.addEventListener("mousedown", primeSnapshot, true);
+    form.addEventListener("touchstart", primeSnapshot, true);
 
     form.addEventListener("keydown", (ev) => {
       const checkbox = checkboxTargetFromEvent(ev);
@@ -855,6 +878,12 @@
       restoreUnexpectedCheckboxReset(form, checkbox);
       captureCheckboxSnapshot(form);
     }, true);
+  }
+
+  function refreshAllCheckboxSnapshots() {
+    Object.values(forms).forEach((form) => {
+      captureCheckboxSnapshot(form);
+    });
   }
 
   function vmKey(vm) {
@@ -1432,10 +1461,6 @@
     saveBtn.classList.toggle("is-ready", state.editor.validated);
   }
 
-  function inlineEditorMount(step) {
-    return $(`#sec-${step} .v-block-body`) || $(".settings-content");
-  }
-
   function closeEditor() {
     detachEditorWatcher();
     const form = editorForm();
@@ -1446,6 +1471,8 @@
     $("#settings-editor-host").innerHTML = "";
     const inline = $("#settings-editor-inline");
     if (inline) inline.hidden = true;
+    const overlay = $("#settings-editor-overlay");
+    if (overlay) overlay.style.display = "none";
     clearEditorState();
   }
 
@@ -1464,12 +1491,12 @@
     host.innerHTML = "";
     host.appendChild(forms[step]);
     const inline = $("#settings-editor-inline");
-    const mount = inlineEditorMount(step);
-    if (inline && mount) {
-      mount.prepend(inline);
+    const overlay = $("#settings-editor-overlay");
+    if (inline) {
       inline.hidden = false;
-      inline.scrollIntoView({ behavior: "smooth", block: "start" });
     }
+    if (overlay) overlay.style.display = "flex";
+    host.scrollTop = 0;
 
     if (step === "chain") {
       syncChainServicesJSON();
@@ -1477,6 +1504,7 @@
       syncVMJSON();
     }
 
+    captureCheckboxSnapshot(forms[step]);
     attachEditorWatcher();
     updateEditorButtons();
   }
@@ -1661,6 +1689,7 @@
     if (importState.sourcePath) {
       state.importedSourceByStep[step] = importState.sourcePath;
     }
+    captureCheckboxSnapshot(form);
   }
 
   async function validateImportPath() {
@@ -1724,6 +1753,7 @@
       setVMRows([]);
     }
     renderAllSummaries();
+    refreshAllCheckboxSnapshots();
   }
 
   function initForms() {
@@ -1787,6 +1817,19 @@
     $("#settings-editor-dismiss").addEventListener("click", () => closeEditor());
     $("#settings-editor-validate").addEventListener("click", () => validateEditor());
     $("#settings-editor-save").addEventListener("click", () => saveEditor());
+    const overlay = $("#settings-editor-overlay");
+    if (overlay) {
+      overlay.addEventListener("click", (ev) => {
+        if (ev.target && ev.target.id === "settings-editor-overlay") {
+          closeEditor();
+        }
+      });
+    }
+    document.addEventListener("keydown", (ev) => {
+      if (ev.key !== "Escape") return;
+      if (!editorForm()) return;
+      closeEditor();
+    });
   }
 
   function initActionDelegation() {

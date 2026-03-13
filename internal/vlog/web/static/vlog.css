@@ -1026,6 +1026,11 @@ summary { list-style: none; }
   min-width: .95rem;
   accent-color: var(--vn-green);
 }
+.settings-grid label.check:has(input[type="checkbox"]:checked) {
+  border-color: rgba(76,175,80,.55);
+  background: rgba(76,175,80,.12);
+  color: #7ff0a3;
+}
 .settings-actions {
   margin-top: .6rem;
   display: flex;
@@ -1343,47 +1348,56 @@ summary { list-style: none; }
   display: none !important;
 }
 
-.settings-inline-editor {
-  margin: .2rem 0 .7rem;
-  border: 1px solid var(--vn-green-border);
-  border-radius: 8px;
-  background: rgba(0,0,0,.30);
-  padding: .75rem;
-  width: min(100%, 920px);
-}
-
-.settings-inline-editor[hidden] {
+.settings-editor-popup[hidden] {
   display: none !important;
 }
 
-.settings-inline-editor h4 {
-  margin: 0 0 .35rem;
-  font-size: .82rem;
-  letter-spacing: .08em;
+.settings-editor-overlay {
+  align-items: flex-start;
+  justify-content: center;
+  padding: .9rem;
+  z-index: 10010;
+}
+
+.settings-editor-popup {
+  width: min(1080px, 96vw);
+  max-height: calc(100vh - 1.8rem);
+  padding: .65rem .72rem;
+  border: 1px solid var(--vn-green-border);
+  background: rgba(6, 10, 6, .97);
+  display: flex;
+  flex-direction: column;
+  gap: .35rem;
+}
+
+.settings-editor-popup h4 {
+  margin: 0 0 .12rem;
+  font-size: .74rem;
+  letter-spacing: .09em;
   text-transform: uppercase;
   color: rgba(0,255,0,.75);
 }
 
 .settings-editor-copy {
-  margin: 0 0 .55rem;
-  font-size: .8rem;
+  margin: 0 0 .28rem;
+  font-size: .73rem;
   color: var(--vn-text-muted);
-  line-height: 1.4;
+  line-height: 1.25;
 }
 
 .settings-editor-host {
-  max-height: none;
-  overflow: visible;
+  max-height: calc(100vh - 15.5rem);
+  overflow: auto;
   border: 1px solid var(--vn-green-border);
   border-radius: 7px;
   background: rgba(0,0,0,.26);
-  padding: .55rem;
-  width: min(100%, 900px);
+  padding: .32rem .4rem;
+  width: 100%;
 }
 
 .settings-editor-host .settings-grid {
   grid-template-columns: 1fr;
-  gap: .38rem .52rem;
+  gap: .24rem;
 }
 
 .settings-editor-host .settings-vm-row .settings-grid {
@@ -1394,9 +1408,9 @@ summary { list-style: none; }
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: .38rem;
-  font-size: .95rem;
-  line-height: 1.18;
+  gap: .28rem;
+  font-size: .78rem;
+  line-height: 1.08;
   color: var(--vn-text-muted);
 }
 
@@ -1404,19 +1418,19 @@ summary { list-style: none; }
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: .42rem;
-  padding: .26rem .5rem;
-  font-size: .95rem;
+  gap: .32rem;
+  padding: .14rem .38rem;
+  font-size: .76rem;
   border: 1px solid var(--vn-green-border);
-  border-radius: 6px;
+  border-radius: 5px;
   color: var(--vn-text);
   background: rgba(0,0,0,.26);
 }
 
 .settings-editor-host .settings-grid label input[type="checkbox"] {
-  width: .95rem;
-  height: .95rem;
-  min-width: .95rem;
+  width: .82rem;
+  height: .82rem;
+  min-width: .82rem;
   margin: 0;
   accent-color: var(--vn-green);
 }
@@ -1425,22 +1439,22 @@ summary { list-style: none; }
 .settings-editor-host input[type="number"],
 .settings-editor-host input[type="password"],
 .settings-editor-host select {
-  width: clamp(180px, 44vw, 360px);
+  width: clamp(140px, 30vw, 240px);
   min-width: 0;
-  max-width: 360px;
-  flex: 0 1 360px;
-  padding: .16rem .44rem;
-  min-height: 1.5rem;
-  line-height: 1.15;
-  font-size: .95rem;
+  max-width: 240px;
+  flex: 0 1 240px;
+  padding: .05rem .34rem;
+  min-height: 1.22rem;
+  line-height: 1.08;
+  font-size: .78rem;
 }
 
 .settings-editor-host textarea {
-  width: min(100%, 520px);
-  min-height: 72px;
-  padding: .22rem .44rem;
-  line-height: 1.2;
-  font-size: .95rem;
+  width: min(100%, 420px);
+  min-height: 58px;
+  padding: .14rem .34rem;
+  line-height: 1.12;
+  font-size: .78rem;
 }
 
 .settings-editor-host input.is-disabled {
@@ -1456,7 +1470,7 @@ summary { list-style: none; }
   display: flex;
   gap: .5rem;
   justify-content: flex-end;
-  margin-top: .8rem;
+  margin-top: .34rem;
   flex-wrap: wrap;
 }
 
@@ -1528,6 +1542,19 @@ summary { list-style: none; }
   .settings-list-table th,
   .settings-list-table td {
     font-size: .73rem;
+  }
+
+  .settings-editor-overlay {
+    padding: .45rem;
+  }
+
+  .settings-editor-popup {
+    width: 100%;
+    max-height: calc(100vh - .9rem);
+  }
+
+  .settings-editor-host {
+    max-height: calc(100vh - 13.8rem);
   }
 
   .settings-editor-host .settings-grid,
