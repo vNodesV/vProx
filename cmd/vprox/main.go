@@ -252,20 +252,31 @@ func getRewriteRegexes(internalIP, baseHost string) *rewriteRegexes {
 	return r
 }
 
-func rewriteLinks(html, routePrefix, internalIP, baseHost, absoluteHost string, rpcVHost bool) string {
+func rewriteLinks(html, routePrefix, internalIP, baseHost, absoluteHost, maskRPC string, rpcVHost bool) string {
 	re := getRewriteRegexes(internalIP, baseHost)
 	switch routePrefix {
 	case rpcPrefix:
-		repl := "/rpc/"
-		if rpcVHost {
-			repl = "/"
-		}
-		html = re.rpcIP.ReplaceAllString(html, repl)
-		html = re.rpcHost.ReplaceAllString(html, repl)
+		mask := strings.TrimSpace(maskRPC)
+		mask = strings.TrimPrefix(mask, "https://")
+		mask = strings.TrimPrefix(mask, "http://")
+		mask = strings.TrimPrefix(mask, "//")
+		mask = strings.TrimSuffix(mask, "/")
+		if mask != "" {
+			repl := "//" + mask + "/"
+			html = re.rpcIP.ReplaceAllString(html, repl)
+			html = re.rpcHost.ReplaceAllString(html, repl)
+		} else {
+			repl := "/rpc/"
+			if rpcVHost {
+				repl = "/"
+			}
+			html = re.rpcIP.ReplaceAllString(html, repl)
+			html = re.rpcHost.ReplaceAllString(html, repl)
 
-		if rpcVHost {
-			html = strings.ReplaceAll(html, `href="/rpc/`, `href="/`)
-			html = strings.ReplaceAll(html, `src="/rpc/`, `src="/`)
+			if rpcVHost {
+				html = strings.ReplaceAll(html, `href="/rpc/`, `href="/`)
+				html = strings.ReplaceAll(html, `src="/rpc/`, `src="/`)
+			}
 		}
 
 	case restPrefix, apiPrefix:
@@ -1104,7 +1115,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	rawHTML, _ := io.ReadAll(io.LimitReader(reader, 10<<20))
 	html := string(rawHTML)
 
-	html = rewriteLinks(html, routePrefix, chain.IP, chain.Host, absoluteHost, isRPCvhost)
+	html = rewriteLinks(html, routePrefix, chain.IP, chain.Host, absoluteHost, chain.Features.MaskRPC, isRPCvhost)
 
 	if injectHTML {
 		// prefer config message; fallback to file banner

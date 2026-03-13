@@ -9,7 +9,7 @@
 <div class="settings-shell">
   <aside class="settings-side">
     <h3>Configuration</h3>
-    <p>Manage vProx and vLog settings in one place using dashboard-native blocks and modal editing.</p>
+    <p>Manage vProx and vLog settings in one place using dashboard-native blocks and inline editing.</p>
     <a href="#sec-ports">vProx Ports</a>
     <a href="#sec-settings">vProx Proxy Controls</a>
     <a href="#sec-chain">Chain Profiles</a>
@@ -216,15 +216,68 @@
     <div class="settings-grid">
       <label>chain_name <span class="required-dot">*</span><input name="chain_name" type="text" required></label>
       <label>chain_id <span class="required-dot">*</span><input name="chain_id" type="text" required></label>
+      <label>host<input name="host" type="text" placeholder="cheqd-testnet.srvs.vnodesv.net"></label>
+      <label>ip<input name="ip" type="text" placeholder="10.0.0.66"></label>
       <label>dashboard_name<input name="dashboard_name" type="text"></label>
       <label>explorer_base<input name="explorer_base" type="text"></label>
       <label class="full">explorers (comma-separated)<input name="explorers" type="text" placeholder="https://mintscan.io/cheqd-mainnet"></label>
+      <label class="check"><input name="default_ports" type="checkbox" checked> default_ports</label>
+      <label class="check"><input name="msg_rpc" type="checkbox"> msg_rpc</label>
+      <label class="check"><input name="msg_api" type="checkbox"> msg_api</label>
+      <label class="full">rpc_aliases (comma-separated)<input name="rpc_aliases" type="text"></label>
+      <label class="full">rest_aliases (comma-separated)<input name="rest_aliases" type="text"></label>
+      <label class="full">api_aliases (comma-separated)<input name="api_aliases" type="text"></label>
+      <label class="full">message.rpc_msg<input name="message_rpc_msg" type="text"></label>
+      <label class="full">message.api_msg<input name="message_api_msg" type="text"></label>
+      <label class="check"><input name="expose_path" type="checkbox" checked> expose.path</label>
+      <label class="check"><input name="expose_vhost" type="checkbox" checked> expose.vhost</label>
       <label>chain_ping_country<input name="chain_ping_country" type="text" value="CA"></label>
       <label>chain_ping_provider<input name="chain_ping_provider" type="text"></label>
       <label>proxy.vhost_prefix.rpc<input name="proxy_vhost_prefix_rpc" type="text" placeholder="rpc"></label>
       <label>proxy.vhost_prefix.rest<input name="proxy_vhost_prefix_rest" type="text" placeholder="api"></label>
       <label class="full">proxy.sp.prefixes (comma-separated)<input name="proxy_sp_prefixes" type="text" placeholder="api,rest,rpc"></label>
       <label class="full">proxy.sp.suffixes (comma-separated)<input name="proxy_sp_suffixes" type="text" placeholder="api,rest,rpc"></label>
+      <label class="check"><input name="services_rpc" type="checkbox" checked> services.rpc</label>
+      <label class="check"><input name="services_rest" type="checkbox" checked> services.rest</label>
+      <label class="check"><input name="services_websocket" type="checkbox" checked> services.websocket</label>
+      <label class="check"><input name="services_grpc" type="checkbox" checked> services.grpc</label>
+      <label class="check"><input name="services_grpc_web" type="checkbox" checked> services.grpc_web</label>
+      <label class="check"><input name="services_api_alias" type="checkbox" checked> services.api_alias</label>
+      <label>ports.rpc override<input name="ports_rpc" type="number" min="0" max="65535" placeholder="26657"></label>
+      <label>ports.rest override<input name="ports_rest" type="number" min="0" max="65535" placeholder="1317"></label>
+      <label>ports.grpc override<input name="ports_grpc" type="number" min="0" max="65535" placeholder="9090"></label>
+      <label>ports.grpc_web override<input name="ports_grpc_web" type="number" min="0" max="65535" placeholder="9091"></label>
+      <label>ports.api override<input name="ports_api" type="number" min="0" max="65535" placeholder="1317"></label>
+      <label>ws.idle_timeout_sec<input name="ws_idle_timeout_sec" type="number" min="0" value="3600"></label>
+      <label>ws.max_lifetime_sec<input name="ws_max_lifetime_sec" type="number" min="0" value="0"></label>
+      <label class="check"><input name="feature_rpc_address_masking" type="checkbox" checked> features.rpc_address_masking</label>
+      <label>features.mask_rpc<input name="feature_mask_rpc" type="text" placeholder="cheqd-testnet.srvs.vnodesv.net"></label>
+      <label class="check"><input name="feature_swagger_masking" type="checkbox"> features.swagger_masking</label>
+      <label>features.absolute_links
+        <select name="feature_absolute_links">
+          <option value="auto">auto</option>
+          <option value="always">always</option>
+          <option value="never">never</option>
+        </select>
+      </label>
+      <label>logging.file<input name="logging_file" type="text"></label>
+      <label>logging.format
+        <select name="logging_format">
+          <option value="summary">summary</option>
+          <option value="json">json</option>
+          <option value="raw">raw</option>
+        </select>
+      </label>
+      <label class="check"><input name="management_managed_host" type="checkbox"> management.managed_host</label>
+      <label class="check"><input name="management_exposed_services" type="checkbox" checked> management.exposed_services</label>
+      <label>management.lan_ip<input name="management_lan_ip" type="text"></label>
+      <label>management.public_ip<input name="management_public_ip" type="text"></label>
+      <label>management.user<input name="management_user" type="text"></label>
+      <label>management.key_path<input name="management_key_path" type="text"></label>
+      <label>management.port<input name="management_port" type="number" min="0" max="65535" value="22"></label>
+      <label class="full">management.type (comma-separated)<input name="management_type" type="text" placeholder="validator,sp"></label>
+      <label>management.datacenter<input name="management_datacenter" type="text" placeholder="QC"></label>
+      <label>management.valoper<input name="management_valoper" type="text"></label>
     </div>
     <section class="settings-vms">
       <div class="settings-vms-head">
@@ -389,19 +442,17 @@
   </div>
 </div>
 
-<div class="enrich-overlay" id="settings-editor-overlay" style="display:none;">
-  <div class="enrich-popup settings-editor-popup">
-    <h4 id="settings-editor-title">Edit Settings</h4>
-    <p class="settings-editor-copy">Fill mandatory fields, click <strong>Validate</strong>, then click <strong>Save</strong>.</p>
-    <div id="settings-editor-host" class="settings-editor-host"></div>
-    <div id="settings-editor-log" class="enrich-log"></div>
-    <div class="settings-editor-pillbar">
-      <button id="settings-editor-dismiss" type="button" class="settings-pill settings-pill-dismiss">Dismiss</button>
-      <button id="settings-editor-validate" type="button" class="settings-pill settings-pill-validate" disabled>Validate</button>
-      <button id="settings-editor-save" type="button" class="settings-pill settings-pill-save" disabled>Save</button>
-    </div>
+<section id="settings-editor-inline" class="settings-inline-editor" hidden>
+  <h4 id="settings-editor-title">Edit Settings</h4>
+  <p class="settings-editor-copy">Fill mandatory fields, click <strong>Validate</strong>, then click <strong>Save</strong>.</p>
+  <div id="settings-editor-host" class="settings-editor-host"></div>
+  <div id="settings-editor-log" class="enrich-log"></div>
+  <div class="settings-editor-pillbar">
+    <button id="settings-editor-dismiss" type="button" class="settings-pill settings-pill-dismiss">Dismiss</button>
+    <button id="settings-editor-validate" type="button" class="settings-pill settings-pill-validate" disabled>Validate</button>
+    <button id="settings-editor-save" type="button" class="settings-pill settings-pill-save" disabled>Save</button>
   </div>
-</div>
+</section>
 
 <script>
 (() => {
@@ -914,24 +965,108 @@
       const m = parseTomlMap(entry.raw);
       fields.chain_name = unquote((m.root || {}).chain_name);
       fields.chain_id = unquote((m.root || {}).chain_id);
+      fields.host = unquote((m.root || {}).host);
+      fields.ip = unquote((m.root || {}).ip);
       fields.dashboard_name = unquote((m.root || {}).dashboard_name);
       fields.explorer_base = unquote((m.root || {}).explorer_base);
       fields.explorers = asList((m.root || {}).explorers);
-      fields.chain_ping_country = unquote((m.chain_ping || {}).country);
-      fields.chain_ping_provider = unquote((m.chain_ping || {}).provider);
+      fields.default_ports = asBool((m.root || {}).default_ports, true);
+      fields.msg_rpc = asBool((m.root || {}).msg_rpc, false);
+      fields.msg_api = asBool((m.root || {}).msg_api, false);
+      fields.rpc_aliases = asList((m.root || {}).rpc_aliases);
+      fields.rest_aliases = asList((m.root || {}).rest_aliases);
+      fields.api_aliases = asList((m.root || {}).api_aliases);
+      fields.message_rpc_msg = unquote((m.message || {}).rpc_msg);
+      fields.message_api_msg = unquote((m.message || {}).api_msg);
+      fields.expose_path = asBool((m.expose || {}).path, true);
+      fields.expose_vhost = asBool((m.expose || {}).vhost, true);
+      fields.proxy_vhost_prefix_rpc = unquote((m["expose.vhost_prefix"] || {}).rpc);
+      fields.proxy_vhost_prefix_rest = unquote((m["expose.vhost_prefix"] || {}).rest);
+      fields.services_rpc = asBool((m.services || {}).rpc, true);
+      fields.services_rest = asBool((m.services || {}).rest, true);
+      fields.services_websocket = asBool((m.services || {}).websocket, true);
+      fields.services_grpc = asBool((m.services || {}).grpc, true);
+      fields.services_grpc_web = asBool((m.services || {}).grpc_web, true);
+      fields.services_api_alias = asBool((m.services || {}).api_alias, true);
+      fields.ports_rpc = asNum((m.ports || {}).rpc, 0);
+      fields.ports_rest = asNum((m.ports || {}).rest, 0);
+      fields.ports_grpc = asNum((m.ports || {}).grpc, 0);
+      fields.ports_grpc_web = asNum((m.ports || {}).grpc_web, 0);
+      fields.ports_api = asNum((m.ports || {}).api, 0);
+      fields.ws_idle_timeout_sec = asNum((m.ws || {}).idle_timeout_sec, 3600);
+      fields.ws_max_lifetime_sec = asNum((m.ws || {}).max_lifetime_sec, 0);
+      fields.feature_rpc_address_masking = asBool((m.features || {}).rpc_address_masking, true);
+      fields.feature_mask_rpc = unquote((m.features || {}).mask_rpc);
+      fields.feature_swagger_masking = asBool((m.features || {}).swagger_masking, false);
+      fields.feature_absolute_links = unquote((m.features || {}).absolute_links);
+      fields.logging_file = unquote((m.logging || {}).file);
+      fields.logging_format = unquote((m.logging || {}).format);
+      fields.management_managed_host = asBool((m.management || {}).managed_host, false);
+      fields.management_lan_ip = unquote((m.management || {}).lan_ip);
+      fields.management_public_ip = unquote((m.management || {}).public_ip);
+      fields.management_user = unquote((m.management || {}).user);
+      fields.management_key_path = unquote((m.management || {}).key_path);
+      fields.management_port = asNum((m.management || {}).port, 22);
+      fields.management_type = asList((m.management || {}).type);
+      fields.management_datacenter = unquote((m.management || {}).datacenter);
+      fields.management_exposed_services = asBool((m.management || {}).exposed_services, true);
+      fields.management_valoper = unquote((m.management || {}).valoper);
+      fields.chain_ping_country = unquote((m.chain_ping || {}).country) || unquote((m["management.ping"] || {}).country);
+      fields.chain_ping_provider = unquote((m.chain_ping || {}).provider) || unquote((m["management.ping"] || {}).provider);
     }
 
     setVal(forms.chain, "chain_name", fields.chain_name || entry.name || "");
     setVal(forms.chain, "chain_id", fields.chain_id || "");
+    setVal(forms.chain, "host", fields.host || "");
+    setVal(forms.chain, "ip", fields.ip || "");
     setVal(forms.chain, "dashboard_name", fields.dashboard_name || "");
     setVal(forms.chain, "explorer_base", fields.explorer_base || "");
     setVal(forms.chain, "explorers", fields.explorers || "");
+    setCheck(forms.chain, "default_ports", toBool(fields.default_ports, true));
+    setCheck(forms.chain, "msg_rpc", toBool(fields.msg_rpc, false));
+    setCheck(forms.chain, "msg_api", toBool(fields.msg_api, false));
+    setVal(forms.chain, "rpc_aliases", fields.rpc_aliases || "");
+    setVal(forms.chain, "rest_aliases", fields.rest_aliases || "");
+    setVal(forms.chain, "api_aliases", fields.api_aliases || "");
+    setVal(forms.chain, "message_rpc_msg", fields.message_rpc_msg || "");
+    setVal(forms.chain, "message_api_msg", fields.message_api_msg || "");
+    setCheck(forms.chain, "expose_path", toBool(fields.expose_path, true));
+    setCheck(forms.chain, "expose_vhost", toBool(fields.expose_vhost, true));
     setVal(forms.chain, "chain_ping_country", fields.chain_ping_country || "CA");
     setVal(forms.chain, "chain_ping_provider", fields.chain_ping_provider || "");
     setVal(forms.chain, "proxy_vhost_prefix_rpc", fields.proxy_vhost_prefix_rpc || "");
     setVal(forms.chain, "proxy_vhost_prefix_rest", fields.proxy_vhost_prefix_rest || "");
     setVal(forms.chain, "proxy_sp_prefixes", fields.proxy_sp_prefixes || "");
     setVal(forms.chain, "proxy_sp_suffixes", fields.proxy_sp_suffixes || "");
+    setCheck(forms.chain, "services_rpc", toBool(fields.services_rpc, true));
+    setCheck(forms.chain, "services_rest", toBool(fields.services_rest, true));
+    setCheck(forms.chain, "services_websocket", toBool(fields.services_websocket, true));
+    setCheck(forms.chain, "services_grpc", toBool(fields.services_grpc, true));
+    setCheck(forms.chain, "services_grpc_web", toBool(fields.services_grpc_web, true));
+    setCheck(forms.chain, "services_api_alias", toBool(fields.services_api_alias, true));
+    setVal(forms.chain, "ports_rpc", fields.ports_rpc ?? "");
+    setVal(forms.chain, "ports_rest", fields.ports_rest ?? "");
+    setVal(forms.chain, "ports_grpc", fields.ports_grpc ?? "");
+    setVal(forms.chain, "ports_grpc_web", fields.ports_grpc_web ?? "");
+    setVal(forms.chain, "ports_api", fields.ports_api ?? "");
+    setVal(forms.chain, "ws_idle_timeout_sec", fields.ws_idle_timeout_sec ?? 3600);
+    setVal(forms.chain, "ws_max_lifetime_sec", fields.ws_max_lifetime_sec ?? 0);
+    setCheck(forms.chain, "feature_rpc_address_masking", toBool(fields.feature_rpc_address_masking, true));
+    setVal(forms.chain, "feature_mask_rpc", fields.feature_mask_rpc || "");
+    setCheck(forms.chain, "feature_swagger_masking", toBool(fields.feature_swagger_masking, false));
+    setVal(forms.chain, "feature_absolute_links", fields.feature_absolute_links || "auto");
+    setVal(forms.chain, "logging_file", fields.logging_file || "");
+    setVal(forms.chain, "logging_format", fields.logging_format || "summary");
+    setCheck(forms.chain, "management_managed_host", toBool(fields.management_managed_host, false));
+    setCheck(forms.chain, "management_exposed_services", toBool(fields.management_exposed_services, true));
+    setVal(forms.chain, "management_lan_ip", fields.management_lan_ip || "");
+    setVal(forms.chain, "management_public_ip", fields.management_public_ip || "");
+    setVal(forms.chain, "management_user", fields.management_user || "");
+    setVal(forms.chain, "management_key_path", fields.management_key_path || "");
+    setVal(forms.chain, "management_port", fields.management_port ?? 22);
+    setVal(forms.chain, "management_type", fields.management_type || "");
+    setVal(forms.chain, "management_datacenter", fields.management_datacenter || "");
+    setVal(forms.chain, "management_valoper", fields.management_valoper || "");
 
     let services = [];
     if (Array.isArray(fields.chain_services)) {
@@ -1033,7 +1168,7 @@
 
       if (!expanded || services.length === 0) return parent;
 
-      const childRows = services.map((svc) => {
+      const childRows = services.map((svc, idx) => {
         const serviceName = String((svc || {}).name || "").trim() || "service";
         const serviceTypeRaw = String((svc || {}).service_type || "").trim().toLowerCase();
         const serviceType = serviceTypeRaw === "sp" ? "api/rpc" : (serviceTypeRaw || "unknown");
@@ -1048,7 +1183,7 @@
           <td class="settings-value">${escapeHTML(renderValue(serviceType))}</td>
           <td class="settings-value">${escapeHTML(renderValue(topology))}</td>
           <td class="settings-value">${escapeHTML(renderValue(identity))}</td>
-          <td></td>
+          <td><button type="button" class="settings-tree-remove" data-remove-chain-service="${escapeHTML(file)}" data-remove-service-index="${idx}" title="Remove service">✕</button></td>
         </tr>`;
       }).join("");
       return parent + childRows;
@@ -1084,6 +1219,73 @@
     renderSimpleSection("backup");
     renderChainSection();
     renderInfraSection();
+  }
+
+  function servicesFromChainEntry(entry) {
+    const fields = entry && entry.fields && typeof entry.fields === "object" ? entry.fields : {};
+    if (Array.isArray(fields.chain_services)) {
+      return dedupeServices(fields.chain_services);
+    }
+    if (typeof fields.chain_services_json === "string" && fields.chain_services_json.trim() !== "") {
+      try {
+        const parsed = JSON.parse(fields.chain_services_json);
+        return Array.isArray(parsed) ? dedupeServices(parsed) : [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  }
+
+  function chainPayloadFromEntry(entry, services) {
+    const fields = entry && entry.fields && typeof entry.fields === "object" ? entry.fields : {};
+    const payload = { ...fields };
+    payload.chain_name = String(payload.chain_name || entry.name || "").trim();
+    payload.chain_id = String(payload.chain_id || "").trim();
+    payload.chain_services_json = JSON.stringify(services || []);
+    delete payload.chain_services;
+    return payload;
+  }
+
+  async function removeChainService(file, index) {
+    const entry = state.chains.find((c) => c.file === file);
+    if (!entry) {
+      setStatus(`Chain profile ${file} was not found.`, "err");
+      return;
+    }
+    const services = servicesFromChainEntry(entry);
+    if (!Number.isFinite(index) || index < 0 || index >= services.length) {
+      setStatus("Could not resolve selected service row.", "err");
+      return;
+    }
+    if (services.length <= 1) {
+      setStatus("A chain profile must keep at least one service row.", "err");
+      return;
+    }
+    const removed = services[index] || {};
+    services.splice(index, 1);
+
+    const payload = chainPayloadFromEntry(entry, services);
+    if (!payload.chain_name || !payload.chain_id) {
+      setStatus("Cannot remove service: chain profile is missing chain_name/chain_id.", "err");
+      return;
+    }
+
+    setStatus(`Removing service ${removed.name || "row"} from ${file}…`);
+    try {
+      const resp = await fetch(apiPath("/settings/api/config/chain"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const body = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(body.error || `HTTP ${resp.status}`);
+      await loadCurrent();
+      markPending("chain");
+      setStatus(`Removed service ${removed.name || "row"} from ${file}.`, "ok");
+    } catch (err) {
+      setStatus(`Could not remove service from ${file}: ${err.message}`, "err");
+    }
   }
 
   function appendEditorLog(message, kind = "enrich-log-line") {
@@ -1182,6 +1384,10 @@
     saveBtn.classList.toggle("is-ready", state.editor.validated);
   }
 
+  function inlineEditorMount(step) {
+    return $(`#sec-${step} .v-block-body`) || $(".settings-content");
+  }
+
   function closeEditor() {
     detachEditorWatcher();
     const form = editorForm();
@@ -1190,7 +1396,8 @@
     }
     $("#settings-editor-log").innerHTML = "";
     $("#settings-editor-host").innerHTML = "";
-    $("#settings-editor-overlay").style.display = "none";
+    const inline = $("#settings-editor-inline");
+    if (inline) inline.hidden = true;
     clearEditorState();
   }
 
@@ -1208,7 +1415,13 @@
     const host = $("#settings-editor-host");
     host.innerHTML = "";
     host.appendChild(forms[step]);
-    $("#settings-editor-overlay").style.display = "flex";
+    const inline = $("#settings-editor-inline");
+    const mount = inlineEditorMount(step);
+    if (inline && mount) {
+      mount.prepend(inline);
+      inline.hidden = false;
+      inline.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
 
     if (step === "chain") {
       syncChainServicesJSON();
@@ -1515,9 +1728,6 @@
     $("#settings-editor-dismiss").addEventListener("click", () => closeEditor());
     $("#settings-editor-validate").addEventListener("click", () => validateEditor());
     $("#settings-editor-save").addEventListener("click", () => saveEditor());
-    $("#settings-editor-overlay").addEventListener("click", (ev) => {
-      if (ev.target.id === "settings-editor-overlay") closeEditor();
-    });
   }
 
   function initActionDelegation() {
@@ -1541,6 +1751,16 @@
         if (!file) return;
         state.chainTreeExpanded[file] = !(state.chainTreeExpanded[file] === true);
         renderChainSection();
+        return;
+      }
+
+      const removeChainServiceBtn = ev.target.closest("button[data-remove-chain-service]");
+      if (removeChainServiceBtn) {
+        const file = removeChainServiceBtn.dataset.removeChainService;
+        const idx = Number(removeChainServiceBtn.dataset.removeServiceIndex);
+        if (!file || !Number.isFinite(idx)) return;
+        if (!confirm(`Remove this service row from ${file}?`)) return;
+        await removeChainService(file, idx);
         return;
       }
 

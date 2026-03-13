@@ -540,10 +540,6 @@
       var group   = groupMap[key];
       var entries = group.entries;
 
-      // Single entry: flat row, no tree chrome
-      if (entries.length === 1) return buildChainRow(entries[0], false);
-
-      // Multi-network group: collapsible header + indented child rows
       var expanded     = (chainTreeExpanded[key] !== false); // default expanded
       var toggleIcon   = expanded ? '▼' : '▶';
       var worstStatus  = entries.some(function(e){ return e.node_status === 'down'; })     ? 'down'
@@ -551,7 +547,7 @@
       var maxHeight    = Math.max.apply(null, entries.map(function(e){ return Number(e.height) || 0; }));
       var combinedTypes = entries.map(function(e){ return e.type || ''; }).join(',');
       var parentEntry  = entries.find(function(e){ return e.has_validator; }) || entries[0];
-      var parentLabel  = parentEntry.dashboard_name || group.label;
+      var parentLabel  = parentEntry.dashboard_name || parentEntry.chain_name || group.label;
 
       var headerRow = '<tr style="border-bottom:1px solid rgba(255,255,255,.06);cursor:pointer;background:rgba(255,255,255,.025)" onclick="toggleChainGroup(\'' + escH(key) + '\')">' +
         '<td style="' + tdStyle + ';white-space:nowrap">' +
@@ -573,7 +569,23 @@
       }
       headerRow += '</tr>';
 
-      var childRows = expanded ? entries.map(function(c) { return buildChainRow(c, true); }).join('') : '';
+      var expandedEntries = [];
+      entries.forEach(function(entry) {
+        var types = String(entry.type || '').split(',').map(function(t) { return t.trim().toLowerCase(); }).filter(Boolean);
+        if (types.length === 0) {
+          expandedEntries.push(entry);
+          return;
+        }
+        types.forEach(function(t) {
+          var clone = Object.assign({}, entry);
+          clone.type = t;
+          var serviceName = (t === 'sp') ? 'api/rpc' : t;
+          clone.dashboard_name = (entry.moniker || entry.dashboard_name || entry.chain_name || entry.chain || 'service') + ' · ' + serviceName;
+          expandedEntries.push(clone);
+        });
+      });
+
+      var childRows = expanded ? expandedEntries.map(function(c) { return buildChainRow(c, true); }).join('') : '';
       return headerRow + childRows;
     }).join('');
 

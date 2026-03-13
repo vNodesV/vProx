@@ -168,7 +168,7 @@ func applySettings(home string, f map[string]any) error {
 }
 
 func applyChain(home string, f map[string]any) error {
-	name := strings.ToLower(strings.TrimSpace(fieldStr(f, "chain_name", "")))
+	name := normalizeChainSlug(fieldStr(f, "chain_name", ""))
 	if name == "" {
 		return fmt.Errorf("chain_name is required")
 	}
@@ -221,18 +221,38 @@ func applyChain(home string, f map[string]any) error {
 	if err := writeConfigNoPrompt(configPath(home, "vlog", "chains", name+".toml"), c); err != nil {
 		return err
 	}
-	if err := patchLegacyProxyChainSettings(home, name, f); err != nil {
+	if err := patchLegacyChainSettings(home, name, f); err != nil {
 		return err
 	}
 	return nil
 }
 
-func patchLegacyProxyChainSettings(home, chainName string, f map[string]any) error {
-	_, hasRPCPrefix := f["proxy_vhost_prefix_rpc"]
-	_, hasRESTPrefix := f["proxy_vhost_prefix_rest"]
-	_, hasSPPrefixes := f["proxy_sp_prefixes"]
-	_, hasSPSuffixes := f["proxy_sp_suffixes"]
-	if !hasRPCPrefix && !hasRESTPrefix && !hasSPPrefixes && !hasSPSuffixes {
+func patchLegacyChainSettings(home, chainName string, f map[string]any) error {
+	legacyKeys := []string{
+		"chain_name", "chain_id", "dashboard_name", "explorer_base", "explorers",
+		"host", "ip", "default_ports", "msg_rpc", "msg_api",
+		"rpc_aliases", "rest_aliases", "api_aliases",
+		"message_rpc_msg", "message_api_msg",
+		"expose_path", "expose_vhost", "proxy_vhost_prefix_rpc", "proxy_vhost_prefix_rest",
+		"services_rpc", "services_rest", "services_websocket", "services_grpc", "services_grpc_web", "services_api_alias",
+		"ports_rpc", "ports_rest", "ports_grpc", "ports_grpc_web", "ports_api",
+		"ws_idle_timeout_sec", "ws_max_lifetime_sec",
+		"feature_rpc_address_masking", "feature_mask_rpc", "feature_swagger_masking", "feature_absolute_links",
+		"logging_file", "logging_format",
+		"management_managed_host", "management_lan_ip", "management_public_ip", "management_user",
+		"management_key_path", "management_port", "management_type", "management_datacenter",
+		"management_exposed_services", "management_valoper",
+		"proxy_sp_prefixes", "proxy_sp_suffixes",
+		"chain_ping_country", "chain_ping_provider",
+	}
+	hasLegacyField := false
+	for _, key := range legacyKeys {
+		if _, ok := f[key]; ok {
+			hasLegacyField = true
+			break
+		}
+	}
+	if !hasLegacyField {
 		return nil
 	}
 
@@ -250,18 +270,276 @@ func patchLegacyProxyChainSettings(home, chainName string, f map[string]any) err
 		return fmt.Errorf("parse legacy chain TOML: %w", err)
 	}
 
-	if hasRPCPrefix {
-		legacy.Expose.VHostPrefix.RPC = strings.TrimSpace(fieldStr(f, "proxy_vhost_prefix_rpc", ""))
+	fieldText := func(key string) (string, bool) {
+		v, ok := f[key]
+		if !ok {
+			return "", false
+		}
+		return strings.TrimSpace(fmt.Sprintf("%v", v)), true
 	}
-	if hasRESTPrefix {
-		legacy.Expose.VHostPrefix.REST = strings.TrimSpace(fieldStr(f, "proxy_vhost_prefix_rest", ""))
+	parseIntField := func(key string) (int, bool, error) {
+		raw, ok := fieldText(key)
+		if !ok {
+			return 0, false, nil
+		}
+		if raw == "" {
+			return 0, true, nil
+		}
+		n, err := strconv.Atoi(raw)
+		if err != nil {
+			return 0, true, fmt.Errorf("%s must be an integer", key)
+		}
+		return n, true, nil
 	}
-	if hasSPPrefixes {
-		legacy.ChainServices.SP.Mainnet.Prefixes = splitList(fieldStr(f, "proxy_sp_prefixes", ""))
+	parsePortField := func(key string) (int, bool, error) {
+		n, ok, err := parseIntField(key)
+		if err != nil {
+			return 0, true, err
+		}
+		if !ok {
+			return 0, false, nil
+		}
+		if n < 0 || n > 65535 {
+			return 0, true, fmt.Errorf("%s must be between 0 and 65535", key)
+		}
+		return n, true, nil
 	}
-	if hasSPSuffixes {
-		legacy.ChainServices.SP.Mainnet.Suffixes = splitList(fieldStr(f, "proxy_sp_suffixes", ""))
+	parseIPField := func(key string) (string, bool, error) {
+		raw, ok := fieldText(key)
+		if !ok {
+			return "", false, nil
+		}
+		if raw != "" && net.ParseIP(raw) == nil {
+			return "", true, fmt.Errorf("%s must be a valid IP address", key)
+		}
+		return raw, true, nil
 	}
+	parseHostList := func(key string) ([]string, bool, error) {
+		raw, ok := fieldText(key)
+		if !ok {
+			return nil, false, nil
+		}
+		hosts := splitList(raw)
+		for _, h := range hosts {
+			if !chainconfig.IsValidHostname(h) {
+				return nil, true, fmt.Errorf("%s contains invalid hostname %q", key, h)
+			}
+		}
+		return hosts, true, nil
+	}
+
+	if v, ok := fieldText("chain_name"); ok && v != "" {
+		legacy.ChainName = strings.ToLower(v)
+	}
+	if v, ok := fieldText("chain_id"); ok {
+		legacy.ChainID = v
+	}
+	if v, ok := fieldText("dashboard_name"); ok {
+		legacy.DashboardName = v
+	}
+	if v, ok := fieldText("explorer_base"); ok {
+		legacy.ExplorerBase = v
+	}
+	if explorersRaw, ok := fieldText("explorers"); ok {
+		legacy.Explorers = splitList(explorersRaw)
+	}
+	if host, ok := fieldText("host"); ok {
+		host = strings.ToLower(host)
+		if host != "" && !chainconfig.IsValidHostname(host) {
+			return fmt.Errorf("host must be a valid hostname")
+		}
+		legacy.Host = host
+	}
+	if ip, ok, err := parseIPField("ip"); err != nil {
+		return err
+	} else if ok {
+		legacy.IP = ip
+	}
+
+	if _, ok := f["default_ports"]; ok {
+		legacy.DefaultPorts = fieldBool(f, "default_ports", legacy.DefaultPorts)
+	}
+	if _, ok := f["msg_rpc"]; ok {
+		legacy.MsgRPC = fieldBool(f, "msg_rpc", legacy.MsgRPC)
+	}
+	if _, ok := f["msg_api"]; ok {
+		legacy.MsgAPI = fieldBool(f, "msg_api", legacy.MsgAPI)
+	}
+
+	if aliases, ok, err := parseHostList("rpc_aliases"); err != nil {
+		return err
+	} else if ok {
+		legacy.RPCAliases = aliases
+	}
+	if aliases, ok, err := parseHostList("rest_aliases"); err != nil {
+		return err
+	} else if ok {
+		legacy.RESTAliases = aliases
+	}
+	if aliases, ok, err := parseHostList("api_aliases"); err != nil {
+		return err
+	} else if ok {
+		legacy.APIAliases = aliases
+	}
+
+	if v, ok := fieldText("message_rpc_msg"); ok {
+		legacy.Message.RPCMsg = v
+	}
+	if v, ok := fieldText("message_api_msg"); ok {
+		legacy.Message.APIMsg = v
+	}
+
+	if _, ok := f["expose_path"]; ok {
+		legacy.Expose.Path = fieldBool(f, "expose_path", legacy.Expose.Path)
+	}
+	if _, ok := f["expose_vhost"]; ok {
+		legacy.Expose.VHost = fieldBool(f, "expose_vhost", legacy.Expose.VHost)
+	}
+	if v, ok := fieldText("proxy_vhost_prefix_rpc"); ok {
+		legacy.Expose.VHostPrefix.RPC = strings.ToLower(v)
+	}
+	if v, ok := fieldText("proxy_vhost_prefix_rest"); ok {
+		legacy.Expose.VHostPrefix.REST = strings.ToLower(v)
+	}
+	if prefixes, ok := fieldText("proxy_sp_prefixes"); ok {
+		legacy.ChainServices.SP.Mainnet.Prefixes = splitList(prefixes)
+	}
+	if suffixes, ok := fieldText("proxy_sp_suffixes"); ok {
+		legacy.ChainServices.SP.Mainnet.Suffixes = splitList(suffixes)
+	}
+
+	if _, ok := f["services_rpc"]; ok {
+		legacy.Services.RPC = fieldBool(f, "services_rpc", legacy.Services.RPC)
+	}
+	if _, ok := f["services_rest"]; ok {
+		legacy.Services.REST = fieldBool(f, "services_rest", legacy.Services.REST)
+	}
+	if _, ok := f["services_websocket"]; ok {
+		legacy.Services.WebSocket = fieldBool(f, "services_websocket", legacy.Services.WebSocket)
+	}
+	if _, ok := f["services_grpc"]; ok {
+		legacy.Services.GRPC = fieldBool(f, "services_grpc", legacy.Services.GRPC)
+	}
+	if _, ok := f["services_grpc_web"]; ok {
+		legacy.Services.GRPCWeb = fieldBool(f, "services_grpc_web", legacy.Services.GRPCWeb)
+	}
+	if _, ok := f["services_api_alias"]; ok {
+		legacy.Services.APIAlias = fieldBool(f, "services_api_alias", legacy.Services.APIAlias)
+	}
+
+	if n, ok, err := parsePortField("ports_rpc"); err != nil {
+		return err
+	} else if ok {
+		legacy.Ports.RPC = n
+	}
+	if n, ok, err := parsePortField("ports_rest"); err != nil {
+		return err
+	} else if ok {
+		legacy.Ports.REST = n
+	}
+	if n, ok, err := parsePortField("ports_grpc"); err != nil {
+		return err
+	} else if ok {
+		legacy.Ports.GRPC = n
+	}
+	if n, ok, err := parsePortField("ports_grpc_web"); err != nil {
+		return err
+	} else if ok {
+		legacy.Ports.GRPCWeb = n
+	}
+	if n, ok, err := parsePortField("ports_api"); err != nil {
+		return err
+	} else if ok {
+		legacy.Ports.API = n
+	}
+	if n, ok, err := parseIntField("ws_idle_timeout_sec"); err != nil {
+		return err
+	} else if ok {
+		legacy.WS.IdleTimeoutSec = n
+	}
+	if n, ok, err := parseIntField("ws_max_lifetime_sec"); err != nil {
+		return err
+	} else if ok {
+		legacy.WS.MaxLifetimeSec = n
+	}
+
+	if _, ok := f["feature_rpc_address_masking"]; ok {
+		legacy.Features.RPCAddressMasking = fieldBool(f, "feature_rpc_address_masking", legacy.Features.RPCAddressMasking)
+	}
+	if v, ok := fieldText("feature_mask_rpc"); ok {
+		legacy.Features.MaskRPC = v
+	}
+	if _, ok := f["feature_swagger_masking"]; ok {
+		legacy.Features.SwaggerMasking = fieldBool(f, "feature_swagger_masking", legacy.Features.SwaggerMasking)
+	}
+	if v, ok := fieldText("feature_absolute_links"); ok {
+		if !chainconfig.ValidateAbsoluteLinksMode(v) {
+			return fmt.Errorf("feature_absolute_links must be auto|always|never")
+		}
+		legacy.Features.AbsoluteLinks = strings.ToLower(v)
+	}
+
+	if v, ok := fieldText("logging_file"); ok {
+		legacy.Logging.File = v
+	}
+	if v, ok := fieldText("logging_format"); ok {
+		format := strings.ToLower(v)
+		if format != "" && format != "summary" && format != "json" && format != "raw" {
+			return fmt.Errorf("logging_format must be summary|json|raw")
+		}
+		legacy.Logging.Format = format
+	}
+
+	if _, ok := f["management_managed_host"]; ok {
+		legacy.Management.ManagedHost = fieldBool(f, "management_managed_host", legacy.Management.ManagedHost)
+	}
+	if ip, ok, err := parseIPField("management_lan_ip"); err != nil {
+		return err
+	} else if ok {
+		legacy.Management.LanIP = ip
+	}
+	if ip, ok, err := parseIPField("management_public_ip"); err != nil {
+		return err
+	} else if ok {
+		legacy.Management.PublicIP = ip
+	}
+	if v, ok := fieldText("management_user"); ok {
+		legacy.Management.User = v
+	}
+	if v, ok := fieldText("management_key_path"); ok {
+		legacy.Management.KeyPath = v
+	}
+	if n, ok, err := parsePortField("management_port"); err != nil {
+		return err
+	} else if ok {
+		legacy.Management.Port = n
+	}
+	if v, ok := fieldText("management_type"); ok {
+		legacy.Management.Type = splitList(v)
+	}
+	if v, ok := fieldText("management_datacenter"); ok {
+		legacy.Management.Datacenter = strings.ToUpper(v)
+	}
+	if _, ok := f["management_exposed_services"]; ok {
+		legacy.Management.ExposedServices = fieldBool(f, "management_exposed_services", legacy.Management.ExposedServices)
+	}
+	if v, ok := fieldText("management_valoper"); ok {
+		legacy.Management.Valoper = v
+	}
+
+	if country, ok := fieldText("chain_ping_country"); ok {
+		country = strings.ToUpper(country)
+		if country != "" && !validCountries[country] {
+			return fmt.Errorf("chain_ping_country is unsupported: %q", country)
+		}
+		legacy.ChainPing.Country = country
+		legacy.Management.Ping.Country = country
+	}
+	if provider, ok := fieldText("chain_ping_provider"); ok {
+		legacy.ChainPing.Provider = provider
+		legacy.Management.Ping.Provider = provider
+	}
+
 	return writeConfigNoPrompt(path, legacy)
 }
 
@@ -514,6 +792,37 @@ func splitList(s string) []string {
 		}
 	}
 	return out
+}
+
+func normalizeChainSlug(raw string) string {
+	text := strings.ToLower(strings.TrimSpace(raw))
+	if text == "" {
+		return ""
+	}
+	text = strings.ReplaceAll(text, "_", "-")
+	text = strings.ReplaceAll(text, " ", "-")
+	var b strings.Builder
+	b.Grow(len(text))
+	prevDash := false
+	for _, r := range text {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+			prevDash = false
+			continue
+		}
+		if r == '-' {
+			if !prevDash {
+				b.WriteRune('-')
+				prevDash = true
+			}
+			continue
+		}
+		if !prevDash {
+			b.WriteRune('-')
+			prevDash = true
+		}
+	}
+	return strings.Trim(b.String(), "-")
 }
 
 func fieldStrAny(f map[string]any, def string, keys ...string) string {
@@ -958,7 +1267,10 @@ func importChainFields(path string, data []byte) (map[string]any, error) {
 		return nil, fmt.Errorf("parse chain TOML: %w", err)
 	}
 
-	chainName := strings.ToLower(strings.TrimSpace(ci.EffectiveChainName()))
+	chainName := normalizeChainSlug(ci.EffectiveChainName())
+	if chainName == "" && strings.TrimSpace(path) != "" {
+		chainName = normalizeChainSlug(strings.TrimSuffix(filepath.Base(path), ".toml"))
+	}
 	if chainName == "" {
 		return nil, fmt.Errorf("chain file must define chain_details.name or chain_name")
 	}
@@ -988,24 +1300,72 @@ func importChainFields(path string, data []byte) (map[string]any, error) {
 		"chain_services":      services,
 	}
 
-	mergeLegacyProxyFields(fields, data)
+	mergeLegacyChainFields(fields, data)
 	if companion := legacyChainCompanionPath(path, chainName); companion != "" {
 		if raw, err := os.ReadFile(companion); err == nil {
-			mergeLegacyProxyFields(fields, raw)
+			mergeLegacyChainFields(fields, raw)
 		}
 	}
 	return fields, nil
 }
 
-func mergeLegacyProxyFields(fields map[string]any, data []byte) {
+func mergeLegacyChainFields(fields map[string]any, data []byte) {
 	var legacy chainconfig.ChainConfig
 	if err := toml.Unmarshal(data, &legacy); err != nil {
 		return
 	}
+
+	fields["host"] = strings.TrimSpace(legacy.Host)
+	fields["ip"] = strings.TrimSpace(legacy.IP)
+	fields["default_ports"] = legacy.DefaultPorts
+	fields["msg_rpc"] = legacy.MsgRPC
+	fields["msg_api"] = legacy.MsgAPI
+	fields["rpc_aliases"] = strings.Join(legacy.RPCAliases, ",")
+	fields["rest_aliases"] = strings.Join(legacy.RESTAliases, ",")
+	fields["api_aliases"] = strings.Join(legacy.APIAliases, ",")
+	fields["message_rpc_msg"] = strings.TrimSpace(legacy.Message.RPCMsg)
+	fields["message_api_msg"] = strings.TrimSpace(legacy.Message.APIMsg)
+	fields["expose_path"] = legacy.Expose.Path
+	fields["expose_vhost"] = legacy.Expose.VHost
 	fields["proxy_vhost_prefix_rpc"] = strings.TrimSpace(legacy.Expose.VHostPrefix.RPC)
 	fields["proxy_vhost_prefix_rest"] = strings.TrimSpace(legacy.Expose.VHostPrefix.REST)
+	fields["services_rpc"] = legacy.Services.RPC
+	fields["services_rest"] = legacy.Services.REST
+	fields["services_websocket"] = legacy.Services.WebSocket
+	fields["services_grpc"] = legacy.Services.GRPC
+	fields["services_grpc_web"] = legacy.Services.GRPCWeb
+	fields["services_api_alias"] = legacy.Services.APIAlias
+	fields["ports_rpc"] = legacy.Ports.RPC
+	fields["ports_rest"] = legacy.Ports.REST
+	fields["ports_grpc"] = legacy.Ports.GRPC
+	fields["ports_grpc_web"] = legacy.Ports.GRPCWeb
+	fields["ports_api"] = legacy.Ports.API
+	fields["ws_idle_timeout_sec"] = legacy.WS.IdleTimeoutSec
+	fields["ws_max_lifetime_sec"] = legacy.WS.MaxLifetimeSec
+	fields["feature_rpc_address_masking"] = legacy.Features.RPCAddressMasking
+	fields["feature_mask_rpc"] = strings.TrimSpace(legacy.Features.MaskRPC)
+	fields["feature_swagger_masking"] = legacy.Features.SwaggerMasking
+	fields["feature_absolute_links"] = strings.TrimSpace(legacy.Features.AbsoluteLinks)
+	fields["logging_file"] = strings.TrimSpace(legacy.Logging.File)
+	fields["logging_format"] = strings.TrimSpace(legacy.Logging.Format)
+	fields["management_managed_host"] = legacy.Management.ManagedHost
+	fields["management_lan_ip"] = strings.TrimSpace(legacy.Management.LanIP)
+	fields["management_public_ip"] = strings.TrimSpace(legacy.Management.PublicIP)
+	fields["management_user"] = strings.TrimSpace(legacy.Management.User)
+	fields["management_key_path"] = strings.TrimSpace(legacy.Management.KeyPath)
+	fields["management_port"] = legacy.Management.Port
+	fields["management_type"] = strings.Join(legacy.Management.Type, ",")
+	fields["management_datacenter"] = strings.TrimSpace(legacy.Management.Datacenter)
+	fields["management_exposed_services"] = legacy.Management.ExposedServices
+	fields["management_valoper"] = strings.TrimSpace(legacy.Management.Valoper)
 	fields["proxy_sp_prefixes"] = strings.Join(legacy.ChainServices.SP.Mainnet.Prefixes, ",")
 	fields["proxy_sp_suffixes"] = strings.Join(legacy.ChainServices.SP.Mainnet.Suffixes, ",")
+	if strings.TrimSpace(legacy.ChainPing.Country) != "" {
+		fields["chain_ping_country"] = strings.ToUpper(strings.TrimSpace(legacy.ChainPing.Country))
+	}
+	if strings.TrimSpace(legacy.ChainPing.Provider) != "" {
+		fields["chain_ping_provider"] = strings.TrimSpace(legacy.ChainPing.Provider)
+	}
 }
 
 func legacyChainCompanionPath(path, chainName string) string {
