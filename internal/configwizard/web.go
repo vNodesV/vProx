@@ -5,6 +5,7 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/pelletier/go-toml/v2"
@@ -27,6 +29,7 @@ type Web struct {
 	home   string
 	server *http.Server
 	done   chan struct{}
+	doneMu sync.Once
 }
 
 // NewWeb creates a new Web wizard for the given $VPROX_HOME.
@@ -91,7 +94,7 @@ func (w *Web) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/config/import", w.enforceLocalhost(w.handlePOST(w.handleImport)))
 
 	// Shutdown signal.
-	mux.HandleFunc("/api/config/done", w.enforceLocalhost(w.handleDone))
+	mux.HandleFunc("/api/config/done", w.enforceLocalhost(w.handlePOST(w.handleDone)))
 }
 
 // enforceLocalhost is a security guard that rejects requests not from 127.0.0.1 or ::1.
@@ -160,8 +163,9 @@ func (w *Web) handleImport(rw http.ResponseWriter, r *http.Request) {
 	}
 	fields, normalizedPath, err := ImportStepFieldsFromPath(req.Step, req.Path)
 	if err != nil {
+		log.Printf("[wizard] import rejected step=%q path=%q: %v", req.Step, req.Path, err)
 		rw.WriteHeader(http.StatusUnprocessableEntity)
-		writeJSON(rw, map[string]string{"error": err.Error()})
+		writeJSON(rw, map[string]string{"error": "import validation failed"})
 		return
 	}
 	writeJSON(rw, map[string]any{
@@ -197,7 +201,7 @@ func CurrentSnapshot(home, mode string) map[string]any {
 	for k, path := range files {
 		data, err := os.ReadFile(path)
 		if err == nil {
-			out[k] = string(data)
+			out[k] = redactSnapshotTOML(string(data))
 		}
 	}
 
@@ -228,6 +232,37 @@ func normalizeDeployMode(raw string) string {
 	default:
 		return "upgrade"
 	}
+}
+
+var snapshotSecretKeys = map[string]struct{}{
+	"api_key":       {},
+	"password_hash": {},
+	"abuseipdb":     {},
+	"virustotal":    {},
+	"shodan":        {},
+}
+
+func redactSnapshotTOML(raw string) string {
+	if strings.TrimSpace(raw) == "" {
+		return raw
+	}
+	lines := strings.Split(raw, "\n")
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		eq := strings.Index(line, "=")
+		if eq <= 0 {
+			continue
+		}
+		key := strings.ToLower(strings.TrimSpace(line[:eq]))
+		if _, ok := snapshotSecretKeys[key]; !ok {
+			continue
+		}
+		lines[i] = strings.TrimRight(line[:eq], " \t") + ` = ""`
+	}
+	return strings.Join(lines, "\n")
 }
 
 func loadChains(home string) []map[string]any {
@@ -275,7 +310,7 @@ func loadChains(home string) []map[string]any {
 		entry := map[string]any{
 			"file": name,
 			"name": strings.TrimSuffix(name, ".toml"),
-			"raw":  string(data),
+			"raw":  redactSnapshotTOML(string(data)),
 		}
 		if fields, err := importChainFields(path, data); err == nil {
 			entry["fields"] = fields
@@ -514,7 +549,7 @@ func vproxToMap(v vproxEntry) map[string]any {
 	return map[string]any{
 		"name":         v.Name,
 		"lan_ip":       v.LanIP,
-		"key":          v.Key,
+		"key":          "",
 		"ssh_key_path": v.SSHKeyPath,
 	}
 }
@@ -548,11 +583,12 @@ func (w *Web) saveStep(step string) http.HandlerFunc {
 		r.Body = http.MaxBytesReader(rw, r.Body, 512*1024) // 512 KB max
 		var fields map[string]any
 		if err := json.NewDecoder(r.Body).Decode(&fields); err != nil {
-			http.Error(rw, "invalid JSON: "+err.Error(), http.StatusBadRequest)
+			http.Error(rw, "invalid JSON payload", http.StatusBadRequest)
 			return
 		}
 		if err := ApplyFields(w.home, step, fields); err != nil {
-			http.Error(rw, err.Error(), http.StatusUnprocessableEntity)
+			log.Printf("[wizard] save rejected step=%q: %v", step, err)
+			http.Error(rw, "invalid configuration payload", http.StatusUnprocessableEntity)
 			return
 		}
 		writeJSON(rw, map[string]string{"status": "ok"})
@@ -562,7 +598,9 @@ func (w *Web) saveStep(step string) http.HandlerFunc {
 // handleDone signals the server to shut down.
 func (w *Web) handleDone(rw http.ResponseWriter, r *http.Request) {
 	writeJSON(rw, map[string]string{"status": "done"})
-	close(w.done)
+	w.doneMu.Do(func() {
+		close(w.done)
+	})
 }
 
 // writeJSON encodes v as JSON and writes it with content-type header.

@@ -647,15 +647,15 @@
           <label>port<input name="port" type="number" min="1" max="65535" value="8889"></label>
           <label>bind_address<input name="bind_address" type="text" value="127.0.0.1"></label>
           <label>base_path<input name="base_path" type="text"></label>
-          <label>api_key<input name="api_key" type="text"></label>
+          <label>api_key<input name="api_key" type="password" autocomplete="off"></label>
           <label>username<span class="required-mark">*</span><input name="username" type="text" value="admin" required></label>
-          <label>password_hash (already hashed)<input name="password_hash" type="text"></label>
+          <label>password_hash (already hashed)<input name="password_hash" type="password" autocomplete="off"></label>
           <label class="check full"><input name="auto_enrich" type="checkbox" checked> intel.auto_enrich</label>
           <label>cache_ttl_hours<input name="cache_ttl_hours" type="number" min="1" value="24"></label>
           <label>rate_limit_rpm<input name="rate_limit_rpm" type="number" min="1" value="10"></label>
-          <label>abuseipdb<input name="abuseipdb" type="text"></label>
-          <label>virustotal<input name="virustotal" type="text"></label>
-          <label>shodan<input name="shodan" type="text"></label>
+          <label>abuseipdb<input name="abuseipdb" type="password" autocomplete="off"></label>
+          <label>virustotal<input name="virustotal" type="password" autocomplete="off"></label>
+          <label>shodan<input name="shodan" type="password" autocomplete="off"></label>
           <label>push_user<input name="push_user" type="text"></label>
           <label>push_key_path<input name="push_key_path" type="text"></label>
           <label>poll_interval_sec<input name="poll_interval_sec" type="number" min="1" value="60"></label>
@@ -724,7 +724,7 @@
           <div class="grid">
             <label>vprox_name<input name="vprox_name" type="text" value="vProx"></label>
             <label>vprox_lan_ip<input name="vprox_lan_ip" type="text" placeholder="10.0.0.10"></label>
-            <label>vprox_key<input name="vprox_key" type="text" placeholder="~/.ssh/vprox"></label>
+            <label>vprox_key<input name="vprox_key" type="password" autocomplete="off" placeholder="~/.ssh/vprox"></label>
             <label>vprox_ssh_key_path<input name="vprox_ssh_key_path" type="text" placeholder="~/.ssh/vprox_fleet"></label>
           </div>
         </fieldset>
@@ -829,6 +829,7 @@
     };
     const stepOrder = ["ports", "settings", "chain", "vlog", "fleet", "infra", "backup"];
     const importState = { step: "", checkbox: null, fields: null, sourcePath: "" };
+    const importedSourceByStep = {};
 
     function setStatus(msg, kind = "") {
       const box = $("#status");
@@ -877,6 +878,10 @@
         syncInfraVMJSON();
       }
       const body = formToObject(form);
+      if (importedSourceByStep[step]) {
+        body._import_source_step = step;
+        body._import_source_path = importedSourceByStep[step];
+      }
       setBusy(form, true);
       setStatus(`Saving ${endpoint}...`);
       try {
@@ -891,6 +896,7 @@
         }
         setStatus(`Saved: ${endpoint}`, "ok");
         await loadCurrent();
+        delete importedSourceByStep[step];
         if (moveNext) {
           const next = nextStep(step);
           if (next) {
@@ -1137,11 +1143,38 @@
       syncInfraVMJSON();
     }
 
+    const previewRedactedKeys = new Set([
+      "api_key",
+      "password_hash",
+      "abuseipdb",
+      "virustotal",
+      "shodan",
+      "push_key_path",
+      "ssh_key_path",
+      "host_ssh_key_path",
+      "vprox_key",
+      "vprox_ssh_key_path",
+      "management_key_path"
+    ]);
+
+    function redactTOMLForPreview(raw) {
+      const text = String(raw || "");
+      if (!text) return text;
+      return text.split(/\r?\n/).map((line) => {
+        const m = line.match(/^(\s*)([A-Za-z0-9_]+)(\s*=\s*)(.+)$/);
+        if (!m) return line;
+        const key = String(m[2] || "").trim().toLowerCase();
+        if (!previewRedactedKeys.has(key)) return line;
+        return `${m[1]}${m[2]}${m[3]}"*** redacted ***"`;
+      }).join("\n");
+    }
+
     function prefillFromCurrent(current) {
+      Object.keys(importedSourceByStep).forEach((step) => delete importedSourceByStep[step]);
       const rawKeys = ["ports", "settings", "vlog", "fleet", "backup"];
       rawKeys.forEach((k) => {
         const pre = $(`#raw-${k}`);
-        if (pre) pre.textContent = current[k] || "(not found)";
+        if (pre) pre.textContent = redactTOMLForPreview(current[k] || "(not found)");
       });
 
       if (current.ports) {
@@ -1362,6 +1395,9 @@
           setChainServices([]);
         }
         syncChainServicesJSON();
+      }
+      if (importState.sourcePath) {
+        importedSourceByStep[step] = importState.sourcePath;
       }
     }
 

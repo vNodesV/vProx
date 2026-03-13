@@ -32,9 +32,11 @@ func writeConfigMode(path string, v any, interactive bool) error {
 		return fmt.Errorf("toml encode: %w", err)
 	}
 	data := buf.Bytes()
+	fileMode := configFileMode(path, 0)
 
 	// Check existing file.
-	if _, err := os.Stat(path); err == nil {
+	if info, err := os.Stat(path); err == nil {
+		fileMode = configFileMode(path, info.Mode().Perm())
 		fmt.Printf("\n  ⚠  File already exists: %s\n", path)
 		if interactive {
 			fmt.Printf("  Diff preview (new values):\n")
@@ -48,7 +50,7 @@ func writeConfigMode(path string, v any, interactive bool) error {
 		}
 		// Backup.
 		bak := path + ".bak"
-		if err := copyFile(path, bak); err != nil {
+		if err := copyFile(path, bak, fileMode); err != nil {
 			return fmt.Errorf("backup %s: %w", bak, err)
 		}
 		fmt.Printf("  ✓ backup → %s\n", bak)
@@ -61,7 +63,10 @@ func writeConfigMode(path string, v any, interactive bool) error {
 
 	// Write atomically via temp file + rename.
 	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+	if err := os.Remove(tmp); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("prepare %s: %w", tmp, err)
+	}
+	if err := os.WriteFile(tmp, data, fileMode); err != nil {
 		return fmt.Errorf("write %s: %w", tmp, err)
 	}
 	if err := os.Rename(tmp, path); err != nil {
@@ -74,19 +79,36 @@ func writeConfigMode(path string, v any, interactive bool) error {
 }
 
 // copyFile copies src to dst, creating dst if needed.
-func copyFile(src, dst string) error {
+func copyFile(src, dst string, mode os.FileMode) error {
 	in, err := os.Open(src)
 	if err != nil {
 		return err
 	}
 	defer in.Close()
-	out, err := os.Create(dst)
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, mode)
 	if err != nil {
 		return err
 	}
 	defer out.Close()
-	_, err = io.Copy(out, in)
-	return err
+	if _, err = io.Copy(out, in); err != nil {
+		return err
+	}
+	return out.Chmod(mode)
+}
+
+func configFileMode(path string, existing os.FileMode) os.FileMode {
+	if isSensitiveConfig(path) {
+		return 0o600
+	}
+	if existing != 0 {
+		return existing
+	}
+	return 0o644
+}
+
+func isSensitiveConfig(path string) bool {
+	lower := strings.ToLower(filepath.ToSlash(filepath.Clean(path)))
+	return strings.HasSuffix(lower, "config/vlog/vlog.toml")
 }
 
 // printPreview prints the first n lines of data with indentation.

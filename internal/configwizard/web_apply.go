@@ -544,27 +544,36 @@ func patchLegacyChainSettings(home, chainName string, f map[string]any) error {
 }
 
 func applyVLog(home string, f map[string]any) error {
+	path := configPath(home, "vlog", "vlog.toml")
+	existing := loadExistingVLog(path)
+	importedSecrets, err := loadImportedVLogSecrets(importSourcePath(f, "vlog"))
+	if err != nil {
+		return err
+	}
+
 	var cfg vlogcfg.Config
 	v := &cfg.VLog
 	v.Port = fieldInt(f, "port", 8889)
 	v.BindAddress = fieldStr(f, "bind_address", "127.0.0.1")
 	v.BasePath = fieldStr(f, "base_path", "")
-	v.APIKey = fieldStr(f, "api_key", "")
 	v.Auth.Username = fieldStr(f, "username", "admin")
-	v.Auth.PasswordHash = fieldStr(f, "password_hash", "")
 	v.Intel.AutoEnrich = fieldBool(f, "auto_enrich", true)
 	v.Intel.CacheTTLHours = fieldInt(f, "cache_ttl_hours", 24)
 	v.Intel.RateLimitRPM = fieldInt(f, "rate_limit_rpm", 10)
-	v.Intel.Keys.AbuseIPDB = fieldStr(f, "abuseipdb", "")
-	v.Intel.Keys.VirusTotal = fieldStr(f, "virustotal", "")
-	v.Intel.Keys.Shodan = fieldStr(f, "shodan", "")
 	v.Push.Defaults.User = fieldStr(f, "push_user", "")
 	v.Push.Defaults.KeyPath = fieldStr(f, "push_key_path", "")
 	v.Push.PollIntervalSec = fieldInt(f, "poll_interval_sec", 60)
 	v.DBPath = fieldStr(f, "db_path", "")
 	v.ArchivesDir = fieldStr(f, "archives_dir", "")
 	v.VProxBin = fieldStr(f, "vprox_bin", "vprox")
-	return writeConfigNoPrompt(configPath(home, "vlog", "vlog.toml"), cfg)
+
+	v.APIKey = preserveRedactedStringFieldWithImport(f, "api_key", existing.VLog.APIKey, importedSecrets["api_key"])
+	v.Auth.PasswordHash = preserveRedactedStringFieldWithImport(f, "password_hash", existing.VLog.Auth.PasswordHash, importedSecrets["password_hash"])
+	v.Intel.Keys.AbuseIPDB = preserveRedactedStringFieldWithImport(f, "abuseipdb", existing.VLog.Intel.Keys.AbuseIPDB, importedSecrets["abuseipdb"])
+	v.Intel.Keys.VirusTotal = preserveRedactedStringFieldWithImport(f, "virustotal", existing.VLog.Intel.Keys.VirusTotal, importedSecrets["virustotal"])
+	v.Intel.Keys.Shodan = preserveRedactedStringFieldWithImport(f, "shodan", existing.VLog.Intel.Keys.Shodan, importedSecrets["shodan"])
+
+	return writeConfigNoPrompt(path, cfg)
 }
 
 func applyFleet(home string, f map[string]any) error {
@@ -582,6 +591,12 @@ func applyInfra(home string, f map[string]any) error {
 	if dc == "" {
 		return fmt.Errorf("datacenter name is required")
 	}
+	path := configPath(home, "infra", dc+".toml")
+	existing := loadInfraFile(path)
+	importedVProxKey, err := loadImportedInfraVProxKey(importSourcePath(f, "infra"))
+	if err != nil {
+		return err
+	}
 
 	// Backward compatibility: accept raw TOML payload from older wizard pages.
 	if tomlRaw := strings.TrimSpace(fieldStr(f, "toml_raw", "")); tomlRaw != "" {
@@ -589,7 +604,7 @@ func applyInfra(home string, f map[string]any) error {
 		if err := toml.Unmarshal([]byte(tomlRaw), &inf); err != nil {
 			return fmt.Errorf("parse infra TOML: %w", err)
 		}
-		return writeConfigNoPrompt(configPath(home, "infra", dc+".toml"), inf)
+		return writeConfigNoPrompt(path, inf)
 	}
 
 	var inf infraFile
@@ -618,7 +633,7 @@ func applyInfra(home string, f map[string]any) error {
 
 	inf.VProx.Name = fieldStr(f, "vprox_name", "vProx")
 	inf.VProx.LanIP = fieldStr(f, "vprox_lan_ip", "")
-	inf.VProx.Key = fieldStr(f, "vprox_key", "")
+	inf.VProx.Key = preserveRedactedStringFieldWithImport(f, "vprox_key", existing.VProx.Key, importedVProxKey)
 	inf.VProx.SSHKeyPath = fieldStr(f, "vprox_ssh_key_path", "")
 	if inf.VProx.LanIP != "" && net.ParseIP(inf.VProx.LanIP) == nil {
 		return fmt.Errorf("vprox_lan_ip must be a valid IP address")
@@ -639,7 +654,7 @@ func applyInfra(home string, f map[string]any) error {
 		inf.VMs = append(inf.VMs, vm)
 	}
 
-	return writeConfigNoPrompt(configPath(home, "infra", dc+".toml"), inf)
+	return writeConfigNoPrompt(path, inf)
 }
 
 func parseInfraVMs(raw string) ([]fleetcfg.VM, error) {
@@ -724,6 +739,98 @@ func applyBackup(home string, f map[string]any) error {
 	b.Files.Data = splitList(fieldStr(f, "files_data", "access-counts.json"))
 	b.Files.Config = splitList(fieldStr(f, "files_config", "chains/ports.toml"))
 	return writeConfigNoPrompt(configPath(home, "backup", "backup.toml"), cfg)
+}
+
+func loadExistingVLog(path string) vlogcfg.Config {
+	var cfg vlogcfg.Config
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return cfg
+	}
+	_ = toml.Unmarshal(data, &cfg)
+	return cfg
+}
+
+func importSourcePath(f map[string]any, step string) string {
+	path := strings.TrimSpace(fieldStr(f, "_import_source_path", ""))
+	sourceStep := strings.ToLower(strings.TrimSpace(fieldStr(f, "_import_source_step", "")))
+	if path == "" || sourceStep != strings.ToLower(strings.TrimSpace(step)) {
+		return ""
+	}
+	return path
+}
+
+func loadImportedVLogSecrets(sourcePath string) (map[string]string, error) {
+	secrets := map[string]string{
+		"api_key":       "",
+		"password_hash": "",
+		"abuseipdb":     "",
+		"virustotal":    "",
+		"shodan":        "",
+	}
+	if sourcePath == "" {
+		return secrets, nil
+	}
+	path, data, err := readImportTOML(sourcePath)
+	if err != nil {
+		return nil, fmt.Errorf("read imported vlog source: %w", err)
+	}
+	if err := validateImportLocation("vlog", path); err != nil {
+		return nil, err
+	}
+	var cfg vlogcfg.Config
+	if err := toml.Unmarshal(data, &cfg); err != nil {
+		return nil, fmt.Errorf("parse imported vlog TOML: %w", err)
+	}
+	v := cfg.VLog
+	secrets["api_key"] = strings.TrimSpace(v.APIKey)
+	secrets["password_hash"] = strings.TrimSpace(v.Auth.PasswordHash)
+	secrets["abuseipdb"] = strings.TrimSpace(v.Intel.Keys.AbuseIPDB)
+	secrets["virustotal"] = strings.TrimSpace(v.Intel.Keys.VirusTotal)
+	secrets["shodan"] = strings.TrimSpace(v.Intel.Keys.Shodan)
+	return secrets, nil
+}
+
+func loadImportedInfraVProxKey(sourcePath string) (string, error) {
+	if sourcePath == "" {
+		return "", nil
+	}
+	path, data, err := readImportTOML(sourcePath)
+	if err != nil {
+		return "", fmt.Errorf("read imported infra source: %w", err)
+	}
+	if err := validateImportLocation("infra", path); err != nil {
+		return "", err
+	}
+	lowerPath := strings.ToLower(filepath.ToSlash(path))
+	if strings.HasSuffix(lowerPath, "/config/push/vms.toml") {
+		return "", nil
+	}
+	var inf infraFile
+	if err := toml.Unmarshal(data, &inf); err != nil {
+		return "", fmt.Errorf("parse imported infra TOML: %w", err)
+	}
+	return strings.TrimSpace(inf.VProx.Key), nil
+}
+
+func preserveRedactedStringField(f map[string]any, key, existing string) string {
+	return preserveRedactedStringFieldWithImport(f, key, existing, "")
+}
+
+func preserveRedactedStringFieldWithImport(f map[string]any, key, existing, imported string) string {
+	if v, ok := f[key]; ok {
+		if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
+			return s
+		}
+		if strings.TrimSpace(existing) != "" {
+			return existing
+		}
+		return imported
+	}
+	if strings.TrimSpace(existing) != "" {
+		return existing
+	}
+	return imported
 }
 
 // ---- field helpers ----
@@ -1150,52 +1257,72 @@ func readImportTOML(raw string) (string, []byte, error) {
 }
 
 func validateImportLocation(step, path string) error {
-	lower := strings.ToLower(filepath.ToSlash(path))
-	if !strings.Contains(lower, "/config/") {
-		return fmt.Errorf("import path must be inside a vProx config directory (.../config/...)")
+	rel, err := configRelativeImportPath(path)
+	if err != nil {
+		return err
 	}
-
-	base := strings.ToLower(filepath.Base(path))
+	rel = strings.ToLower(filepath.ToSlash(rel))
+	base := strings.ToLower(filepath.Base(rel))
 	switch step {
 	case "ports":
-		if !strings.Contains(lower, "/config/chains/") || base != "ports.toml" {
+		if rel != "chains/ports.toml" {
 			return fmt.Errorf("ports import expects .../config/chains/ports.toml")
 		}
 	case "settings":
-		if !strings.Contains(lower, "/config/vprox/") || base != "settings.toml" {
+		if rel != "vprox/settings.toml" {
 			return fmt.Errorf("settings import expects .../config/vprox/settings.toml")
 		}
 	case "chain":
-		if strings.Contains(lower, "/config/vlog/chains/") {
+		if strings.HasPrefix(rel, "vlog/chains/") && base != "" {
 			return nil
 		}
-		if strings.Contains(lower, "/config/chains/") && base != "ports.toml" {
+		if strings.HasPrefix(rel, "chains/") && base != "ports.toml" {
 			return nil // legacy chain layout
 		}
 		return fmt.Errorf("chain import expects .../config/vlog/chains/*.toml (or legacy .../config/chains/*.toml)")
 	case "vlog":
-		if !strings.Contains(lower, "/config/vlog/") || base != "vlog.toml" {
+		if rel != "vlog/vlog.toml" {
 			return fmt.Errorf("vlog import expects .../config/vlog/vlog.toml")
 		}
 	case "fleet":
-		if !strings.Contains(lower, "/config/fleet/") || base != "settings.toml" {
+		if rel != "fleet/settings.toml" {
 			return fmt.Errorf("fleet import expects .../config/fleet/settings.toml")
 		}
 	case "infra":
-		if strings.HasSuffix(lower, "/config/push/vms.toml") {
+		if rel == "push/vms.toml" {
 			return nil // legacy migration source
 		}
-		if !strings.Contains(lower, "/config/infra/") {
+		if !strings.HasPrefix(rel, "infra/") || base == "" {
 			return fmt.Errorf("infra import expects .../config/infra/<datacenter>.toml or legacy .../config/push/vms.toml")
 		}
 	case "backup":
-		if !strings.Contains(lower, "/config/backup/") || base != "backup.toml" {
+		if rel != "backup/backup.toml" {
 			return fmt.Errorf("backup import expects .../config/backup/backup.toml")
 		}
 	default:
 		return fmt.Errorf("unknown step: %q", step)
 	}
 	return nil
+}
+
+func configRelativeImportPath(path string) (string, error) {
+	cleaned := filepath.ToSlash(filepath.Clean(path))
+	parts := strings.Split(cleaned, "/")
+	configIdx := -1
+	for i := len(parts) - 1; i >= 0; i-- {
+		if strings.EqualFold(parts[i], "config") {
+			configIdx = i
+			break
+		}
+	}
+	if configIdx < 0 || configIdx >= len(parts)-1 {
+		return "", fmt.Errorf("import path must be inside a vProx config directory (.../config/...)")
+	}
+	rel := strings.Join(parts[configIdx+1:], "/")
+	if strings.TrimSpace(rel) == "" {
+		return "", fmt.Errorf("import path must target a file inside .../config/")
+	}
+	return rel, nil
 }
 
 func importFieldsFromTOML(step, path string, data []byte) (map[string]any, error) {
@@ -1397,15 +1524,15 @@ func importVLogFields(data []byte) (map[string]any, error) {
 		"port":              v.Port,
 		"bind_address":      v.BindAddress,
 		"base_path":         v.BasePath,
-		"api_key":           v.APIKey,
+		"api_key":           "",
 		"username":          v.Auth.Username,
-		"password_hash":     v.Auth.PasswordHash,
+		"password_hash":     "",
 		"auto_enrich":       v.Intel.AutoEnrich,
 		"cache_ttl_hours":   v.Intel.CacheTTLHours,
 		"rate_limit_rpm":    v.Intel.RateLimitRPM,
-		"abuseipdb":         v.Intel.Keys.AbuseIPDB,
-		"virustotal":        v.Intel.Keys.VirusTotal,
-		"shodan":            v.Intel.Keys.Shodan,
+		"abuseipdb":         "",
+		"virustotal":        "",
+		"shodan":            "",
 		"push_user":         v.Push.Defaults.User,
 		"push_key_path":     v.Push.Defaults.KeyPath,
 		"poll_interval_sec": v.Push.PollIntervalSec,
@@ -1484,7 +1611,7 @@ func importInfraFields(path string, data []byte) (map[string]any, error) {
 		"host_ssh_key_path":  inf.Host.SSHKeyPath,
 		"vprox_name":         inf.VProx.Name,
 		"vprox_lan_ip":       inf.VProx.LanIP,
-		"vprox_key":          inf.VProx.Key,
+		"vprox_key":          "",
 		"vprox_ssh_key_path": inf.VProx.SSHKeyPath,
 		"vms_json":           string(vmJSON),
 		"vms":                vmMaps,

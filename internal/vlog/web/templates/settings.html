@@ -320,15 +320,15 @@
       <label>port<input name="port" type="number" min="1" max="65535" value="8889"></label>
       <label>bind_address<input name="bind_address" type="text" value="127.0.0.1"></label>
       <label>base_path<input name="base_path" type="text"></label>
-      <label>api_key<input name="api_key" type="text"></label>
+      <label>api_key<input name="api_key" type="password" autocomplete="off"></label>
       <label>username <span class="required-dot">*</span><input name="username" type="text" value="admin" required></label>
-      <label>password_hash<input name="password_hash" type="text"></label>
+      <label>password_hash<input name="password_hash" type="password" autocomplete="off"></label>
       <label class="check full"><input name="auto_enrich" type="checkbox" checked> intel.auto_enrich</label>
       <label>cache_ttl_hours<input name="cache_ttl_hours" type="number" min="1" value="24"></label>
       <label>rate_limit_rpm<input name="rate_limit_rpm" type="number" min="1" value="10"></label>
-      <label>abuseipdb<input name="abuseipdb" type="text"></label>
-      <label>virustotal<input name="virustotal" type="text"></label>
-      <label>shodan<input name="shodan" type="text"></label>
+      <label>abuseipdb<input name="abuseipdb" type="password" autocomplete="off"></label>
+      <label>virustotal<input name="virustotal" type="password" autocomplete="off"></label>
+      <label>shodan<input name="shodan" type="password" autocomplete="off"></label>
       <label>push_user<input name="push_user" type="text"></label>
       <label>push_key_path<input name="push_key_path" type="text"></label>
       <label>poll_interval_sec<input name="poll_interval_sec" type="number" min="1" value="60"></label>
@@ -372,7 +372,7 @@
       <div class="settings-grid">
         <label>vprox_name<input name="vprox_name" type="text" value="vProx"></label>
         <label>vprox_lan_ip<input name="vprox_lan_ip" type="text"></label>
-        <label>vprox_key<input name="vprox_key" type="text"></label>
+        <label>vprox_key<input name="vprox_key" type="password" autocomplete="off"></label>
         <label>vprox_ssh_key_path<input name="vprox_ssh_key_path" type="text"></label>
       </div>
     </fieldset>
@@ -554,6 +554,7 @@
     chains: [],
     infras: [],
     chainTreeExpanded: {},
+    importedSourceByStep: {},
     pendingSteps: new Set(),
     editor: {
       step: "",
@@ -569,6 +570,20 @@
     fields: null,
     sourcePath: ""
   };
+
+  const sensitiveSummaryKeys = new Set([
+    "api_key",
+    "password_hash",
+    "abuseipdb",
+    "virustotal",
+    "shodan",
+    "push_key_path",
+    "ssh_key_path",
+    "host_ssh_key_path",
+    "vprox_key",
+    "vprox_ssh_key_path",
+    "management_key_path"
+  ]);
 
   function setStatus(message, kind = "") {
     const box = $("#settings-status");
@@ -1120,6 +1135,15 @@
     return text === "" ? "—" : text;
   }
 
+  function renderSummaryValue(step, key, value) {
+    const rendered = renderValue(value);
+    if (rendered === "—") return rendered;
+    if (sensitiveSummaryKeys.has(String(key || "").trim().toLowerCase())) {
+      return "••••••";
+    }
+    return rendered;
+  }
+
   function renderSimpleSection(step) {
     const body = $(`#settings-list-${step}`);
     const form = forms[step];
@@ -1127,7 +1151,7 @@
     const data = formToObject(form);
     const rows = stepSummaryFields[step] || [];
     body.innerHTML = rows.map(([label, key]) => {
-      return `<tr><td class="settings-name">${escapeHTML(label)}</td><td class="settings-value">${escapeHTML(renderValue(data[key]))}</td></tr>`;
+      return `<tr><td class="settings-name">${escapeHTML(label)}</td><td class="settings-value">${escapeHTML(renderSummaryValue(step, key, data[key]))}</td></tr>`;
     }).join("") +
       `<tr class="settings-actions-row"><td colspan="2"><div class="settings-row-buttons"><button type="button" class="outline" data-edit-step="${step}">Edit</button><button type="button" class="danger" data-remove-step="${step}">Remove</button></div></td></tr>`;
   }
@@ -1476,6 +1500,10 @@
     if (step === "infra") syncVMJSON();
 
     const payload = formToObject(form);
+    if (state.importedSourceByStep[step]) {
+      payload._import_source_step = step;
+      payload._import_source_path = state.importedSourceByStep[step];
+    }
     setFormBusy(form, true);
     setStatus(`Saving ${step}…`);
     try {
@@ -1487,6 +1515,7 @@
       const body = await resp.json().catch(() => ({}));
       if (!resp.ok) throw new Error(body.error || `HTTP ${resp.status}`);
       await loadCurrent();
+      delete state.importedSourceByStep[step];
       markPending(step);
       setStatus(`Saved ${stepLabels[step] || step} successfully.`, "ok");
       return true;
@@ -1605,6 +1634,9 @@
       }
       syncChainServicesJSON();
     }
+    if (importState.sourcePath) {
+      state.importedSourceByStep[step] = importState.sourcePath;
+    }
   }
 
   async function validateImportPath() {
@@ -1653,6 +1685,7 @@
     const resp = await fetch(apiPath("/settings/api/config/current"), { method: "GET" });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const current = await resp.json();
+    state.importedSourceByStep = {};
     prefillSimpleForms(current || {});
     state.chains = Array.isArray(current.chains) ? current.chains : [];
     state.infras = Array.isArray(current.infras) ? current.infras : [];
