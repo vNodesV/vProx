@@ -1232,6 +1232,51 @@ summary { list-style: none; }
   letter-spacing: .03em;
 }
 
+.settings-chain-root {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+}
+
+.settings-chain-name {
+  font-weight: 600;
+}
+
+.settings-tree-toggle {
+  width: 1.12rem;
+  height: 1.12rem;
+  min-width: 1.12rem;
+  border-radius: 3px;
+  border: 1px solid var(--vn-green-border);
+  background: rgba(0,0,0,.25);
+  color: var(--vn-green);
+  font-size: .78rem;
+  line-height: 1;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.settings-tree-toggle:hover {
+  background: rgba(0,255,0,.1);
+}
+
+.settings-tree-spacer {
+  display: inline-block;
+  width: 1.12rem;
+  min-width: 1.12rem;
+}
+
+.settings-chain-child td {
+  background: rgba(255,255,255,.015);
+}
+
+.settings-chain-child-name {
+  padding-left: 1.45rem !important;
+  color: var(--vn-text-muted);
+}
+
 .settings-empty {
   text-align: center;
   color: var(--vn-text-muted);
@@ -1243,7 +1288,7 @@ summary { list-style: none; }
 }
 
 .settings-editor-popup {
-  width: min(980px, 96vw);
+  width: min(920px, 96vw);
 }
 
 .settings-editor-copy {
@@ -1273,11 +1318,11 @@ summary { list-style: none; }
 
 .settings-editor-host .settings-grid label {
   display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
+  grid-template-columns: fit-content(18ch) minmax(0, max-content);
   align-items: center;
-  gap: .36rem;
-  font-size: .8rem;
-  line-height: 1.24;
+  gap: .32rem;
+  font-size: .82rem;
+  line-height: 1.2;
   color: var(--vn-text-muted);
 }
 
@@ -1285,8 +1330,8 @@ summary { list-style: none; }
   display: flex;
   align-items: center;
   gap: .32rem;
-  padding: .3rem .4rem;
-  font-size: .78rem;
+  padding: .28rem .36rem;
+  font-size: .8rem;
 }
 
 .settings-editor-host .settings-grid label input[type="checkbox"] {
@@ -1301,13 +1346,13 @@ summary { list-style: none; }
 .settings-editor-host input[type="number"],
 .settings-editor-host input[type="password"],
 .settings-editor-host select {
-  width: min(20ch, 100%);
-  min-width: 9ch;
-  max-width: 28ch;
-  padding: .12rem .32rem;
-  min-height: 1.45rem;
-  line-height: 1.2;
-  font-size: .8rem;
+  width: min(14ch, 100%);
+  min-width: 6ch;
+  max-width: 18ch;
+  padding: .08rem .28rem;
+  min-height: 1.18rem;
+  line-height: 1.15;
+  font-size: .82rem;
 }
 
 .settings-editor-host textarea {
@@ -1356,6 +1401,40 @@ summary { list-style: none; }
 .settings-pill-dismiss {
   color: rgba(255,255,255,.72);
   border-color: rgba(255,255,255,.2);
+}
+
+.vlog-top-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: .5rem;
+  padding: .5rem 0;
+}
+
+.vlog-top-form {
+  margin: 0;
+}
+
+.vlog-top-link,
+.vlog-top-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  text-decoration: none;
+  background: none;
+  border: 1px solid rgba(0,255,0,0.35);
+  color: #00ff00;
+  padding: .3rem .8rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: .8rem;
+  font-family: Inter, sans-serif;
+  transition: all .2s;
+}
+
+.vlog-top-link:hover,
+.vlog-top-btn:hover {
+  background: rgba(0,255,0,.10);
+  border-color: #00ff00;
 }
 
 .settings-pill-validate.is-ready,

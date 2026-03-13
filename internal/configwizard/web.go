@@ -277,7 +277,7 @@ func loadChains(home string) []map[string]any {
 			"name": strings.TrimSuffix(name, ".toml"),
 			"raw":  string(data),
 		}
-		if fields, err := importChainFields(data); err == nil {
+		if fields, err := importChainFields(path, data); err == nil {
 			entry["fields"] = fields
 		}
 		out = append(out, entry)

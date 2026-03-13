@@ -81,7 +81,7 @@
               <tr>
                 <th>Chain</th>
                 <th>Chain ID</th>
-                <th>Services</th>
+                <th>Services / Topology</th>
                 <th>Explorers</th>
                 <th>Actions</th>
               </tr>
@@ -221,6 +221,10 @@
       <label class="full">explorers (comma-separated)<input name="explorers" type="text" placeholder="https://mintscan.io/cheqd-mainnet"></label>
       <label>chain_ping_country<input name="chain_ping_country" type="text" value="CA"></label>
       <label>chain_ping_provider<input name="chain_ping_provider" type="text"></label>
+      <label>proxy.vhost_prefix.rpc<input name="proxy_vhost_prefix_rpc" type="text" placeholder="rpc"></label>
+      <label>proxy.vhost_prefix.rest<input name="proxy_vhost_prefix_rest" type="text" placeholder="api"></label>
+      <label class="full">proxy.sp.prefixes (comma-separated)<input name="proxy_sp_prefixes" type="text" placeholder="api,rest,rpc"></label>
+      <label class="full">proxy.sp.suffixes (comma-separated)<input name="proxy_sp_suffixes" type="text" placeholder="api,rest,rpc"></label>
     </div>
     <section class="settings-vms">
       <div class="settings-vms-head">
@@ -498,6 +502,7 @@
   const state = {
     chains: [],
     infras: [],
+    chainTreeExpanded: {},
     pendingSteps: new Set(),
     editor: {
       step: "",
@@ -923,6 +928,10 @@
     setVal(forms.chain, "explorers", fields.explorers || "");
     setVal(forms.chain, "chain_ping_country", fields.chain_ping_country || "CA");
     setVal(forms.chain, "chain_ping_provider", fields.chain_ping_provider || "");
+    setVal(forms.chain, "proxy_vhost_prefix_rpc", fields.proxy_vhost_prefix_rpc || "");
+    setVal(forms.chain, "proxy_vhost_prefix_rest", fields.proxy_vhost_prefix_rest || "");
+    setVal(forms.chain, "proxy_sp_prefixes", fields.proxy_sp_prefixes || "");
+    setVal(forms.chain, "proxy_sp_suffixes", fields.proxy_sp_suffixes || "");
 
     let services = [];
     if (Array.isArray(fields.chain_services)) {
@@ -1001,17 +1010,48 @@
       const chainID = String(fields.chain_id || "").trim();
       const services = Array.isArray(fields.chain_services) ? fields.chain_services : [];
       const serviceTypes = Array.from(new Set(services
-        .map((svc) => String((svc || {}).service_type || "").trim().toLowerCase())
+        .map((svc) => {
+          const raw = String((svc || {}).service_type || "").trim().toLowerCase();
+          if (raw === "sp") return "api/rpc";
+          return raw;
+        })
         .filter(Boolean)));
-      const serviceSummary = serviceTypes.length > 0 ? serviceTypes.join(", ") : "—";
+      const serviceSummary = serviceTypes.length > 0 ? `${services.length} service(s): ${serviceTypes.join(", ")}` : "—";
       const explorers = String(fields.explorers || fields.explorer_base || "").trim();
-      return `<tr>
-        <td class="settings-value">${escapeHTML(renderValue(chain))}</td>
+      const file = String(entry.file || `${chain}.toml`).trim();
+      const expanded = state.chainTreeExpanded[file] === true;
+      const toggle = services.length > 0
+        ? `<button type="button" class="settings-tree-toggle" data-toggle-chain="${escapeHTML(file)}" aria-expanded="${expanded ? "true" : "false"}">${expanded ? "−" : "+"}</button>`
+        : `<span class="settings-tree-spacer"></span>`;
+      const parent = `<tr class="settings-chain-parent">
+        <td class="settings-value settings-chain-root">${toggle}<span class="settings-chain-name">${escapeHTML(renderValue(chain))}</span></td>
         <td class="settings-value">${escapeHTML(renderValue(chainID))}</td>
         <td class="settings-value">${escapeHTML(renderValue(serviceSummary))}</td>
         <td class="settings-value">${escapeHTML(renderValue(explorers))}</td>
-        <td><div class="settings-row-buttons"><button type="button" class="outline" data-edit-chain="${escapeHTML(entry.file)}">Edit</button><button type="button" class="danger" data-remove-chain="${escapeHTML(entry.file)}">− Remove</button></div></td>
+        <td><div class="settings-row-buttons"><button type="button" class="outline" data-edit-chain="${escapeHTML(file)}">Edit</button><button type="button" class="danger" data-remove-chain="${escapeHTML(file)}">− Remove</button></div></td>
       </tr>`;
+
+      if (!expanded || services.length === 0) return parent;
+
+      const childRows = services.map((svc) => {
+        const serviceName = String((svc || {}).name || "").trim() || "service";
+        const serviceTypeRaw = String((svc || {}).service_type || "").trim().toLowerCase();
+        const serviceType = serviceTypeRaw === "sp" ? "api/rpc" : (serviceTypeRaw || "unknown");
+        const internalIP = String((svc || {}).internal_ip || "").trim();
+        const host = String((svc || {}).host || "").trim();
+        const moniker = String((svc || {}).moniker || "").trim();
+        const valoper = String((svc || {}).valoper || "").trim();
+        const topology = [internalIP ? `ip:${internalIP}` : "", host ? `host:${host}` : ""].filter(Boolean).join(" · ") || "—";
+        const identity = [moniker, valoper].filter(Boolean).join(" · ") || "—";
+        return `<tr class="settings-chain-child">
+          <td class="settings-value settings-chain-child-name">↳ ${escapeHTML(serviceName)}</td>
+          <td class="settings-value">${escapeHTML(renderValue(serviceType))}</td>
+          <td class="settings-value">${escapeHTML(renderValue(topology))}</td>
+          <td class="settings-value">${escapeHTML(renderValue(identity))}</td>
+          <td></td>
+        </tr>`;
+      }).join("");
+      return parent + childRows;
     }).join("");
   }
 
@@ -1492,6 +1532,15 @@
           prefillInfra(null);
           openEditor("infra", "New Datacenter File");
         }
+        return;
+      }
+
+      const toggleChainBtn = ev.target.closest("button[data-toggle-chain]");
+      if (toggleChainBtn) {
+        const file = toggleChainBtn.dataset.toggleChain;
+        if (!file) return;
+        state.chainTreeExpanded[file] = !(state.chainTreeExpanded[file] === true);
+        renderChainSection();
         return;
       }
 

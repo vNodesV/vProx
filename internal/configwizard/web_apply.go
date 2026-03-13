@@ -218,7 +218,51 @@ func applyChain(home string, f map[string]any) error {
 		return fmt.Errorf("chain_ping_country is unsupported: %q", c.ChainPing.Country)
 	}
 
-	return writeConfigNoPrompt(configPath(home, "vlog", "chains", name+".toml"), c)
+	if err := writeConfigNoPrompt(configPath(home, "vlog", "chains", name+".toml"), c); err != nil {
+		return err
+	}
+	if err := patchLegacyProxyChainSettings(home, name, f); err != nil {
+		return err
+	}
+	return nil
+}
+
+func patchLegacyProxyChainSettings(home, chainName string, f map[string]any) error {
+	_, hasRPCPrefix := f["proxy_vhost_prefix_rpc"]
+	_, hasRESTPrefix := f["proxy_vhost_prefix_rest"]
+	_, hasSPPrefixes := f["proxy_sp_prefixes"]
+	_, hasSPSuffixes := f["proxy_sp_suffixes"]
+	if !hasRPCPrefix && !hasRESTPrefix && !hasSPPrefixes && !hasSPSuffixes {
+		return nil
+	}
+
+	path := configPath(home, "chains", chainName+".toml")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("read legacy chain file: %w", err)
+	}
+
+	var legacy chainconfig.ChainConfig
+	if err := toml.Unmarshal(data, &legacy); err != nil {
+		return fmt.Errorf("parse legacy chain TOML: %w", err)
+	}
+
+	if hasRPCPrefix {
+		legacy.Expose.VHostPrefix.RPC = strings.TrimSpace(fieldStr(f, "proxy_vhost_prefix_rpc", ""))
+	}
+	if hasRESTPrefix {
+		legacy.Expose.VHostPrefix.REST = strings.TrimSpace(fieldStr(f, "proxy_vhost_prefix_rest", ""))
+	}
+	if hasSPPrefixes {
+		legacy.ChainServices.SP.Mainnet.Prefixes = splitList(fieldStr(f, "proxy_sp_prefixes", ""))
+	}
+	if hasSPSuffixes {
+		legacy.ChainServices.SP.Mainnet.Suffixes = splitList(fieldStr(f, "proxy_sp_suffixes", ""))
+	}
+	return writeConfigNoPrompt(path, legacy)
 }
 
 func applyVLog(home string, f map[string]any) error {
@@ -852,7 +896,7 @@ func importFieldsFromTOML(step, path string, data []byte) (map[string]any, error
 	case "settings":
 		return importSettingsFields(data)
 	case "chain":
-		return importChainFields(data)
+		return importChainFields(path, data)
 	case "vlog":
 		return importVLogFields(data)
 	case "fleet":
@@ -908,7 +952,7 @@ func importSettingsFields(data []byte) (map[string]any, error) {
 	}, nil
 }
 
-func importChainFields(data []byte) (map[string]any, error) {
+func importChainFields(path string, data []byte) (map[string]any, error) {
 	ci, err := chainconfig.ParseChainIdentity(data, "")
 	if err != nil {
 		return nil, fmt.Errorf("parse chain TOML: %w", err)
@@ -943,7 +987,40 @@ func importChainFields(data []byte) (map[string]any, error) {
 		"chain_services_json": string(servicesJSON),
 		"chain_services":      services,
 	}
+
+	mergeLegacyProxyFields(fields, data)
+	if companion := legacyChainCompanionPath(path, chainName); companion != "" {
+		if raw, err := os.ReadFile(companion); err == nil {
+			mergeLegacyProxyFields(fields, raw)
+		}
+	}
 	return fields, nil
+}
+
+func mergeLegacyProxyFields(fields map[string]any, data []byte) {
+	var legacy chainconfig.ChainConfig
+	if err := toml.Unmarshal(data, &legacy); err != nil {
+		return
+	}
+	fields["proxy_vhost_prefix_rpc"] = strings.TrimSpace(legacy.Expose.VHostPrefix.RPC)
+	fields["proxy_vhost_prefix_rest"] = strings.TrimSpace(legacy.Expose.VHostPrefix.REST)
+	fields["proxy_sp_prefixes"] = strings.Join(legacy.ChainServices.SP.Mainnet.Prefixes, ",")
+	fields["proxy_sp_suffixes"] = strings.Join(legacy.ChainServices.SP.Mainnet.Suffixes, ",")
+}
+
+func legacyChainCompanionPath(path, chainName string) string {
+	if strings.TrimSpace(path) == "" || strings.TrimSpace(chainName) == "" {
+		return ""
+	}
+	dir := filepath.Dir(path)
+	if !strings.EqualFold(filepath.Base(dir), "chains") {
+		return ""
+	}
+	if !strings.EqualFold(filepath.Base(filepath.Dir(dir)), "vlog") {
+		return ""
+	}
+	configDir := filepath.Dir(filepath.Dir(dir))
+	return filepath.Join(configDir, "chains", chainName+".toml")
 }
 
 func importVLogFields(data []byte) (map[string]any, error) {
