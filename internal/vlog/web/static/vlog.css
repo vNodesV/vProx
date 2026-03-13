@@ -1386,75 +1386,126 @@ summary { list-style: none; }
 }
 
 .settings-editor-host {
+  /* Pico v2 form-element overrides — drops input height from ~42px to ~27px */
+  --pico-form-element-spacing-vertical: 0.14rem;
+  --pico-form-element-spacing-horizontal: 0.38rem;
+  --pico-border-radius: 3px;
+
   max-height: calc(100vh - 15.5rem);
   overflow: auto;
   border: 1px solid var(--vn-green-border);
   border-radius: 7px;
   background: rgba(0,0,0,.26);
-  padding: .32rem .4rem;
+  padding: .32rem .55rem;
   width: 100%;
 }
 
 .settings-editor-host .settings-grid {
   grid-template-columns: 1fr;
-  gap: .24rem;
+  gap: .18rem;
 }
 
 .settings-editor-host .settings-vm-row .settings-grid {
   grid-template-columns: 1fr;
 }
 
+/* Row = label text (left, shrinks to content) + input (right, fills remainder) */
 .settings-editor-host .settings-grid label {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
-  gap: .28rem;
-  font-size: .78rem;
-  line-height: 1.08;
+  gap: .45rem;
+  font-size: .8rem;
+  font-family: var(--font-mono);
+  line-height: 1.25;
   color: var(--vn-text-muted);
+  letter-spacing: .01em;
+  min-height: 1.72rem;
+  padding: .04rem 0;
+  white-space: nowrap;
 }
 
 .settings-editor-host .settings-grid label.check {
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: .32rem;
-  padding: .14rem .38rem;
-  font-size: .76rem;
+  gap: .38rem;
+  padding: .16rem .42rem;
+  font-size: .8rem;
+  font-family: var(--font-mono);
   border: 1px solid var(--vn-green-border);
-  border-radius: 5px;
+  border-radius: 3px;
   color: var(--vn-text);
   background: rgba(0,0,0,.26);
+  white-space: normal;
+  min-height: 1.72rem;
+}
+
+/* Checked checkbox rows get green tint */
+.settings-editor-host .settings-grid label.check:has(input:checked) {
+  border-color: rgba(0,255,0,.35);
+  background: rgba(0,255,0,.06);
+  color: var(--vn-green);
 }
 
 .settings-editor-host .settings-grid label input[type="checkbox"] {
-  width: .82rem;
-  height: .82rem;
-  min-width: .82rem;
+  width: .84rem;
+  height: .84rem;
+  min-width: .84rem;
+  flex-shrink: 0;
   margin: 0;
   accent-color: var(--vn-green);
 }
 
-.settings-editor-host input[type="text"],
-.settings-editor-host input[type="number"],
-.settings-editor-host input[type="password"],
-.settings-editor-host select {
-  width: clamp(140px, 30vw, 240px);
+/* Inputs fill the remainder of the flex label row.
+   Selector specificity 0,3,2 beats base .settings-grid label > input at 0,2,2 */
+.settings-editor-host .settings-grid label > input[type="text"],
+.settings-editor-host .settings-grid label > input[type="number"],
+.settings-editor-host .settings-grid label > input[type="password"],
+.settings-editor-host .settings-grid label > select {
+  flex: 1;
   min-width: 0;
-  max-width: 240px;
-  flex: 0 1 240px;
-  padding: .05rem .34rem;
-  min-height: 1.22rem;
-  line-height: 1.08;
+  max-width: none;
+  width: auto;
+  height: 1.72rem;
+  padding: 0 .38rem;
+  line-height: 1.5;
   font-size: .78rem;
+  border: 1px solid var(--vn-border);
+  border-radius: 3px;
+  background: rgba(255,255,255,.04);
+  color: var(--vn-text);
+  box-sizing: border-box;
 }
 
-.settings-editor-host textarea {
-  width: min(100%, 420px);
-  min-height: 58px;
-  padding: .14rem .34rem;
-  line-height: 1.12;
+/* .full labels stack vertically so long text + input fill the full row */
+.settings-editor-host .settings-grid label.full {
+  flex-direction: column;
+  align-items: flex-start;
+  min-height: auto;
+  white-space: normal;
+}
+
+.settings-editor-host .settings-grid label.full > input,
+.settings-editor-host .settings-grid label.full > select,
+.settings-editor-host .settings-grid label.full > textarea {
+  width: 100%;
+  height: 1.72rem;
+  flex: none;
+}
+
+.settings-editor-host .settings-grid label > textarea {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+  min-height: 55px;
+  height: auto;
+  padding: .18rem .38rem;
+  line-height: 1.4;
   font-size: .78rem;
+  border: 1px solid var(--vn-border);
+  border-radius: 3px;
+  background: rgba(255,255,255,.04);
+  color: var(--vn-text);
 }
 
 .settings-editor-host input.is-disabled {
@@ -1557,18 +1608,17 @@ summary { list-style: none; }
     max-height: calc(100vh - 13.8rem);
   }
 
-  .settings-editor-host .settings-grid,
-  .settings-editor-host .settings-vm-row .settings-grid {
-    grid-template-columns: 1fr;
-  }
-
+  /* On mobile, stack label text above input */
   .settings-editor-host .settings-grid label {
     flex-direction: column;
     align-items: flex-start;
-    gap: .3rem;
+    min-height: auto;
+    gap: .2rem;
+    white-space: normal;
   }
 
   .settings-editor-host .settings-grid label.check {
+    flex-direction: row;
     justify-content: flex-start;
   }
 
@@ -1578,7 +1628,6 @@ summary { list-style: none; }
   .settings-editor-host select,
   .settings-editor-host textarea {
     width: 100%;
-    max-width: none;
-    flex: 1 1 auto;
+    flex: none;
   }
 }
