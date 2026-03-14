@@ -53,7 +53,8 @@ EFFECTIVE_GOROOT  := $(if $(_TOOLCHAIN_GOROOT),$(_TOOLCHAIN_GOROOT),$(GOROOT))
 
 .PHONY: all install clean ufw help \
         validate-go dirs geo config config-vops config-vprox config-modules \
-        build build-vops systemd service-vops samples-fleet
+        build build-vops systemd service-vops samples-fleet \
+        release release-vops deploy-jarvis
 
 all: help
 
@@ -67,6 +68,9 @@ help:
 	@echo "  make add-<module>     Reinstall one module  (e.g. make add-vOps)"
 	@echo "  make clean            Remove local build artifacts"
 	@echo "  make ufw              Passwordless UFW sudoers for vOps block/unblock"
+	@echo "  make release          Cross-compile vProx + vOps → dist/ (linux+darwin × amd64+arm64)"
+	@echo "  make release-vops     Cross-compile vOps only → dist/"
+	@echo "  make deploy-jarvis    Cross-compile + kill + SCP + restart vOps on jarvis"
 	@echo ""
 	@echo "  SSH control plane (fleet module) is installed automatically."
 	@echo "  Add VM hosts to: ~/.vProx/config/infra/{datacenter}.toml (e.g. qc.toml, rbx.toml)"
@@ -521,3 +525,59 @@ ufw:
 build-vlog: build-vops
 config-vlog: config-vops
 service-vlog: service-vops
+
+## ─── Cross-compile + Jarvis deploy ───────────────────────────────────────────
+
+# SSH config for jarvis (reads identity + ProxyJump from ~/.ssh/config)
+JARVIS_HOST    := jarvis
+JARVIS_BIN_DST := ~/vops
+JARVIS_HOME    := ~/.vprox
+JARVIS_PID     := $(JARVIS_HOME)/vops.pid
+JARVIS_LOG     := $(JARVIS_HOME)/vops-dev.log
+JARVIS_PORT    := 18889
+
+DIST_DIR := dist
+
+## Cross-compile vProx + vOps for all supported platforms into dist/
+## Output: dist/vprox-<os>-<arch>  and  dist/vops-<os>-<arch>
+release:
+	@echo "Cross-compiling vProx + vOps for all platforms..."
+	@mkdir -p "$(DIST_DIR)"
+	@for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do \
+		os=$$(echo $$target | cut -d/ -f1); \
+		arch=$$(echo $$target | cut -d/ -f2); \
+		echo "  → $$os/$$arch"; \
+		GOOS=$$os GOARCH=$$arch GOROOT="$(EFFECTIVE_GOROOT)" \
+			go build -o "$(DIST_DIR)/vprox-$$os-$$arch" "$(BUILD_SRC)" || exit 1; \
+		GOOS=$$os GOARCH=$$arch GOROOT="$(EFFECTIVE_GOROOT)" \
+			go build -o "$(DIST_DIR)/vops-$$os-$$arch" "$(VOPS_SRC)" || exit 1; \
+	done
+	@echo "✓ Cross-compile complete. Outputs in $(DIST_DIR)/:"
+	@ls -lh "$(DIST_DIR)/"
+
+## Cross-compile vOps only for all supported platforms into dist/
+release-vops:
+	@echo "Cross-compiling vOps for all platforms..."
+	@mkdir -p "$(DIST_DIR)"
+	@for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do \
+		os=$$(echo $$target | cut -d/ -f1); \
+		arch=$$(echo $$target | cut -d/ -f2); \
+		echo "  → vOps $$os/$$arch"; \
+		GOOS=$$os GOARCH=$$arch GOROOT="$(EFFECTIVE_GOROOT)" \
+			go build -o "$(DIST_DIR)/vops-$$os-$$arch" "$(VOPS_SRC)" || exit 1; \
+	done
+	@echo "✓ Cross-compile complete. Outputs in $(DIST_DIR)/:"
+	@ls -lh "$(DIST_DIR)/"
+
+## Build vOps linux/amd64, kill jarvis process, SCP, and restart
+## Usage: make deploy-jarvis
+##   Override host: make deploy-jarvis JARVIS_HOST=myhost
+deploy-jarvis: release-vops
+	@echo "Deploying vOps to $(JARVIS_HOST)..."
+	@echo "  Killing existing vOps process..."
+	@ssh "$(JARVIS_HOST)" "kill \$$(cat $(JARVIS_PID) 2>/dev/null) 2>/dev/null; sleep 1; rm -f $(JARVIS_BIN_DST); echo '  Process stopped'" || true
+	@echo "  Uploading linux/amd64 binary..."
+	@scp "$(DIST_DIR)/vops-linux-amd64" "$(JARVIS_HOST):$(JARVIS_BIN_DST)"
+	@echo "  Starting vOps on $(JARVIS_HOST)..."
+	@ssh "$(JARVIS_HOST)" "chmod +x $(JARVIS_BIN_DST) && nohup $(JARVIS_BIN_DST) start --home $(JARVIS_HOME) > $(JARVIS_LOG) 2>&1 & echo \$$! > $(JARVIS_PID) && sleep 2 && echo '  PID:'\$$(cat $(JARVIS_PID)) && curl -s -o /dev/null -w '  HTTP:%{http_code}' http://127.0.0.1:$(JARVIS_PORT)/ && echo ''"
+	@echo "✓ Deploy complete. Tunnel with: ssh -N -L $(JARVIS_PORT):127.0.0.1:$(JARVIS_PORT) $(JARVIS_HOST)"
