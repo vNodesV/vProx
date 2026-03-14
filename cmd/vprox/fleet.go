@@ -12,7 +12,7 @@ import (
 	"github.com/vNodesV/vProx/internal/fleet/config"
 	fleetssh "github.com/vNodesV/vProx/internal/fleet/ssh"
 	"github.com/vNodesV/vProx/internal/fleet/state"
-	vlogconfig "github.com/vNodesV/vProx/internal/vlog/config"
+	vopsconfig "github.com/vNodesV/vProx/internal/vops/config"
 )
 
 // runFleetCmd handles: vprox fleet <sub> [flags]
@@ -63,7 +63,7 @@ func runFleetCmd(home string, args []string) {
 //  1. config/vprox/nodes/*.toml  — per-node proxy + management
 //  2. config/infra/*.toml        — canonical host+VM registry
 //
-// VMs are enriched with chain identity from config/vlog/chains/*.toml.
+// VMs are enriched with chain identity from config/vops/chains/*.toml.
 func loadFleetVMsCfg(home string) (*config.Config, error) {
 	merged, err := config.LoadRuntimeConfig(
 		home,
@@ -155,12 +155,12 @@ func fleetUnregister(home string, args []string) {
 }
 
 // openFleetDB opens the fleet SQLite state DB using the configured path.
-// It reads db_path from vlog.toml ([vlog.push] db_path) and falls back
+// It reads db_path from vops.toml ([vops.push] db_path) and falls back
 // to $VPROX_HOME/data/push.db when the config is absent or the field is empty.
 func openFleetDB(home string) (*state.DB, error) {
-	cfgPath := filepath.Join(home, "config", "vlog.toml")
-	cfg, err := vlogconfig.Load(cfgPath)
-	dbPath := cfg.VLog.Push.DBPath
+	cfgPath := filepath.Join(home, "config", "vops.toml")
+	cfg, err := vopsconfig.Load(cfgPath)
+	dbPath := cfg.VOps.Push.DBPath
 	if err != nil || strings.TrimSpace(dbPath) == "" {
 		dbPath = filepath.Join(home, "data", "push.db")
 	}

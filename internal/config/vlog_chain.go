@@ -30,9 +30,9 @@ type ChainService struct {
 	LinkToVM   bool   `toml:"link_to_vm"`   // true = match InternalIP against VM registry
 }
 
-// ChainIdentity is the per-chain configuration for config/vlog/chains/<chain>.toml.
+// ChainIdentity is the per-chain configuration for config/vops/chains/<chain>.toml.
 //
-// This file is vLog-owned and stores chain identity + managed service rows.
+// This file is vOps-owned and stores chain identity + managed service rows.
 // Proxy routing and management settings live in config/vprox/nodes/<node>.toml.
 type ChainIdentity struct {
 	SchemaVersion int `toml:"schema_version"`
@@ -337,7 +337,7 @@ func (l legacyChainIdentity) toChainIdentity(base string) ChainIdentity {
 	return ci
 }
 
-// ParseChainIdentity decodes one vlog chain profile, supporting both the new
+// ParseChainIdentity decodes one vops chain profile, supporting both the new
 // array-based chain_services format and the legacy nested chain_services table.
 func ParseChainIdentity(data []byte, fileName string) (ChainIdentity, error) {
 	base := strings.TrimSuffix(fileName, ".toml")

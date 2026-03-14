@@ -1,5 +1,5 @@
 // Package modules manages the vProx module registry.
-// Modules are standalone vProx ecosystem binaries (e.g. vLog) that are
+// Modules are standalone vProx ecosystem binaries (e.g. vOps) that are
 // installed alongside vProx and tracked in config/modules.toml.
 package modules
 

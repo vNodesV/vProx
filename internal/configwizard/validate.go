@@ -8,7 +8,7 @@ import (
 
 	"github.com/pelletier/go-toml/v2"
 	chainconfig "github.com/vNodesV/vProx/internal/config"
-	vlogcfg "github.com/vNodesV/vProx/internal/vlog/config"
+	vopscfg "github.com/vNodesV/vProx/internal/vops/config"
 )
 
 // listConfigs prints all TOML files under $VPROX_HOME/config/ with status markers.
@@ -71,9 +71,9 @@ func validateConfigs(home string) error {
 		return toml.Unmarshal(b, &s)
 	})
 
-	// vlog/vlog.toml
-	checkFile("vlog/vlog.toml", filepath.Join(cfgDir, "vlog", "vlog.toml"), func(b []byte) error {
-		_, err := vlogcfg.Load(filepath.Join(cfgDir, "vlog", "vlog.toml"))
+	// vops/vops.toml
+	checkFile("vops/vops.toml", filepath.Join(cfgDir, "vops", "vops.toml"), func(b []byte) error {
+		_, err := vopscfg.Load(filepath.Join(cfgDir, "vops", "vops.toml"))
 		return err
 	})
 

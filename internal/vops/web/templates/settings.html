@@ -1,0 +1,2068 @@
+{{define "title"}}Settings{{end}}
+{{define "content"}}
+<nav class="page-nav">
+  <a href="{{.BasePath}}/">Dashboard</a>
+  <a href="{{.BasePath}}/accounts">Intel</a>
+  <a href="{{.BasePath}}/settings" class="active">Settings</a>
+</nav>
+
+<div class="settings-shell">
+  <aside class="settings-side">
+    <h3>Configuration</h3>
+    <p>Manage vProx and vLog settings in one place using dashboard-native blocks and compact popup editing.</p>
+    <a href="#sec-preferences">Preferences</a>
+    <a href="#sec-ports">vProx Ports</a>
+    <a href="#sec-settings">vProx Proxy Controls</a>
+    <a href="#sec-chain">Chain Profiles</a>
+    <a href="#sec-vlog">vLog Core</a>
+    <a href="#sec-fleet">Fleet Defaults</a>
+    <a href="#sec-infra">Infra Datacenters</a>
+    <a href="#sec-backup">Backups</a>
+    <div id="settings-status" class="settings-status">Loading current configuration…</div>
+    <button id="settings-apply-btn" type="button" class="settings-pill settings-pill-save" disabled>APPLY CHANGES</button>
+    <p class="settings-apply-note">Turns green when saved changes need runtime apply/restart.</p>
+  </aside>
+
+  <section class="settings-content">
+
+    <!-- ── Preferences ─────────────────────────────────────────────── -->
+    <article id="sec-preferences" class="v-block settings-block">
+      <details open>
+        <summary>
+          <span class="v-block-title">Preferences</span>
+        </summary>
+        <div class="v-block-body">
+
+          <!-- Theme selection -->
+          <h4 style="margin-bottom:0.6rem;">Theme</h4>
+          <div class="theme-swatches">
+
+            <!-- vNodes[V] — Matrix green (default) -->
+            <button type="button"
+                    class="theme-swatch{{ if or (eq .Theme "vnodes") (eq .Theme "") }} theme-swatch-active{{ end }}"
+                    data-theme="vnodes"
+                    onclick="setTheme('vnodes')"
+                    title="vNodes[V] — Matrix Green">
+              <div class="theme-swatch-preview theme-preview-vnodes">
+                <div class="tsp-header"></div>
+                <div class="tsp-rows">
+                  <div class="tsp-row"></div>
+                  <div class="tsp-row short"></div>
+                </div>
+              </div>
+              <span class="theme-swatch-label">vNodes[V]</span>
+            </button>
+
+            <!-- Dark Blue -->
+            <button type="button"
+                    class="theme-swatch{{ if eq .Theme "dark-blue" }} theme-swatch-active{{ end }}"
+                    data-theme="dark-blue"
+                    onclick="setTheme('dark-blue')"
+                    title="Dark Blue">
+              <div class="theme-swatch-preview theme-preview-dark-blue">
+                <div class="tsp-header"></div>
+                <div class="tsp-rows">
+                  <div class="tsp-row"></div>
+                  <div class="tsp-row short"></div>
+                </div>
+              </div>
+              <span class="theme-swatch-label">Dark Blue</span>
+            </button>
+
+            <!-- Light Blue (Classic) -->
+            <button type="button"
+                    class="theme-swatch{{ if eq .Theme "light-blue" }} theme-swatch-active{{ end }}"
+                    data-theme="light-blue"
+                    onclick="setTheme('light-blue')"
+                    title="Light Blue (Classic)">
+              <div class="theme-swatch-preview theme-preview-light-blue">
+                <div class="tsp-header"></div>
+                <div class="tsp-rows">
+                  <div class="tsp-row"></div>
+                  <div class="tsp-row short"></div>
+                </div>
+              </div>
+              <span class="theme-swatch-label">Light Blue</span>
+            </button>
+
+          </div><!-- /.theme-swatches -->
+
+          <!-- Dashboard Settings -->
+          <h4 style="margin-top:1.4rem;margin-bottom:0.6rem;">Dashboard Settings</h4>
+          <div class="pref-grid">
+            <div class="pref-row">
+              <label class="pref-label" for="pref-refresh">Auto-refresh interval</label>
+              <select id="pref-refresh" class="pref-select" onchange="savePref('refresh',this.value)">
+                <option value="0">Off</option>
+                <option value="30">30 s</option>
+                <option value="60" selected>1 min</option>
+                <option value="300">5 min</option>
+              </select>
+            </div>
+            <div class="pref-row">
+              <label class="pref-label">Show columns</label>
+              <div class="pref-checks">
+                <label><input type="checkbox" id="pref-show-validator" checked onchange="savePref('show_validator',this.checked)"> Validator status</label>
+                <label><input type="checkbox" id="pref-show-governance" checked onchange="savePref('show_governance',this.checked)"> Governance</label>
+                <label><input type="checkbox" id="pref-show-ping" checked onchange="savePref('show_ping',this.checked)"> Ping</label>
+              </div>
+            </div>
+          </div><!-- /.pref-grid -->
+
+        </div><!-- /.v-block-body -->
+      </details>
+    </article><!-- /#sec-preferences -->
+
+    <article id="sec-ports" class="v-block settings-block">
+      <details open>
+        <summary>
+          <span class="v-block-title">vProx Ports</span>
+        </summary>
+        <div class="v-block-body">
+          <div class="settings-import-row">
+            <label class="settings-import-toggle">
+              <input class="settings-import-check" data-step="ports" type="checkbox">
+              I want to convert an existing toml files
+            </label>
+          </div>
+          <table class="settings-list-table">
+            <tbody id="settings-list-ports"></tbody>
+          </table>
+        </div>
+      </details>
+    </article>
+
+    <article id="sec-settings" class="v-block settings-block">
+      <details open>
+        <summary>
+          <span class="v-block-title">vProx Proxy Controls</span>
+        </summary>
+        <div class="v-block-body">
+          <div class="settings-import-row">
+            <label class="settings-import-toggle">
+              <input class="settings-import-check" data-step="settings" type="checkbox">
+              I want to convert an existing toml files
+            </label>
+          </div>
+          <table class="settings-list-table">
+            <tbody id="settings-list-settings"></tbody>
+          </table>
+        </div>
+      </details>
+    </article>
+
+    <article id="sec-chain" class="v-block settings-block">
+      <details open>
+        <summary>
+          <span class="v-block-title">Chain Profiles</span>
+          <div class="v-block-actions">
+            <button type="button" class="outline" data-add-step="chain">+ Add</button>
+          </div>
+        </summary>
+        <div class="v-block-body">
+          <div class="settings-import-row">
+            <label class="settings-import-toggle">
+              <input class="settings-import-check" data-step="chain" type="checkbox">
+              I want to convert an existing toml files
+            </label>
+          </div>
+          <table class="settings-list-table settings-list-wide">
+            <thead>
+              <tr>
+                <th>Chain</th>
+                <th>Chain ID</th>
+                <th>Services / Topology</th>
+                <th>Explorers</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="settings-list-chain"></tbody>
+          </table>
+        </div>
+      </details>
+    </article>
+
+    <article id="sec-vlog" class="v-block settings-block">
+      <details open>
+        <summary>
+          <span class="v-block-title">vLog Core</span>
+        </summary>
+        <div class="v-block-body">
+          <div class="settings-import-row">
+            <label class="settings-import-toggle">
+              <input class="settings-import-check" data-step="vlog" type="checkbox">
+              I want to convert an existing toml files
+            </label>
+          </div>
+          <table class="settings-list-table">
+            <tbody id="settings-list-vlog"></tbody>
+          </table>
+        </div>
+      </details>
+    </article>
+
+    <article id="sec-fleet" class="v-block settings-block">
+      <details open>
+        <summary>
+          <span class="v-block-title">Fleet Defaults</span>
+        </summary>
+        <div class="v-block-body">
+          <div class="settings-import-row">
+            <label class="settings-import-toggle">
+              <input class="settings-import-check" data-step="fleet" type="checkbox">
+              I want to convert an existing toml files
+            </label>
+          </div>
+          <table class="settings-list-table">
+            <tbody id="settings-list-fleet"></tbody>
+          </table>
+        </div>
+      </details>
+    </article>
+
+    <article id="sec-infra" class="v-block settings-block">
+      <details open>
+        <summary>
+          <span class="v-block-title">Infrastructure</span>
+          <div class="v-block-actions">
+            <button type="button" class="outline" data-add-step="infra">+ Add</button>
+          </div>
+        </summary>
+        <div class="v-block-body">
+          <div class="settings-import-row">
+            <label class="settings-import-toggle">
+              <input class="settings-import-check" data-step="infra" type="checkbox">
+              I want to convert an existing toml files
+            </label>
+          </div>
+          <table class="settings-list-table settings-list-wide">
+            <thead>
+              <tr>
+                <th>Datacenter</th>
+                <th>Host</th>
+                <th>vProx LAN</th>
+                <th>VMs</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="settings-list-infra"></tbody>
+          </table>
+        </div>
+      </details>
+    </article>
+
+    <article id="sec-backup" class="v-block settings-block">
+      <details open>
+        <summary>
+          <span class="v-block-title">Backups</span>
+        </summary>
+        <div class="v-block-body">
+          <div class="settings-import-row">
+            <label class="settings-import-toggle">
+              <input class="settings-import-check" data-step="backup" type="checkbox">
+              I want to convert an existing toml files
+            </label>
+          </div>
+          <table class="settings-list-table">
+            <tbody id="settings-list-backup"></tbody>
+          </table>
+        </div>
+      </details>
+    </article>
+  </section>
+</div>
+
+<div id="settings-form-store" class="settings-form-store" aria-hidden="true">
+  <form id="settings-form-ports" data-step="ports">
+    <div class="settings-grid">
+      <label>rpc <span class="required-dot">*</span><input name="rpc" type="number" min="1" max="65535" value="26657" required></label>
+      <label>rest <span class="required-dot">*</span><input name="rest" type="number" min="1" max="65535" value="1317" required></label>
+      <label>grpc<input name="grpc" type="number" min="0" max="65535" value="0"></label>
+      <label>grpc_web<input name="grpc_web" type="number" min="0" max="65535" value="0"></label>
+      <label>api<input name="api" type="number" min="0" max="65535" value="0"></label>
+      <label>vlog_url<input name="vlog_url" type="text" placeholder="http://127.0.0.1:8889"></label>
+      <label class="full">trusted_proxies (comma-separated CIDRs)<input name="trusted_proxies" type="text"></label>
+    </div>
+    <div class="settings-actions"><button type="submit">Save ports.toml</button></div>
+  </form>
+
+  <form id="settings-form-proxy" data-step="settings">
+    <div class="settings-grid">
+      <label>rps<input name="rps" type="number" step="0.1" min="0.1" value="25"></label>
+      <label>burst<input name="burst" type="number" min="1" value="100"></label>
+      <label class="check full">auto_quarantine.enabled <input name="aq_enabled" type="checkbox" checked></label>
+      <label>aq_threshold<input name="aq_threshold" type="number" min="1" value="120"></label>
+      <label>aq_window_sec<input name="aq_window_sec" type="number" min="1" value="10"></label>
+      <label>aq_penalty_rps<input name="aq_penalty_rps" type="number" step="0.1" min="0.1" value="1"></label>
+      <label>aq_penalty_burst<input name="aq_penalty_burst" type="number" min="1" value="1"></label>
+      <label>aq_ttl_sec<input name="aq_ttl_sec" type="number" min="1" value="900"></label>
+      <label class="check full">debug.enabled <input name="debug_enabled" type="checkbox"></label>
+      <label>debug_port<input name="debug_port" type="number" min="1" max="65535" value="6060"></label>
+    </div>
+    <div class="settings-actions"><button type="submit">Save proxy settings</button></div>
+  </form>
+
+  <form id="settings-form-chain" data-step="chain">
+    <div class="settings-grid">
+      <label>chain_name <span class="required-dot">*</span><input name="chain_name" type="text" required></label>
+      <label>chain_id <span class="required-dot">*</span><input name="chain_id" type="text" required></label>
+      <label>host<input name="host" type="text" placeholder="cheqd-testnet.srvs.vnodesv.net"></label>
+      <label>ip<input name="ip" type="text" placeholder="10.0.0.66"></label>
+      <label>dashboard_name<input name="dashboard_name" type="text"></label>
+      <label>explorer_base<input name="explorer_base" type="text"></label>
+      <label class="full">explorers (comma-separated)<input name="explorers" type="text" placeholder="https://mintscan.io/cheqd-mainnet"></label>
+      <label class="check">default_ports <input name="default_ports" type="checkbox" checked></label>
+      <label class="check">msg_rpc <input name="msg_rpc" type="checkbox"></label>
+      <label class="check">msg_api <input name="msg_api" type="checkbox"></label>
+      <label class="full">rpc_aliases (comma-separated)<input name="rpc_aliases" type="text"></label>
+      <label class="full">rest_aliases (comma-separated)<input name="rest_aliases" type="text"></label>
+      <label class="full">api_aliases (comma-separated)<input name="api_aliases" type="text"></label>
+      <label class="full">message.rpc_msg<input name="message_rpc_msg" type="text"></label>
+      <label class="full">message.api_msg<input name="message_api_msg" type="text"></label>
+      <label class="check">expose.path <input name="expose_path" type="checkbox" checked></label>
+      <label class="check">expose.vhost <input name="expose_vhost" type="checkbox" checked></label>
+      <label>chain_ping_country<input name="chain_ping_country" type="text" value="CA"></label>
+      <label>chain_ping_provider<input name="chain_ping_provider" type="text"></label>
+      <label>proxy.vhost_prefix.rpc<input name="proxy_vhost_prefix_rpc" type="text" placeholder="rpc"></label>
+      <label>proxy.vhost_prefix.rest<input name="proxy_vhost_prefix_rest" type="text" placeholder="api"></label>
+      <label class="full">proxy.sp.prefixes (comma-separated)<input name="proxy_sp_prefixes" type="text" placeholder="api,rest,rpc"></label>
+      <label class="full">proxy.sp.suffixes (comma-separated)<input name="proxy_sp_suffixes" type="text" placeholder="api,rest,rpc"></label>
+      <label class="check">services.rpc <input name="services_rpc" type="checkbox" checked></label>
+      <label class="check">services.rest <input name="services_rest" type="checkbox" checked></label>
+      <label class="check">services.websocket <input name="services_websocket" type="checkbox" checked></label>
+      <label class="check">services.grpc <input name="services_grpc" type="checkbox" checked></label>
+      <label class="check">services.grpc_web <input name="services_grpc_web" type="checkbox" checked></label>
+      <label class="check">services.api_alias <input name="services_api_alias" type="checkbox" checked></label>
+      <label>ports.rpc override<input name="ports_rpc" type="number" min="0" max="65535" placeholder="26657"></label>
+      <label>ports.rest override<input name="ports_rest" type="number" min="0" max="65535" placeholder="1317"></label>
+      <label>ports.grpc override<input name="ports_grpc" type="number" min="0" max="65535" placeholder="9090"></label>
+      <label>ports.grpc_web override<input name="ports_grpc_web" type="number" min="0" max="65535" placeholder="9091"></label>
+      <label>ports.api override<input name="ports_api" type="number" min="0" max="65535" placeholder="1317"></label>
+      <label>ws.idle_timeout_sec<input name="ws_idle_timeout_sec" type="number" min="0" value="3600"></label>
+      <label>ws.max_lifetime_sec<input name="ws_max_lifetime_sec" type="number" min="0" value="0"></label>
+      <label class="check">features.rpc_address_masking <input name="feature_rpc_address_masking" type="checkbox" checked></label>
+      <label>features.mask_rpc<input name="feature_mask_rpc" type="text" placeholder="cheqd-testnet.srvs.vnodesv.net"></label>
+      <label class="check">features.swagger_masking <input name="feature_swagger_masking" type="checkbox"></label>
+      <label>features.absolute_links
+        <select name="feature_absolute_links">
+          <option value="auto">auto</option>
+          <option value="always">always</option>
+          <option value="never">never</option>
+        </select>
+      </label>
+      <label>logging.file<input name="logging_file" type="text"></label>
+      <label>logging.format
+        <select name="logging_format">
+          <option value="summary">summary</option>
+          <option value="json">json</option>
+          <option value="raw">raw</option>
+        </select>
+      </label>
+    </div>
+    <section class="settings-vms">
+      <div class="settings-vms-head">
+        <strong>[[chain_services]]</strong>
+        <button id="settings-chain-add-service" type="button" class="outline">+ Add Service</button>
+      </div>
+      <div id="settings-chain-service-list" class="settings-vm-list"></div>
+      <input id="settings-chain-services-json" name="chain_services_json" type="hidden" value="[]">
+    </section>
+    <div class="settings-actions"><button type="submit">Save chain profile</button></div>
+  </form>
+
+  <template id="settings-chain-service-template">
+    <article class="settings-vm-row settings-chain-service-row">
+      <div class="settings-grid">
+        <label>service.name <span class="required-dot">*</span><input class="svc-field" data-field="name" type="text"></label>
+        <label>service_type <span class="required-dot">*</span>
+          <select class="svc-field" data-field="service_type">
+            <option value="">Select type</option>
+            <option value="node">node</option>
+            <option value="validator">validator</option>
+            <option value="relayer">relayer</option>
+            <option value="sp">sp</option>
+          </select>
+        </label>
+        <label>moniker<input class="svc-field" data-field="moniker" type="text"></label>
+        <label>valoper<input class="svc-field" data-field="valoper" type="text"></label>
+        <label>internal_ip (required when link_to_vm=true)<input class="svc-field" data-field="internal_ip" type="text"></label>
+        <label>host<input class="svc-field" data-field="host" type="text"></label>
+        <label class="check full">link_to_vm <input class="svc-field" data-field="link_to_vm" type="checkbox" checked></label>
+      </div>
+      <div class="settings-actions">
+        <button type="button" class="danger settings-service-remove">− Remove Service</button>
+      </div>
+    </article>
+  </template>
+
+  <form id="settings-form-vlog" data-step="vlog">
+    <div class="settings-grid">
+      <label>port<input name="port" type="number" min="1" max="65535" value="8889"></label>
+      <label>bind_address<input name="bind_address" type="text" value="127.0.0.1"></label>
+      <label>base_path<input name="base_path" type="text"></label>
+      <label>api_key<input name="api_key" type="password" autocomplete="off"></label>
+      <label>username <span class="required-dot">*</span><input name="username" type="text" value="admin" required></label>
+      <label>password_hash<input name="password_hash" type="password" autocomplete="off"></label>
+      <label class="check full">intel.auto_enrich <input name="auto_enrich" type="checkbox" checked></label>
+      <label>cache_ttl_hours<input name="cache_ttl_hours" type="number" min="1" value="24"></label>
+      <label>rate_limit_rpm<input name="rate_limit_rpm" type="number" min="1" value="10"></label>
+      <label>abuseipdb<input name="abuseipdb" type="password" autocomplete="off"></label>
+      <label>virustotal<input name="virustotal" type="password" autocomplete="off"></label>
+      <label>shodan<input name="shodan" type="password" autocomplete="off"></label>
+      <label>push_user<input name="push_user" type="text"></label>
+      <label>push_key_path<input name="push_key_path" type="text"></label>
+      <label>poll_interval_sec<input name="poll_interval_sec" type="number" min="1" value="60"></label>
+      <label>db_path<input name="db_path" type="text"></label>
+      <label>archives_dir<input name="archives_dir" type="text"></label>
+      <label>vprox_bin<input name="vprox_bin" type="text" value="vprox"></label>
+    </div>
+    <div class="settings-actions"><button type="submit">Save vlog.toml</button></div>
+  </form>
+
+  <form id="settings-form-fleet" data-step="fleet">
+    <div class="settings-grid">
+      <label>ssh_user <span class="required-dot">*</span><input name="ssh_user" type="text" required></label>
+      <label>ssh_key_path <span class="required-dot">*</span><input name="ssh_key_path" type="text" required></label>
+      <label>ssh_port<input name="ssh_port" type="number" min="1" max="65535" value="22"></label>
+      <label>poll_interval_sec<input name="poll_interval_sec" type="number" min="1" value="60"></label>
+      <label>datacenter (default)<input name="datacenter" type="text"></label>
+    </div>
+    <div class="settings-actions"><button type="submit">Save fleet settings</button></div>
+  </form>
+
+  <form id="settings-form-infra" data-step="infra">
+    <div class="settings-grid">
+      <label>datacenter <span class="required-dot">*</span><input name="datacenter" type="text" required></label>
+    </div>
+
+    <fieldset class="settings-fieldset">
+      <legend>[host] Physical Server (optional)</legend>
+      <div class="settings-grid">
+        <label>host_name<input name="host_name" type="text"></label>
+        <label>host_lan_ip<input name="host_lan_ip" type="text"></label>
+        <label>host_public_ip<input name="host_public_ip" type="text"></label>
+        <label>host_datacenter<input name="host_datacenter" type="text"></label>
+        <label>host_user<input name="host_user" type="text"></label>
+        <label>host_ssh_key_path<input name="host_ssh_key_path" type="text"></label>
+      </div>
+    </fieldset>
+
+    <fieldset class="settings-fieldset">
+      <legend>[vprox] vProx Instance</legend>
+      <div class="settings-grid">
+        <label>vprox_name<input name="vprox_name" type="text" value="vProx"></label>
+        <label>vprox_lan_ip<input name="vprox_lan_ip" type="text"></label>
+        <label>vprox_key<input name="vprox_key" type="password" autocomplete="off"></label>
+        <label>vprox_ssh_key_path<input name="vprox_ssh_key_path" type="text"></label>
+      </div>
+    </fieldset>
+
+    <section class="settings-vms">
+      <div class="settings-vms-head">
+        <strong>[[vm]] entries</strong>
+        <button id="settings-infra-add-vm" type="button" class="outline">+ Add VM</button>
+      </div>
+      <div id="settings-infra-vm-list" class="settings-vm-list"></div>
+      <input id="settings-infra-vms-json" name="vms_json" type="hidden" value="[]">
+    </section>
+
+    <div class="settings-actions"><button type="submit">Save infra file</button></div>
+  </form>
+
+  <form id="settings-form-backup" data-step="backup">
+    <div class="settings-grid">
+      <label class="check full">automation <input name="automation" type="checkbox"></label>
+      <label>interval_days<input name="interval_days" type="number" min="0" value="7"></label>
+      <label>max_size_mb<input name="max_size_mb" type="number" min="0" value="100"></label>
+      <label>check_interval_min<input name="check_interval_min" type="number" min="1" value="10"></label>
+      <label class="full">destination<input name="destination" type="text"></label>
+      <label class="full">files_logs<input name="files_logs" type="text"></label>
+      <label class="full">files_data<input name="files_data" type="text"></label>
+      <label class="full">files_config<input name="files_config" type="text"></label>
+    </div>
+    <div class="settings-actions"><button type="submit">Save backup settings</button></div>
+  </form>
+</div>
+
+<template id="settings-infra-vm-template">
+  <article class="settings-vm-row">
+    <div class="settings-grid">
+      <label>vm.name <span class="required-dot">*</span><input class="vm-field" data-field="name" type="text"></label>
+      <label>vm.host <span class="required-dot">*</span><input class="vm-field" data-field="host" type="text"></label>
+      <label>vm.port<input class="vm-field" data-field="port" type="number" min="1" max="65535" value="22"></label>
+      <label>vm.lan_ip<input class="vm-field" data-field="lan_ip" type="text"></label>
+      <label>vm.public_ip<input class="vm-field" data-field="public_ip" type="text"></label>
+      <label>vm.user<input class="vm-field" data-field="user" type="text"></label>
+      <label>vm.key_path<input class="vm-field" data-field="key_path" type="text"></label>
+      <label>vm.datacenter<input class="vm-field" data-field="datacenter" type="text"></label>
+      <label>vm.type<input class="vm-field" data-field="type" type="text"></label>
+      <label>vm.chain_name<input class="vm-field" data-field="chain_name" type="text"></label>
+      <label>vm.ping.country<input class="vm-field" data-field="ping_country" type="text" value="CA"></label>
+      <label>vm.ping.provider<input class="vm-field" data-field="ping_provider" type="text"></label>
+    </div>
+    <div class="settings-actions">
+      <button type="button" class="danger settings-vm-remove">− Remove VM</button>
+    </div>
+  </article>
+</template>
+
+<div class="enrich-overlay" id="settings-import-overlay" style="display:none;">
+  <div class="enrich-popup settings-import-popup">
+    <h4>TOML Import</h4>
+    <p class="settings-import-copy">Please enter the path and filename to import (i.e <code>/home/user/.vProx/config/infra/myinfra.toml</code>) and click validate. The file is validated for vProx TOML structure, safety checks, and field mapping. If valid, the bottom button will change from <strong>DISMISS</strong> to <strong>IMPORT</strong>.</p>
+    <label class="settings-import-field">
+      TOML path
+      <input id="settings-import-path" type="text" placeholder="/home/user/.vProx/config/.../file.toml">
+    </label>
+    <div id="settings-import-log" class="enrich-log"></div>
+    <div class="settings-import-actions">
+      <button id="settings-import-validate" type="button">Validate file</button>
+    </div>
+    <button class="enrich-dismiss visible" id="settings-import-dismiss" type="button">DISMISS</button>
+  </div>
+</div>
+
+<div id="settings-editor-overlay" class="enrich-overlay settings-editor-overlay" style="display:none;">
+  <section id="settings-editor-inline" class="enrich-popup settings-editor-popup" hidden role="dialog" aria-modal="true" aria-labelledby="settings-editor-title">
+    <h4 id="settings-editor-title">Edit Settings</h4>
+    <p class="settings-editor-copy">Fill mandatory fields, click <strong>Validate</strong>, then click <strong>Save</strong>.</p>
+    <div id="settings-editor-host" class="settings-editor-host"></div>
+    <div id="settings-editor-log" class="enrich-log"></div>
+    <div class="settings-editor-pillbar">
+      <button id="settings-editor-dismiss" type="button" class="settings-pill settings-pill-dismiss">Dismiss</button>
+      <button id="settings-editor-validate" type="button" class="settings-pill settings-pill-validate" disabled>Validate</button>
+      <button id="settings-editor-save" type="button" class="settings-pill settings-pill-save" disabled>Save</button>
+    </div>
+  </section>
+</div>
+
+<script>
+(() => {
+  const BASE = "{{.BasePath}}";
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+  const apiPath = (path) => `${BASE}${path}`;
+
+  const forms = {
+    ports: $("#settings-form-ports"),
+    settings: $("#settings-form-proxy"),
+    chain: $("#settings-form-chain"),
+    vlog: $("#settings-form-vlog"),
+    fleet: $("#settings-form-fleet"),
+    infra: $("#settings-form-infra"),
+    backup: $("#settings-form-backup")
+  };
+
+  const stepLabels = {
+    ports: "vProx Ports",
+    settings: "vProx Proxy Controls",
+    chain: "Chain Profiles",
+    vlog: "vLog Core",
+    fleet: "Fleet Defaults",
+    infra: "Infrastructure",
+    backup: "Backups"
+  };
+
+  const requiredByStep = {
+    ports: ["rpc", "rest"],
+    chain: ["chain_name", "chain_id"],
+    vlog: ["username"],
+    fleet: ["ssh_user", "ssh_key_path"],
+    infra: ["datacenter"],
+    backup: []
+  };
+
+  const stepSummaryFields = {
+    ports: [
+      ["rpc", "rpc"],
+      ["rest", "rest"],
+      ["grpc", "grpc"],
+      ["grpc_web", "grpc_web"],
+      ["api", "api"],
+      ["vlog_url", "vlog_url"],
+      ["trusted_proxies", "trusted_proxies"]
+    ],
+    settings: [
+      ["rps", "rps"],
+      ["burst", "burst"],
+      ["aq_enabled", "aq_enabled"],
+      ["aq_threshold", "aq_threshold"],
+      ["aq_window_sec", "aq_window_sec"],
+      ["aq_penalty_rps", "aq_penalty_rps"],
+      ["aq_penalty_burst", "aq_penalty_burst"],
+      ["aq_ttl_sec", "aq_ttl_sec"],
+      ["debug_enabled", "debug_enabled"],
+      ["debug_port", "debug_port"]
+    ],
+    vlog: [
+      ["port", "port"],
+      ["bind_address", "bind_address"],
+      ["base_path", "base_path"],
+      ["api_key", "api_key"],
+      ["username", "username"],
+      ["auto_enrich", "auto_enrich"],
+      ["cache_ttl_hours", "cache_ttl_hours"],
+      ["rate_limit_rpm", "rate_limit_rpm"],
+      ["abuseipdb", "abuseipdb"],
+      ["virustotal", "virustotal"],
+      ["shodan", "shodan"],
+      ["push_user", "push_user"],
+      ["push_key_path", "push_key_path"],
+      ["poll_interval_sec", "poll_interval_sec"],
+      ["db_path", "db_path"],
+      ["archives_dir", "archives_dir"],
+      ["vprox_bin", "vprox_bin"]
+    ],
+    fleet: [
+      ["ssh_user", "ssh_user"],
+      ["ssh_key_path", "ssh_key_path"],
+      ["ssh_port", "ssh_port"],
+      ["poll_interval_sec", "poll_interval_sec"],
+      ["datacenter", "datacenter"]
+    ],
+    backup: [
+      ["automation", "automation"],
+      ["interval_days", "interval_days"],
+      ["max_size_mb", "max_size_mb"],
+      ["check_interval_min", "check_interval_min"],
+      ["destination", "destination"],
+      ["files_logs", "files_logs"],
+      ["files_data", "files_data"],
+      ["files_config", "files_config"]
+    ]
+  };
+
+  const state = {
+    chains: [],
+    infras: [],
+    chainTreeExpanded: {},
+    importedSourceByStep: {},
+    pendingSteps: new Set(),
+    editor: {
+      step: "",
+      form: null,
+      validated: false,
+      watcher: null
+    }
+  };
+
+  const importState = {
+    step: "",
+    checkbox: null,
+    fields: null,
+    sourcePath: ""
+  };
+
+  const sensitiveSummaryKeys = new Set([
+    "api_key",
+    "password_hash",
+    "abuseipdb",
+    "virustotal",
+    "shodan",
+    "push_key_path",
+    "ssh_key_path",
+    "host_ssh_key_path",
+    "vprox_key",
+    "vprox_ssh_key_path"
+  ]);
+
+  function setStatus(message, kind = "") {
+    const box = $("#settings-status");
+    box.textContent = message;
+    box.className = `settings-status${kind ? " " + kind : ""}`;
+  }
+
+  function refreshApplyButton() {
+    const btn = $("#settings-apply-btn");
+    if (!btn) return;
+    const count = state.pendingSteps.size;
+    btn.disabled = count === 0;
+    btn.classList.toggle("is-ready", count > 0);
+    btn.textContent = count > 0 ? `APPLY CHANGES (${count})` : "APPLY CHANGES";
+  }
+
+  function markPending(step) {
+    const normalized = String(step || "").trim().toLowerCase();
+    if (!normalized) return;
+    state.pendingSteps.add(normalized);
+    refreshApplyButton();
+  }
+
+  async function applyPendingChanges() {
+    if (state.pendingSteps.size === 0) {
+      setStatus("No pending changes to apply.", "warn");
+      return;
+    }
+
+    const btn = $("#settings-apply-btn");
+    if (btn) btn.disabled = true;
+    const steps = Array.from(state.pendingSteps);
+    setStatus("Applying saved changes…");
+
+    try {
+      const resp = await fetch(apiPath("/settings/api/config/apply"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ steps })
+      });
+      const body = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(body.error || `HTTP ${resp.status}`);
+
+      const restartTargets = Array.isArray(body.requires_restart) ? body.requires_restart : [];
+      const baseMsg = String(body.message || "Apply completed.").trim();
+      if (restartTargets.length > 0) {
+        setStatus(`${baseMsg} Restart required: ${restartTargets.join(", ")}.`, "warn");
+      } else {
+        setStatus(baseMsg, "ok");
+      }
+
+      state.pendingSteps.clear();
+      refreshApplyButton();
+    } catch (err) {
+      setStatus(`Apply failed: ${err.message}`, "err");
+      refreshApplyButton();
+    }
+  }
+
+  function setFormBusy(form, busy) {
+    if (!form) return;
+    $$("button", form).forEach((btn) => {
+      btn.disabled = busy;
+    });
+  }
+
+  function formToObject(form) {
+    const out = {};
+    $$("input, textarea, select", form).forEach((el) => {
+      if (!el.name) return;
+      out[el.name] = el.type === "checkbox" ? !!el.checked : (el.value || "").trim();
+    });
+    return out;
+  }
+
+  function parseTomlMap(text) {
+    const map = { root: {} };
+    let section = "root";
+    (text || "").split(/\r?\n/).forEach((raw) => {
+      const line = raw.split("#")[0].trim();
+      if (!line) return;
+      const sec = line.match(/^\[([^\]]+)\]$/);
+      if (sec) {
+        section = sec[1].trim();
+        if (!map[section]) map[section] = {};
+        return;
+      }
+      const kv = line.match(/^([A-Za-z0-9_]+)\s*=\s*(.+)$/);
+      if (!kv) return;
+      if (!map[section]) map[section] = {};
+      map[section][kv[1].trim()] = kv[2].trim();
+    });
+    return map;
+  }
+
+  function unquote(v) {
+    if (typeof v !== "string") return "";
+    const t = v.trim();
+    if ((t.startsWith('"') && t.endsWith('"')) || (t.startsWith("'") && t.endsWith("'"))) return t.slice(1, -1);
+    return t;
+  }
+
+  function asNum(v, def = 0) {
+    const n = Number(unquote(v));
+    return Number.isFinite(n) ? n : def;
+  }
+
+  function asBool(v, def = false) {
+    const t = unquote(v).toLowerCase();
+    if (t === "true") return true;
+    if (t === "false") return false;
+    return def;
+  }
+
+  function toBool(v, def = false) {
+    if (typeof v === "boolean") return v;
+    if (typeof v === "number") return v !== 0;
+    if (typeof v === "string") {
+      const t = v.trim().toLowerCase();
+      if (["true", "1", "yes", "on"].includes(t)) return true;
+      if (["false", "0", "no", "off", ""].includes(t)) return false;
+    }
+    return def;
+  }
+
+  function asList(v) {
+    const t = String(v || "").trim();
+    if (!t.startsWith("[") || !t.endsWith("]")) return "";
+    return t.slice(1, -1).split(",").map((x) => unquote(x).trim()).filter(Boolean).join(",");
+  }
+
+  function setVal(form, name, value) {
+    const el = $(`[name="${name}"]`, form);
+    if (!el || value === undefined || value === null || value === "") return;
+    el.value = String(value);
+  }
+
+  function setCheck(form, name, value) {
+    const el = $(`[name="${name}"]`, form);
+    if (!el || el.type !== "checkbox") return;
+    el.checked = toBool(value, false);
+  }
+
+  function serviceKey(svc) {
+    return [svc.name, svc.service_type, svc.internal_ip].map((v) => String(v || "").trim().toLowerCase()).join("|");
+  }
+
+  function dedupeServices(services) {
+    const out = [];
+    const seen = new Set();
+    (services || []).forEach((svc) => {
+      const key = serviceKey(svc || {});
+      if (!key || seen.has(key)) return;
+      seen.add(key);
+      out.push(svc);
+    });
+    return out;
+  }
+
+  function addChainServiceRow(seed = {}) {
+    const tpl = $("#settings-chain-service-template");
+    const list = $("#settings-chain-service-list", forms.chain);
+    if (!tpl || !list) return;
+
+    const row = tpl.content.firstElementChild.cloneNode(true);
+    $$(".svc-field", row).forEach((el) => {
+      const key = el.dataset.field;
+      const value = seed[key];
+      if (el.type === "checkbox") {
+        el.checked = value === undefined ? true : toBool(value, true);
+      } else if (value !== undefined && value !== null && value !== "") {
+        el.value = String(value);
+      }
+      el.addEventListener("input", syncChainServicesJSON);
+      el.addEventListener("change", syncChainServicesJSON);
+    });
+
+    $(".settings-service-remove", row).addEventListener("click", () => {
+      row.remove();
+      syncChainServicesJSON();
+    });
+
+    list.appendChild(row);
+    syncChainServicesJSON();
+  }
+
+  function collectChainServices() {
+    const rows = $$("#settings-chain-service-list .settings-chain-service-row", forms.chain).map((row) => {
+      const svc = {};
+      $$(".svc-field", row).forEach((el) => {
+        const key = el.dataset.field;
+        if (el.type === "checkbox") {
+          svc[key] = !!el.checked;
+          return;
+        }
+        svc[key] = (el.value || "").trim();
+      });
+      const hasAny = ["name", "service_type", "moniker", "valoper", "internal_ip", "host"].some((k) => String(svc[k] || "").trim() !== "");
+      if (!hasAny) return null;
+      if (svc.service_type) svc.service_type = String(svc.service_type).toLowerCase();
+      if (svc.link_to_vm === undefined) svc.link_to_vm = true;
+      return svc;
+    }).filter(Boolean);
+    return dedupeServices(rows);
+  }
+
+  function syncChainServicesJSON() {
+    const hidden = $("#settings-chain-services-json", forms.chain);
+    if (!hidden) return;
+    hidden.value = JSON.stringify(collectChainServices());
+  }
+
+  function setChainServiceRows(services) {
+    const list = $("#settings-chain-service-list", forms.chain);
+    if (!list) return;
+    list.innerHTML = "";
+    const compact = dedupeServices(services || []);
+    if (compact.length === 0) {
+      addChainServiceRow({});
+      return;
+    }
+    compact.forEach((svc) => addChainServiceRow(svc));
+  }
+
+  function resetForm(form) {
+    if (!form) return;
+    form.reset();
+  }
+
+  const checkboxSnapshots = new WeakMap();
+
+  function eventElementFromEvent(ev) {
+    const target = ev && ev.target;
+    if (!target) return null;
+    if (target.nodeType === Node.TEXT_NODE) {
+      return target.parentElement || null;
+    }
+    if (target.nodeType === Node.ELEMENT_NODE) {
+      return target;
+    }
+    return null;
+  }
+
+  function checkboxTargetFromEvent(ev) {
+    const el = eventElementFromEvent(ev);
+    if (!el) return null;
+    if (el.tagName === "INPUT" && String(el.type || "").toLowerCase() === "checkbox") {
+      return el;
+    }
+    if (typeof el.closest !== "function") return null;
+    const label = el.closest("label");
+    if (!label) return null;
+    const box = $('input[type="checkbox"]', label);
+    return box || null;
+  }
+
+  function captureCheckboxSnapshot(form) {
+    if (!form) return;
+    const snapshot = new Map();
+    $$('input[type="checkbox"]', form).forEach((box) => {
+      snapshot.set(box, !!box.checked);
+    });
+    checkboxSnapshots.set(form, snapshot);
+  }
+
+  function restoreUnexpectedCheckboxReset(form, changed) {
+    const snapshot = checkboxSnapshots.get(form);
+    if (!(snapshot instanceof Map)) return;
+    snapshot.forEach((wasChecked, box) => {
+      if (box === changed) return;
+      if (wasChecked && !box.checked) {
+        box.checked = true;
+      }
+    });
+  }
+
+  function wireCheckboxIndependence(form) {
+    if (!form || form.dataset.checkboxGuardWired === "1") return;
+    form.dataset.checkboxGuardWired = "1";
+    captureCheckboxSnapshot(form);
+
+    const primeSnapshot = (ev) => {
+      if (!checkboxTargetFromEvent(ev)) return;
+      captureCheckboxSnapshot(form);
+    };
+    form.addEventListener("pointerdown", primeSnapshot, true);
+    form.addEventListener("mousedown", primeSnapshot, true);
+    form.addEventListener("touchstart", primeSnapshot, true);
+
+    form.addEventListener("keydown", (ev) => {
+      const checkbox = checkboxTargetFromEvent(ev);
+      if (!checkbox) return;
+      if (ev.key === " " || ev.key === "Spacebar" || ev.key === "Enter") {
+        captureCheckboxSnapshot(form);
+      }
+    }, true);
+
+    form.addEventListener("change", (ev) => {
+      const checkbox = checkboxTargetFromEvent(ev);
+      if (!checkbox) return;
+      restoreUnexpectedCheckboxReset(form, checkbox);
+      captureCheckboxSnapshot(form);
+    }, true);
+  }
+
+  function refreshAllCheckboxSnapshots() {
+    Object.values(forms).forEach((form) => {
+      captureCheckboxSnapshot(form);
+    });
+  }
+
+  function vmKey(vm) {
+    return [vm.name, vm.host, vm.chain_name, vm.datacenter].map((v) => String(v || "").trim().toLowerCase()).join("|");
+  }
+
+  function dedupeVMs(vms) {
+    const out = [];
+    const seen = new Set();
+    (vms || []).forEach((vm) => {
+      const key = vmKey(vm || {});
+      if (!key || seen.has(key)) return;
+      seen.add(key);
+      out.push(vm);
+    });
+    return out;
+  }
+
+  function addVMRow(seed = {}) {
+    const tpl = $("#settings-infra-vm-template");
+    const list = $("#settings-infra-vm-list", forms.infra);
+    if (!tpl || !list) return;
+
+    const row = tpl.content.firstElementChild.cloneNode(true);
+    $$(".vm-field", row).forEach((el) => {
+      const key = el.dataset.field;
+      const value = seed[key];
+      if (value !== undefined && value !== null && value !== "") {
+        el.value = String(value);
+      }
+      el.addEventListener("input", syncVMJSON);
+    });
+    $(".settings-vm-remove", row).addEventListener("click", () => {
+      row.remove();
+      syncVMJSON();
+    });
+    list.appendChild(row);
+    syncVMJSON();
+  }
+
+  function collectVMs() {
+    const rows = $$("#settings-infra-vm-list .settings-vm-row", forms.infra).map((row) => {
+      const vm = {};
+      $$(".vm-field", row).forEach((el) => {
+        const key = el.dataset.field;
+        const raw = (el.value || "").trim();
+        if (key === "port") {
+          const port = Number(raw);
+          vm.port = Number.isFinite(port) && port > 0 ? Math.trunc(port) : 22;
+          return;
+        }
+        vm[key] = raw;
+      });
+      const hasAny = Object.values(vm).some((v) => String(v || "").trim() !== "");
+      if (!hasAny) return null;
+      if (!vm.port) vm.port = 22;
+      if (vm.ping_country) vm.ping_country = String(vm.ping_country).toUpperCase();
+      return vm;
+    }).filter(Boolean);
+    return dedupeVMs(rows);
+  }
+
+  function syncVMJSON() {
+    const hidden = $("#settings-infra-vms-json", forms.infra);
+    if (!hidden) return;
+    hidden.value = JSON.stringify(collectVMs());
+  }
+
+  function setVMRows(vms) {
+    const list = $("#settings-infra-vm-list", forms.infra);
+    if (!list) return;
+    list.innerHTML = "";
+    const compact = dedupeVMs(vms || []);
+    if (compact.length === 0) {
+      addVMRow({});
+      return;
+    }
+    compact.forEach((vm) => addVMRow(vm));
+  }
+
+  function prefillSimpleForms(current) {
+    resetForm(forms.ports);
+    resetForm(forms.settings);
+    resetForm(forms.vlog);
+    resetForm(forms.fleet);
+    resetForm(forms.backup);
+
+    if (current.ports) {
+      const m = parseTomlMap(current.ports);
+      setVal(forms.ports, "rpc", asNum(m.root.rpc, 26657));
+      setVal(forms.ports, "rest", asNum(m.root.rest, 1317));
+      setVal(forms.ports, "grpc", asNum(m.root.grpc, 0));
+      setVal(forms.ports, "grpc_web", asNum(m.root.grpc_web, 0));
+      setVal(forms.ports, "api", asNum(m.root.api, 0));
+      setVal(forms.ports, "vlog_url", unquote(m.root.vlog_url));
+      setVal(forms.ports, "trusted_proxies", asList(m.root.trusted_proxies));
+    }
+
+    if (current.settings) {
+      const m = parseTomlMap(current.settings);
+      setVal(forms.settings, "rps", asNum((m.rate_limit || {}).rps, 25));
+      setVal(forms.settings, "burst", asNum((m.rate_limit || {}).burst, 100));
+      setCheck(forms.settings, "aq_enabled", asBool((m.auto_quarantine || {}).enabled, true));
+      setVal(forms.settings, "aq_threshold", asNum((m.auto_quarantine || {}).threshold, 120));
+      setVal(forms.settings, "aq_window_sec", asNum((m.auto_quarantine || {}).window_sec, 10));
+      setVal(forms.settings, "aq_penalty_rps", asNum((m.auto_quarantine || {}).penalty_rps, 1));
+      setVal(forms.settings, "aq_penalty_burst", asNum((m.auto_quarantine || {}).penalty_burst, 1));
+      setVal(forms.settings, "aq_ttl_sec", asNum((m.auto_quarantine || {}).ttl_sec, 900));
+      setCheck(forms.settings, "debug_enabled", asBool((m.debug || {}).enabled, false));
+      setVal(forms.settings, "debug_port", asNum((m.debug || {}).port, 6060));
+    }
+
+    if (current.vlog) {
+      const m = parseTomlMap(current.vlog);
+      setVal(forms.vlog, "port", asNum((m.vlog || {}).port, 8889));
+      setVal(forms.vlog, "bind_address", unquote((m.vlog || {}).bind_address));
+      setVal(forms.vlog, "base_path", unquote((m.vlog || {}).base_path));
+      setVal(forms.vlog, "api_key", unquote((m.vlog || {}).api_key));
+      setVal(forms.vlog, "username", unquote((m["vlog.auth"] || {}).username));
+      setVal(forms.vlog, "password_hash", unquote((m["vlog.auth"] || {}).password_hash));
+      setCheck(forms.vlog, "auto_enrich", asBool((m["vlog.intel"] || {}).auto_enrich, true));
+      setVal(forms.vlog, "cache_ttl_hours", asNum((m["vlog.intel"] || {}).cache_ttl_hours, 24));
+      setVal(forms.vlog, "rate_limit_rpm", asNum((m["vlog.intel"] || {}).rate_limit_rpm, 10));
+      setVal(forms.vlog, "abuseipdb", unquote((m["vlog.intel.keys"] || {}).abuseipdb));
+      setVal(forms.vlog, "virustotal", unquote((m["vlog.intel.keys"] || {}).virustotal));
+      setVal(forms.vlog, "shodan", unquote((m["vlog.intel.keys"] || {}).shodan));
+      setVal(forms.vlog, "push_user", unquote((m["vlog.push.defaults"] || {}).user));
+      setVal(forms.vlog, "push_key_path", unquote((m["vlog.push.defaults"] || {}).key_path));
+      setVal(forms.vlog, "poll_interval_sec", asNum((m["vlog.push"] || {}).poll_interval_sec, 60));
+      setVal(forms.vlog, "db_path", unquote((m.vlog || {}).db_path));
+      setVal(forms.vlog, "archives_dir", unquote((m.vlog || {}).archives_dir));
+      setVal(forms.vlog, "vprox_bin", unquote((m.vlog || {}).vprox_bin));
+    }
+
+    if (current.fleet) {
+      const m = parseTomlMap(current.fleet);
+      setVal(forms.fleet, "ssh_user", unquote((m.ssh || {}).user));
+      setVal(forms.fleet, "ssh_key_path", unquote((m.ssh || {}).key_path));
+      setVal(forms.fleet, "ssh_port", asNum((m.ssh || {}).port, 22));
+      setVal(forms.fleet, "poll_interval_sec", asNum((m.poll || {}).interval_sec, 60));
+      setVal(forms.fleet, "datacenter", unquote((m.defaults || {}).datacenter));
+    }
+
+    if (current.backup) {
+      const m = parseTomlMap(current.backup);
+      setCheck(forms.backup, "automation", asBool((m.backup || {}).automation, false));
+      setVal(forms.backup, "interval_days", asNum((m.backup || {}).interval_days, 7));
+      setVal(forms.backup, "max_size_mb", asNum((m.backup || {}).max_size_mb, 100));
+      setVal(forms.backup, "check_interval_min", asNum((m.backup || {}).check_interval_min, 10));
+      setVal(forms.backup, "destination", unquote((m.backup || {}).destination));
+      setVal(forms.backup, "files_logs", asList((m["backup.files"] || {}).logs));
+      setVal(forms.backup, "files_data", asList((m["backup.files"] || {}).data));
+      setVal(forms.backup, "files_config", asList((m["backup.files"] || {}).config));
+    }
+  }
+
+  function prefillChain(entry) {
+    resetForm(forms.chain);
+    if (!entry) {
+      setChainServiceRows([]);
+      syncChainServicesJSON();
+      return;
+    }
+
+    const fields = entry.fields && typeof entry.fields === "object" ? entry.fields : {};
+    if (Object.keys(fields).length === 0 && entry.raw) {
+      const m = parseTomlMap(entry.raw);
+      fields.chain_name = unquote((m.root || {}).chain_name);
+      fields.chain_id = unquote((m.root || {}).chain_id);
+      fields.host = unquote((m.root || {}).host);
+      fields.ip = unquote((m.root || {}).ip);
+      fields.dashboard_name = unquote((m.root || {}).dashboard_name);
+      fields.explorer_base = unquote((m.root || {}).explorer_base);
+      fields.explorers = asList((m.root || {}).explorers);
+      fields.default_ports = asBool((m.root || {}).default_ports, true);
+      fields.msg_rpc = asBool((m.root || {}).msg_rpc, false);
+      fields.msg_api = asBool((m.root || {}).msg_api, false);
+      fields.rpc_aliases = asList((m.root || {}).rpc_aliases);
+      fields.rest_aliases = asList((m.root || {}).rest_aliases);
+      fields.api_aliases = asList((m.root || {}).api_aliases);
+      fields.message_rpc_msg = unquote((m.message || {}).rpc_msg);
+      fields.message_api_msg = unquote((m.message || {}).api_msg);
+      fields.expose_path = asBool((m.expose || {}).path, true);
+      fields.expose_vhost = asBool((m.expose || {}).vhost, true);
+      fields.proxy_vhost_prefix_rpc = unquote((m["expose.vhost_prefix"] || {}).rpc);
+      fields.proxy_vhost_prefix_rest = unquote((m["expose.vhost_prefix"] || {}).rest);
+      fields.services_rpc = asBool((m.services || {}).rpc, true);
+      fields.services_rest = asBool((m.services || {}).rest, true);
+      fields.services_websocket = asBool((m.services || {}).websocket, true);
+      fields.services_grpc = asBool((m.services || {}).grpc, true);
+      fields.services_grpc_web = asBool((m.services || {}).grpc_web, true);
+      fields.services_api_alias = asBool((m.services || {}).api_alias, true);
+      fields.ports_rpc = asNum((m.ports || {}).rpc, 0);
+      fields.ports_rest = asNum((m.ports || {}).rest, 0);
+      fields.ports_grpc = asNum((m.ports || {}).grpc, 0);
+      fields.ports_grpc_web = asNum((m.ports || {}).grpc_web, 0);
+      fields.ports_api = asNum((m.ports || {}).api, 0);
+      fields.ws_idle_timeout_sec = asNum((m.ws || {}).idle_timeout_sec, 3600);
+      fields.ws_max_lifetime_sec = asNum((m.ws || {}).max_lifetime_sec, 0);
+      fields.feature_rpc_address_masking = asBool((m.features || {}).rpc_address_masking, true);
+      fields.feature_mask_rpc = unquote((m.features || {}).mask_rpc);
+      fields.feature_swagger_masking = asBool((m.features || {}).swagger_masking, false);
+      fields.feature_absolute_links = unquote((m.features || {}).absolute_links);
+      fields.logging_file = unquote((m.logging || {}).file);
+      fields.logging_format = unquote((m.logging || {}).format);
+      fields.chain_ping_country = unquote((m.chain_ping || {}).country) || unquote((m["management.ping"] || {}).country);
+      fields.chain_ping_provider = unquote((m.chain_ping || {}).provider) || unquote((m["management.ping"] || {}).provider);
+    }
+
+    setVal(forms.chain, "chain_name", fields.chain_name || entry.name || "");
+    setVal(forms.chain, "chain_id", fields.chain_id || "");
+    setVal(forms.chain, "host", fields.host || "");
+    setVal(forms.chain, "ip", fields.ip || "");
+    setVal(forms.chain, "dashboard_name", fields.dashboard_name || "");
+    setVal(forms.chain, "explorer_base", fields.explorer_base || "");
+    setVal(forms.chain, "explorers", fields.explorers || "");
+    setCheck(forms.chain, "default_ports", toBool(fields.default_ports, true));
+    setCheck(forms.chain, "msg_rpc", toBool(fields.msg_rpc, false));
+    setCheck(forms.chain, "msg_api", toBool(fields.msg_api, false));
+    setVal(forms.chain, "rpc_aliases", fields.rpc_aliases || "");
+    setVal(forms.chain, "rest_aliases", fields.rest_aliases || "");
+    setVal(forms.chain, "api_aliases", fields.api_aliases || "");
+    setVal(forms.chain, "message_rpc_msg", fields.message_rpc_msg || "");
+    setVal(forms.chain, "message_api_msg", fields.message_api_msg || "");
+    setCheck(forms.chain, "expose_path", toBool(fields.expose_path, true));
+    setCheck(forms.chain, "expose_vhost", toBool(fields.expose_vhost, true));
+    setVal(forms.chain, "chain_ping_country", fields.chain_ping_country || "CA");
+    setVal(forms.chain, "chain_ping_provider", fields.chain_ping_provider || "");
+    setVal(forms.chain, "proxy_vhost_prefix_rpc", fields.proxy_vhost_prefix_rpc || "");
+    setVal(forms.chain, "proxy_vhost_prefix_rest", fields.proxy_vhost_prefix_rest || "");
+    setVal(forms.chain, "proxy_sp_prefixes", fields.proxy_sp_prefixes || "");
+    setVal(forms.chain, "proxy_sp_suffixes", fields.proxy_sp_suffixes || "");
+    setCheck(forms.chain, "services_rpc", toBool(fields.services_rpc, true));
+    setCheck(forms.chain, "services_rest", toBool(fields.services_rest, true));
+    setCheck(forms.chain, "services_websocket", toBool(fields.services_websocket, true));
+    setCheck(forms.chain, "services_grpc", toBool(fields.services_grpc, true));
+    setCheck(forms.chain, "services_grpc_web", toBool(fields.services_grpc_web, true));
+    setCheck(forms.chain, "services_api_alias", toBool(fields.services_api_alias, true));
+    setVal(forms.chain, "ports_rpc", fields.ports_rpc ?? "");
+    setVal(forms.chain, "ports_rest", fields.ports_rest ?? "");
+    setVal(forms.chain, "ports_grpc", fields.ports_grpc ?? "");
+    setVal(forms.chain, "ports_grpc_web", fields.ports_grpc_web ?? "");
+    setVal(forms.chain, "ports_api", fields.ports_api ?? "");
+    setVal(forms.chain, "ws_idle_timeout_sec", fields.ws_idle_timeout_sec ?? 3600);
+    setVal(forms.chain, "ws_max_lifetime_sec", fields.ws_max_lifetime_sec ?? 0);
+    setCheck(forms.chain, "feature_rpc_address_masking", toBool(fields.feature_rpc_address_masking, true));
+    setVal(forms.chain, "feature_mask_rpc", fields.feature_mask_rpc || "");
+    setCheck(forms.chain, "feature_swagger_masking", toBool(fields.feature_swagger_masking, false));
+    setVal(forms.chain, "feature_absolute_links", fields.feature_absolute_links || "auto");
+    setVal(forms.chain, "logging_file", fields.logging_file || "");
+    setVal(forms.chain, "logging_format", fields.logging_format || "summary");
+
+    let services = [];
+    if (Array.isArray(fields.chain_services)) {
+      services = fields.chain_services;
+    } else if (typeof fields.chain_services_json === "string" && fields.chain_services_json.trim() !== "") {
+      try {
+        const parsed = JSON.parse(fields.chain_services_json);
+        services = Array.isArray(parsed) ? parsed : [];
+      } catch {
+        services = [];
+      }
+    }
+    setChainServiceRows(services);
+    syncChainServicesJSON();
+  }
+
+  function prefillInfra(entry) {
+    resetForm(forms.infra);
+    if (!entry) {
+      setVMRows([]);
+      return;
+    }
+    const host = entry.host || {};
+    const vprox = entry.vprox || {};
+    setVal(forms.infra, "datacenter", entry.datacenter || "");
+    setVal(forms.infra, "host_name", host.name || "");
+    setVal(forms.infra, "host_lan_ip", host.lan_ip || "");
+    setVal(forms.infra, "host_public_ip", host.public_ip || "");
+    setVal(forms.infra, "host_datacenter", host.datacenter || "");
+    setVal(forms.infra, "host_user", host.user || "");
+    setVal(forms.infra, "host_ssh_key_path", host.ssh_key_path || "");
+    setVal(forms.infra, "vprox_name", vprox.name || "vProx");
+    setVal(forms.infra, "vprox_lan_ip", vprox.lan_ip || "");
+    setVal(forms.infra, "vprox_key", vprox.key || "");
+    setVal(forms.infra, "vprox_ssh_key_path", vprox.ssh_key_path || "");
+    setVMRows(Array.isArray(entry.vms) ? entry.vms : []);
+  }
+
+  function escapeHTML(value) {
+    return String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/\"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function renderValue(value) {
+    if (typeof value === "boolean") return value ? "true" : "false";
+    const text = String(value ?? "").trim();
+    return text === "" ? "—" : text;
+  }
+
+  function renderSummaryValue(step, key, value) {
+    const rendered = renderValue(value);
+    if (rendered === "—") return rendered;
+    if (sensitiveSummaryKeys.has(String(key || "").trim().toLowerCase())) {
+      return "••••••";
+    }
+    return rendered;
+  }
+
+  function renderSimpleSection(step) {
+    const body = $(`#settings-list-${step}`);
+    const form = forms[step];
+    if (!body || !form) return;
+    const data = formToObject(form);
+    const rows = stepSummaryFields[step] || [];
+    body.innerHTML = rows.map(([label, key]) => {
+      return `<tr><td class="settings-name">${escapeHTML(label)}</td><td class="settings-value">${escapeHTML(renderSummaryValue(step, key, data[key]))}</td></tr>`;
+    }).join("") +
+      `<tr class="settings-actions-row"><td colspan="2"><div class="settings-row-buttons"><button type="button" class="outline" data-edit-step="${step}">Edit</button><button type="button" class="danger" data-remove-step="${step}">Remove</button></div></td></tr>`;
+  }
+
+  function renderChainSection() {
+    const body = $("#settings-list-chain");
+    if (!body) return;
+    if (!state.chains.length) {
+      body.innerHTML = `<tr><td colspan="5" class="settings-empty">No chain profiles found.</td></tr>`;
+      return;
+    }
+    body.innerHTML = state.chains.map((entry) => {
+      const fields = entry.fields && typeof entry.fields === "object" ? entry.fields : {};
+      const chain = String(fields.chain_name || entry.name || entry.file || "").trim();
+      const chainID = String(fields.chain_id || "").trim();
+      const services = Array.isArray(fields.chain_services) ? fields.chain_services : [];
+      const serviceTypes = Array.from(new Set(services
+        .map((svc) => {
+          const raw = String((svc || {}).service_type || "").trim().toLowerCase();
+          if (raw === "sp") return "api/rpc";
+          return raw;
+        })
+        .filter(Boolean)));
+      const serviceSummary = serviceTypes.length > 0 ? `${services.length} service(s): ${serviceTypes.join(", ")}` : "—";
+      const explorers = String(fields.explorers || fields.explorer_base || "").trim();
+      const file = String(entry.file || `${chain}.toml`).trim();
+      const expanded = state.chainTreeExpanded[file] === true;
+      const toggle = services.length > 0
+        ? `<button type="button" class="settings-tree-toggle" data-toggle-chain="${escapeHTML(file)}" aria-expanded="${expanded ? "true" : "false"}">${expanded ? "−" : "+"}</button>`
+        : `<span class="settings-tree-spacer"></span>`;
+      const parent = `<tr class="settings-chain-parent">
+        <td class="settings-value settings-chain-root">${toggle}<span class="settings-chain-name">${escapeHTML(renderValue(chain))}</span></td>
+        <td class="settings-value">${escapeHTML(renderValue(chainID))}</td>
+        <td class="settings-value">${escapeHTML(renderValue(serviceSummary))}</td>
+        <td class="settings-value">${escapeHTML(renderValue(explorers))}</td>
+        <td><div class="settings-row-buttons"><button type="button" class="outline" data-edit-chain="${escapeHTML(file)}">Edit</button><button type="button" class="danger" data-remove-chain="${escapeHTML(file)}">− Remove</button></div></td>
+      </tr>`;
+
+      if (!expanded || services.length === 0) return parent;
+
+      const childRows = services.map((svc, idx) => {
+        const serviceName = String((svc || {}).name || "").trim() || "service";
+        const serviceTypeRaw = String((svc || {}).service_type || "").trim().toLowerCase();
+        const serviceType = serviceTypeRaw === "sp" ? "api/rpc" : (serviceTypeRaw || "unknown");
+        const internalIP = String((svc || {}).internal_ip || "").trim();
+        const host = String((svc || {}).host || "").trim();
+        const moniker = String((svc || {}).moniker || "").trim();
+        const valoper = String((svc || {}).valoper || "").trim();
+        const topology = [internalIP ? `ip:${internalIP}` : "", host ? `host:${host}` : ""].filter(Boolean).join(" · ") || "—";
+        const identity = [moniker, valoper].filter(Boolean).join(" · ") || "—";
+        return `<tr class="settings-chain-child">
+          <td class="settings-value settings-chain-child-name">↳ ${escapeHTML(serviceName)}</td>
+          <td class="settings-value">${escapeHTML(renderValue(serviceType))}</td>
+          <td class="settings-value">${escapeHTML(renderValue(topology))}</td>
+          <td class="settings-value">${escapeHTML(renderValue(identity))}</td>
+          <td><button type="button" class="settings-tree-remove" data-remove-chain-service="${escapeHTML(file)}" data-remove-service-index="${idx}" title="Remove service">✕</button></td>
+        </tr>`;
+      }).join("");
+      return parent + childRows;
+    }).join("");
+  }
+
+  function renderInfraSection() {
+    const body = $("#settings-list-infra");
+    if (!body) return;
+    if (!state.infras.length) {
+      body.innerHTML = `<tr><td colspan="5" class="settings-empty">No datacenter files found.</td></tr>`;
+      return;
+    }
+    body.innerHTML = state.infras.map((entry) => {
+      const host = (entry.host || {}).name || "";
+      const vproxLAN = (entry.vprox || {}).lan_ip || "";
+      const vmCount = Array.isArray(entry.vms) ? entry.vms.length : 0;
+      return `<tr>
+        <td class="settings-value">${escapeHTML(renderValue(entry.datacenter || ""))}</td>
+        <td class="settings-value">${escapeHTML(renderValue(host))}</td>
+        <td class="settings-value">${escapeHTML(renderValue(vproxLAN))}</td>
+        <td class="settings-value">${escapeHTML(String(vmCount))}</td>
+        <td><div class="settings-row-buttons"><button type="button" class="outline" data-edit-infra="${escapeHTML(entry.file || `${entry.datacenter}.toml`)}">Edit</button><button type="button" class="danger" data-remove-infra="${escapeHTML(entry.file || `${entry.datacenter}.toml`)}">− Remove</button></div></td>
+      </tr>`;
+    }).join("");
+  }
+
+  function renderAllSummaries() {
+    renderSimpleSection("ports");
+    renderSimpleSection("settings");
+    renderSimpleSection("vlog");
+    renderSimpleSection("fleet");
+    renderSimpleSection("backup");
+    renderChainSection();
+    renderInfraSection();
+  }
+
+  function servicesFromChainEntry(entry) {
+    const fields = entry && entry.fields && typeof entry.fields === "object" ? entry.fields : {};
+    if (Array.isArray(fields.chain_services)) {
+      return dedupeServices(fields.chain_services);
+    }
+    if (typeof fields.chain_services_json === "string" && fields.chain_services_json.trim() !== "") {
+      try {
+        const parsed = JSON.parse(fields.chain_services_json);
+        return Array.isArray(parsed) ? dedupeServices(parsed) : [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  }
+
+  function chainPayloadFromEntry(entry, services) {
+    const fields = entry && entry.fields && typeof entry.fields === "object" ? entry.fields : {};
+    const payload = { ...fields };
+    payload.chain_name = String(payload.chain_name || entry.name || "").trim();
+    payload.chain_id = String(payload.chain_id || "").trim();
+    payload.chain_services_json = JSON.stringify(services || []);
+    delete payload.chain_services;
+    return payload;
+  }
+
+  async function removeChainService(file, index) {
+    const entry = state.chains.find((c) => c.file === file);
+    if (!entry) {
+      setStatus(`Chain profile ${file} was not found.`, "err");
+      return;
+    }
+    const services = servicesFromChainEntry(entry);
+    if (!Number.isFinite(index) || index < 0 || index >= services.length) {
+      setStatus("Could not resolve selected service row.", "err");
+      return;
+    }
+    if (services.length <= 1) {
+      setStatus("A chain profile must keep at least one service row.", "err");
+      return;
+    }
+    const removed = services[index] || {};
+    services.splice(index, 1);
+
+    const payload = chainPayloadFromEntry(entry, services);
+    if (!payload.chain_name || !payload.chain_id) {
+      setStatus("Cannot remove service: chain profile is missing chain_name/chain_id.", "err");
+      return;
+    }
+
+    setStatus(`Removing service ${removed.name || "row"} from ${file}…`);
+    try {
+      const resp = await fetch(apiPath("/settings/api/config/chain"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const body = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(body.error || `HTTP ${resp.status}`);
+      await loadCurrent();
+      markPending("chain");
+      setStatus(`Removed service ${removed.name || "row"} from ${file}.`, "ok");
+    } catch (err) {
+      setStatus(`Could not remove service from ${file}: ${err.message}`, "err");
+    }
+  }
+
+  function appendEditorLog(message, kind = "enrich-log-line") {
+    const log = $("#settings-editor-log");
+    const line = document.createElement("div");
+    line.className = kind;
+    line.textContent = message;
+    log.appendChild(line);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  function editorForm() {
+    return state.editor.form;
+  }
+
+  function clearEditorState() {
+    state.editor.step = "";
+    state.editor.form = null;
+    state.editor.validated = false;
+    state.editor.watcher = null;
+  }
+
+  function detachEditorWatcher() {
+    const form = editorForm();
+    if (!form || !state.editor.watcher) return;
+    form.removeEventListener("input", state.editor.watcher, true);
+    form.removeEventListener("change", state.editor.watcher, true);
+    state.editor.watcher = null;
+  }
+
+  function attachEditorWatcher() {
+    const form = editorForm();
+    if (!form) return;
+    const watcher = () => {
+      state.editor.validated = false;
+      updateEditorButtons();
+    };
+    form.addEventListener("input", watcher, true);
+    form.addEventListener("change", watcher, true);
+    state.editor.watcher = watcher;
+  }
+
+  function mandatoryComplete() {
+    const step = state.editor.step;
+    const form = editorForm();
+    if (!step || !form) return false;
+
+    const required = requiredByStep[step] || [];
+    for (const name of required) {
+      const el = $(`[name="${name}"]`, form);
+      if (!el) continue;
+      if (el.type === "checkbox") {
+        if (!el.checked) return false;
+      } else if (!(el.value || "").trim()) {
+        return false;
+      }
+    }
+
+    if (step === "infra") {
+      const rows = $$("#settings-infra-vm-list .settings-vm-row", form);
+      for (const row of rows) {
+        const vm = {};
+        $$(".vm-field", row).forEach((el) => {
+          vm[el.dataset.field] = (el.value || "").trim();
+        });
+        const hasAny = Object.values(vm).some((value) => String(value || "").trim() !== "");
+        if (!hasAny) continue;
+        if (!vm.name || !vm.host) return false;
+      }
+    }
+
+    if (step === "chain") {
+      const services = collectChainServices();
+      if (services.length === 0) return false;
+      for (const svc of services) {
+        const svcType = String(svc.service_type || "").trim().toLowerCase();
+        const linkToVM = toBool(svc.link_to_vm, true);
+        if (!String(svc.name || "").trim()) return false;
+        if (!svcType) return false;
+        if (linkToVM && !String(svc.internal_ip || "").trim()) return false;
+        if (svcType === "validator" && !String(svc.valoper || "").trim()) return false;
+      }
+    }
+
+    return true;
+  }
+
+  function updateEditorButtons() {
+    const validateBtn = $("#settings-editor-validate");
+    const saveBtn = $("#settings-editor-save");
+    const complete = mandatoryComplete();
+
+    validateBtn.disabled = !complete;
+    validateBtn.classList.toggle("is-ready", complete);
+    saveBtn.disabled = !state.editor.validated;
+    saveBtn.classList.toggle("is-ready", state.editor.validated);
+  }
+
+  function closeEditor() {
+    detachEditorWatcher();
+    const form = editorForm();
+    if (form) {
+      $("#settings-form-store").appendChild(form);
+    }
+    $("#settings-editor-log").innerHTML = "";
+    $("#settings-editor-host").innerHTML = "";
+    const inline = $("#settings-editor-inline");
+    if (inline) inline.hidden = true;
+    const overlay = $("#settings-editor-overlay");
+    if (overlay) overlay.style.display = "none";
+    clearEditorState();
+  }
+
+  function openEditor(step, title) {
+    if (!forms[step]) return;
+    if (editorForm()) closeEditor();
+
+    state.editor.step = step;
+    state.editor.form = forms[step];
+    state.editor.validated = false;
+
+    $("#settings-editor-title").textContent = title || `Edit ${stepLabels[step] || step}`;
+    $("#settings-editor-log").innerHTML = "";
+
+    const host = $("#settings-editor-host");
+    host.innerHTML = "";
+    host.appendChild(forms[step]);
+    const inline = $("#settings-editor-inline");
+    const overlay = $("#settings-editor-overlay");
+    if (inline) {
+      inline.hidden = false;
+    }
+    if (overlay) overlay.style.display = "flex";
+    host.scrollTop = 0;
+
+    if (step === "chain") {
+      syncChainServicesJSON();
+    } else if (step === "infra") {
+      syncVMJSON();
+    }
+
+    captureCheckboxSnapshot(forms[step]);
+    attachEditorWatcher();
+    updateEditorButtons();
+  }
+
+  function validateEditor() {
+    const form = editorForm();
+    if (!form) return;
+    $("#settings-editor-log").innerHTML = "";
+
+    if (!mandatoryComplete()) {
+      state.editor.validated = false;
+      appendEditorLog("Please fill all mandatory fields before validation.", "enrich-log-err");
+      updateEditorButtons();
+      return;
+    }
+
+    if (state.editor.step === "infra") {
+      syncVMJSON();
+      try {
+        JSON.parse($("#settings-infra-vms-json", form).value || "[]");
+      } catch {
+        state.editor.validated = false;
+        appendEditorLog("Infra VM payload is invalid JSON.", "enrich-log-err");
+        updateEditorButtons();
+        return;
+      }
+    }
+
+    if (!form.checkValidity()) {
+      form.reportValidity();
+      state.editor.validated = false;
+      appendEditorLog("Validation failed. Please review highlighted fields.", "enrich-log-err");
+      updateEditorButtons();
+      return;
+    }
+
+    state.editor.validated = true;
+    appendEditorLog("Validation passed. Save is now enabled.", "enrich-log-ok");
+    updateEditorButtons();
+  }
+
+  async function submitForm(form) {
+    const step = form.dataset.step;
+    if (step === "chain") syncChainServicesJSON();
+    if (step === "infra") syncVMJSON();
+
+    const payload = formToObject(form);
+    if (state.importedSourceByStep[step]) {
+      payload._import_source_step = step;
+      payload._import_source_path = state.importedSourceByStep[step];
+    }
+    setFormBusy(form, true);
+    setStatus(`Saving ${step}…`);
+    try {
+      const resp = await fetch(apiPath(`/settings/api/config/${step}`), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const body = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(body.error || `HTTP ${resp.status}`);
+      await loadCurrent();
+      delete state.importedSourceByStep[step];
+      markPending(step);
+      setStatus(`Saved ${stepLabels[step] || step} successfully.`, "ok");
+      return true;
+    } catch (err) {
+      setStatus(`Save failed for ${step}: ${err.message}`, "err");
+      return false;
+    } finally {
+      setFormBusy(form, false);
+    }
+  }
+
+  async function removeVariable(step, target) {
+    const resp = await fetch(apiPath("/settings/api/config/remove"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ step, target })
+    });
+    const body = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      throw new Error(body.error || `HTTP ${resp.status}`);
+    }
+  }
+
+  async function removeSingleton(step) {
+    const label = stepLabels[step] || step;
+    if (!confirm(`Reset ${label} to defaults and save?`)) return;
+    resetForm(forms[step]);
+    if (step === "infra") setVMRows([]);
+    const ok = await submitForm(forms[step]);
+    if (ok) {
+      markPending(step);
+      setStatus(`${label} reset to defaults.`, "ok");
+    }
+  }
+
+  function resetImportDialog() {
+    importState.fields = null;
+    importState.sourcePath = "";
+    $("#settings-import-path").value = "";
+    $("#settings-import-log").innerHTML = "";
+    const action = $("#settings-import-dismiss");
+    action.textContent = "DISMISS";
+    action.dataset.mode = "dismiss";
+  }
+
+  function closeImportDialog() {
+    $("#settings-import-overlay").style.display = "none";
+    if (importState.checkbox) {
+      importState.checkbox.checked = false;
+    }
+    importState.step = "";
+    importState.checkbox = null;
+    resetImportDialog();
+  }
+
+  function openImportDialog(step, checkbox) {
+    importState.step = step;
+    importState.checkbox = checkbox || null;
+    resetImportDialog();
+    $("#settings-import-overlay").style.display = "flex";
+  }
+
+  function appendImportLog(message, kind = "enrich-log-line") {
+    const log = $("#settings-import-log");
+    const line = document.createElement("div");
+    line.className = kind;
+    line.textContent = message;
+    log.appendChild(line);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  function applyImportedFields(step, fields) {
+    const form = forms[step];
+    if (!form || !fields) return;
+    resetForm(form);
+    Object.entries(fields).forEach(([name, value]) => {
+      const el = $(`[name="${name}"]`, form);
+      if (!el) return;
+      if (el.type === "checkbox") {
+        el.checked = toBool(value, false);
+        return;
+      }
+      if (value === undefined || value === null) {
+        el.value = "";
+        return;
+      }
+      el.value = String(value);
+    });
+    if (step === "infra") {
+      if (Array.isArray(fields.vms)) {
+        setVMRows(fields.vms);
+      } else if (typeof fields.vms_json === "string" && fields.vms_json.trim() !== "") {
+        try {
+          const parsed = JSON.parse(fields.vms_json);
+          setVMRows(Array.isArray(parsed) ? parsed : []);
+        } catch {
+          setVMRows([]);
+        }
+      } else {
+        setVMRows([]);
+      }
+      syncVMJSON();
+    }
+    if (step === "chain") {
+      if (Array.isArray(fields.chain_services)) {
+        setChainServiceRows(fields.chain_services);
+      } else if (typeof fields.chain_services_json === "string" && fields.chain_services_json.trim() !== "") {
+        try {
+          const parsed = JSON.parse(fields.chain_services_json);
+          setChainServiceRows(Array.isArray(parsed) ? parsed : []);
+        } catch {
+          setChainServiceRows([]);
+        }
+      } else {
+        setChainServiceRows([]);
+      }
+      syncChainServicesJSON();
+    }
+    if (importState.sourcePath) {
+      state.importedSourceByStep[step] = importState.sourcePath;
+    }
+    captureCheckboxSnapshot(form);
+  }
+
+  async function validateImportPath() {
+    const path = ($("#settings-import-path").value || "").trim();
+    if (!importState.step) {
+      appendImportLog("Missing target section.", "enrich-log-err");
+      return;
+    }
+    if (!path) {
+      appendImportLog("Please enter a TOML path first.", "enrich-log-err");
+      return;
+    }
+    appendImportLog(`Validating ${path} ...`, "enrich-log-line");
+    try {
+      const resp = await fetch(apiPath("/settings/api/config/import"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ step: importState.step, path })
+      });
+      const body = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(body.error || `HTTP ${resp.status}`);
+      importState.fields = body.fields || null;
+      importState.sourcePath = String(body.source_path || path);
+      appendImportLog(`Validation passed: ${importState.sourcePath}`, "enrich-log-ok");
+      appendImportLog("Click IMPORT to load values into this section.", "enrich-log-ok");
+      const action = $("#settings-import-dismiss");
+      action.textContent = "IMPORT";
+      action.dataset.mode = "import";
+    } catch (err) {
+      importState.fields = null;
+      importState.sourcePath = "";
+      const action = $("#settings-import-dismiss");
+      action.textContent = "DISMISS";
+      action.dataset.mode = "dismiss";
+      appendImportLog(`Validation failed: ${err.message}`, "enrich-log-err");
+    }
+  }
+
+  async function saveEditor() {
+    if (!state.editor.validated || !editorForm()) return;
+    const ok = await submitForm(editorForm());
+    if (ok) closeEditor();
+  }
+
+  async function loadCurrent() {
+    const resp = await fetch(apiPath("/settings/api/config/current"), { method: "GET" });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const current = await resp.json();
+    state.importedSourceByStep = {};
+    prefillSimpleForms(current || {});
+    state.chains = Array.isArray(current.chains) ? current.chains : [];
+    state.infras = Array.isArray(current.infras) ? current.infras : [];
+    if (state.chains.length > 0) {
+      prefillChain(state.chains[0]);
+    } else {
+      prefillChain(null);
+    }
+    if (state.infras.length > 0) {
+      prefillInfra(state.infras[0]);
+    } else {
+      setVMRows([]);
+    }
+    renderAllSummaries();
+    refreshAllCheckboxSnapshots();
+  }
+
+  function initForms() {
+    Object.values(forms).forEach((form) => wireCheckboxIndependence(form));
+
+    Object.values(forms).forEach((form) => {
+      form.addEventListener("submit", (ev) => {
+        ev.preventDefault();
+        if (editorForm() === form && !state.editor.validated) {
+          appendEditorLog("Please validate this section before saving.", "enrich-log-err");
+          return;
+        }
+        submitForm(form).then((ok) => {
+          if (ok && editorForm() === form) {
+            closeEditor();
+          }
+        });
+      });
+    });
+
+    const addVMBtn = $("#settings-infra-add-vm", forms.infra);
+    if (addVMBtn) {
+      addVMBtn.addEventListener("click", () => addVMRow({}));
+    }
+    const addServiceBtn = $("#settings-chain-add-service", forms.chain);
+    if (addServiceBtn) {
+      addServiceBtn.addEventListener("click", () => addChainServiceRow({ link_to_vm: true }));
+    }
+    const applyBtn = $("#settings-apply-btn");
+    if (applyBtn) {
+      applyBtn.addEventListener("click", () => applyPendingChanges());
+    }
+    setVMRows([]);
+    setChainServiceRows([]);
+    refreshApplyButton();
+  }
+
+  function initImportFlow() {
+    $$(".settings-import-check").forEach((chk) => {
+      chk.addEventListener("change", (ev) => {
+        if (!ev.target.checked) return;
+        openImportDialog(ev.target.dataset.step, ev.target);
+      });
+    });
+
+    $("#settings-import-validate").addEventListener("click", () => validateImportPath());
+    $("#settings-import-dismiss").addEventListener("click", () => {
+      if ($("#settings-import-dismiss").dataset.mode === "import" && importState.fields) {
+        applyImportedFields(importState.step, importState.fields);
+        setStatus(`Imported values from ${importState.sourcePath}. Validate and save when ready.`, "ok");
+        openEditor(importState.step, `Imported ${stepLabels[importState.step] || importState.step}`);
+      }
+      closeImportDialog();
+    });
+    $("#settings-import-overlay").addEventListener("click", (ev) => {
+      if (ev.target.id === "settings-import-overlay") closeImportDialog();
+    });
+  }
+
+  function initEditorEvents() {
+    $("#settings-editor-dismiss").addEventListener("click", () => closeEditor());
+    $("#settings-editor-validate").addEventListener("click", () => validateEditor());
+    $("#settings-editor-save").addEventListener("click", () => saveEditor());
+    const overlay = $("#settings-editor-overlay");
+    if (overlay) {
+      overlay.addEventListener("click", (ev) => {
+        if (ev.target && ev.target.id === "settings-editor-overlay") {
+          closeEditor();
+        }
+      });
+    }
+    document.addEventListener("keydown", (ev) => {
+      if (ev.key !== "Escape") return;
+      if (!editorForm()) return;
+      closeEditor();
+    });
+  }
+
+  function initActionDelegation() {
+    document.addEventListener("click", async (ev) => {
+      const addBtn = ev.target.closest("button[data-add-step]");
+      if (addBtn) {
+        const step = addBtn.dataset.addStep;
+        if (step === "chain") {
+          prefillChain(null);
+          openEditor("chain", "New Chain Profile");
+        } else if (step === "infra") {
+          prefillInfra(null);
+          openEditor("infra", "New Datacenter File");
+        }
+        return;
+      }
+
+      const toggleChainBtn = ev.target.closest("button[data-toggle-chain]");
+      if (toggleChainBtn) {
+        const file = toggleChainBtn.dataset.toggleChain;
+        if (!file) return;
+        state.chainTreeExpanded[file] = !(state.chainTreeExpanded[file] === true);
+        renderChainSection();
+        return;
+      }
+
+      const removeChainServiceBtn = ev.target.closest("button[data-remove-chain-service]");
+      if (removeChainServiceBtn) {
+        const file = removeChainServiceBtn.dataset.removeChainService;
+        const idx = Number(removeChainServiceBtn.dataset.removeServiceIndex);
+        if (!file || !Number.isFinite(idx)) return;
+        if (!confirm(`Remove this service row from ${file}?`)) return;
+        await removeChainService(file, idx);
+        return;
+      }
+
+      const editStepBtn = ev.target.closest("button[data-edit-step]");
+      if (editStepBtn) {
+        const step = editStepBtn.dataset.editStep;
+        openEditor(step, `Edit ${stepLabels[step] || step}`);
+        return;
+      }
+
+      const removeStepBtn = ev.target.closest("button[data-remove-step]");
+      if (removeStepBtn) {
+        const step = removeStepBtn.dataset.removeStep;
+        await removeSingleton(step);
+        return;
+      }
+
+      const editChainBtn = ev.target.closest("button[data-edit-chain]");
+      if (editChainBtn) {
+        const file = editChainBtn.dataset.editChain;
+        const entry = state.chains.find((c) => c.file === file);
+        if (!entry) return;
+        prefillChain(entry);
+        openEditor("chain", `Edit Chain: ${entry.name || entry.file}`);
+        return;
+      }
+
+      const removeChainBtn = ev.target.closest("button[data-remove-chain]");
+      if (removeChainBtn) {
+        const file = removeChainBtn.dataset.removeChain;
+        if (!confirm(`Remove chain profile ${file} and unregister linked runtime entries?`)) return;
+        try {
+          await removeVariable("chain", file);
+          await loadCurrent();
+          markPending("chain");
+          setStatus(`Removed chain profile ${file} and unregistered linked runtime entries.`, "ok");
+        } catch (err) {
+          setStatus(`Could not remove chain profile: ${err.message}`, "err");
+        }
+        return;
+      }
+
+      const editInfraBtn = ev.target.closest("button[data-edit-infra]");
+      if (editInfraBtn) {
+        const file = editInfraBtn.dataset.editInfra;
+        const entry = state.infras.find((i) => (i.file || `${i.datacenter}.toml`) === file);
+        if (!entry) return;
+        prefillInfra(entry);
+        openEditor("infra", `Edit Infrastructure: ${entry.datacenter || file}`);
+        return;
+      }
+
+      const removeInfraBtn = ev.target.closest("button[data-remove-infra]");
+      if (removeInfraBtn) {
+        const file = removeInfraBtn.dataset.removeInfra;
+        if (!confirm(`Remove infrastructure file ${file}?`)) return;
+        try {
+          await removeVariable("infra", file);
+          await loadCurrent();
+          markPending("infra");
+          setStatus(`Removed infrastructure file ${file} and unregistered linked runtime entries.`, "ok");
+        } catch (err) {
+          setStatus(`Could not remove infrastructure file: ${err.message}`, "err");
+        }
+      }
+    });
+  }
+
+  initForms();
+  initImportFlow();
+  initEditorEvents();
+  initActionDelegation();
+
+  loadCurrent()
+    .then(() => setStatus("Settings loaded."))
+    .catch((err) => setStatus(`Could not load current config: ${err.message}`, "err"));
+})();
+</script>
+
+<script>
+// ── Preferences: localStorage persistence ────────────────────────────────
+// Refresh interval and column visibility are stored client-side only (v1.4.0).
+// Theme is handled by setTheme() in base.html.
+
+function savePref(key, value) {
+  localStorage.setItem('vprox_pref_' + key, String(value));
+}
+
+function loadPrefs() {
+  // Restore refresh interval dropdown.
+  var refresh = localStorage.getItem('vprox_pref_refresh');
+  if (refresh !== null) {
+    var sel = document.getElementById('pref-refresh');
+    if (sel) sel.value = refresh;
+  }
+  // Restore show-column checkboxes.
+  ['show_validator','show_governance','show_ping'].forEach(function(k) {
+    var val = localStorage.getItem('vprox_pref_' + k);
+    if (val !== null) {
+      var cb = document.getElementById('pref-' + k.replace('_','-'));
+      if (cb) cb.checked = (val === 'true');
+    }
+  });
+  // Mark active theme swatch based on current data-theme.
+  var currentTheme = document.documentElement.getAttribute('data-theme') || 'vnodes';
+  document.querySelectorAll('.theme-swatch').forEach(function(el) {
+    el.classList.toggle('theme-swatch-active', el.dataset.theme === currentTheme);
+  });
+}
+
+document.addEventListener('DOMContentLoaded', loadPrefs);
+</script>
+{{end}}

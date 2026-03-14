@@ -186,7 +186,7 @@ func (c *Config) AllChains() []string {
 
 // FleetDefaults holds global SSH credential defaults for chain-managed hosts.
 // Applied when [management] user or key_path are empty in chain.toml.
-// Sourced from [vlog.push.defaults] in vlog.toml.
+// Sourced from [vops.push.defaults] in vops.toml.
 type FleetDefaults struct {
 	User    string
 	KeyPath string
@@ -267,7 +267,7 @@ func LoadFromNodeConfigs(dir string, defaults FleetDefaults) (*Config, error) {
 			Type:       strings.Join(m.Type, ","),
 			RPCURL:     rpcURL,
 			RESTURL:    restURL,
-			// Chain identity enriched later via enrichVMsFromVLogChains or enrichVMsFromChains.
+			// Chain identity enriched later via enrichVMsFromVOpsChains or enrichVMsFromChains.
 			Valoper: m.Valoper,
 			Ping: VMPing{
 				Country:  m.Ping.Country,
@@ -334,7 +334,7 @@ func LoadFromChainConfigs(dir string, defaults FleetDefaults) (*Config, error) {
 
 		// exposed_services routing: when true, probe URLs use the public chain.host domain
 		// (requests route through vProx/Apache). When false, probe directly via LAN IP —
-		// preferred when vLog is co-located on the same network as the node.
+		// preferred when vOps is co-located on the same network as the node.
 		// This is independent of managed_host (SSH management); both can be set freely.
 		rpcURL := ""
 		restURL := ""

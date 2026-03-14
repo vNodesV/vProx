@@ -20,7 +20,7 @@ type Ports struct {
 	GRPC           int      `toml:"grpc"`
 	GRPCWeb        int      `toml:"grpc_web"`
 	API            int      `toml:"api"`
-	VLogURL        string   `toml:"vlog_url"`        // optional: notify vLog after --new-backup
+	VOpsURL        string   `toml:"vops_url"`        // optional: notify vOps after --new-backup
 	TrustedProxies []string `toml:"trusted_proxies"` // CIDRs trusted to set X-Forwarded-For (e.g. ["127.0.0.1/32"])
 }
 
@@ -148,9 +148,9 @@ type ManagementPing struct {
 //	  Has NO effect on probe routing or health polling.
 //
 //	exposed_services: Probe routing gate.
-//	  When true, vLog probes this node via the public chain.host domain (i.e.,
-//	  through vProx/Apache). When false, vLog probes directly via lan_ip, bypassing
-//	  the public proxy stack (lower latency, useful when vLog is on the same LAN).
+//	  When true, vOps probes this node via the public chain.host domain (i.e.,
+//	  through vProx/Apache). When false, vOps probes directly via lan_ip, bypassing
+//	  the public proxy stack (lower latency, useful when vOps is on the same LAN).
 //	  Has NO effect on SSH management.
 //
 // Example combos:
@@ -160,20 +160,20 @@ type ManagementPing struct {
 //	managed_host=false + exposed_services=true  → no SSH; probe via public domain
 //	managed_host=false + exposed_services=false → monitoring only; probe via LAN
 //
-// Global defaults for user and key_path are sourced from [vlog.push.defaults]
-// in vlog.toml when the corresponding fields are empty here.
+// Global defaults for user and key_path are sourced from [vops.push.defaults]
+// in vops.toml when the corresponding fields are empty here.
 type Management struct {
 	// managed_host: when true, this node is registered in the fleet module (SSH management enabled).
 	// Does NOT affect probe routing — see exposed_services below.
 	ManagedHost bool     `toml:"managed_host"`
 	LanIP       string   `toml:"lan_ip"`     // SSH target IP; empty = use chain.ip
 	PublicIP    string   `toml:"public_ip"`  // display-only; optional
-	User        string   `toml:"user"`       // SSH user; empty = [vlog.push.defaults].user
-	KeyPath     string   `toml:"key_path"`   // SSH key path; empty = [vlog.push.defaults].key_path
+	User        string   `toml:"user"`       // SSH user; empty = [vops.push.defaults].user
+	KeyPath     string   `toml:"key_path"`   // SSH key path; empty = [vops.push.defaults].key_path
 	Port        int      `toml:"port"`       // SSH port; 0 = default 22
 	Type        []string `toml:"type"`       // service roles: validator | sp | rpc | relayer | node
 	Datacenter  string   `toml:"datacenter"` // location label, e.g. "QC"
-	// exposed_services: when true, vLog probes via public chain.host domain (through vProx).
+	// exposed_services: when true, vOps probes via public chain.host domain (through vProx).
 	// When false, probes directly via lan_ip (same-LAN monitoring, no proxy hop).
 	// Independent from managed_host — controls probe routing only.
 	ExposedServices bool           `toml:"exposed_services"`
@@ -435,7 +435,7 @@ func IsChainTOML(name string) bool {
 	if strings.HasSuffix(name, ".sample.toml") {
 		return false
 	}
-	skip := []string{"ports.toml", "services.toml", "backup.toml", "modules.toml", "vlog.toml", "webservice.toml"}
+	skip := []string{"ports.toml", "services.toml", "backup.toml", "modules.toml", "vops.toml", "webservice.toml"}
 	for _, s := range skip {
 		if strings.EqualFold(name, s) {
 			return false

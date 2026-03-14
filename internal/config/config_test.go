@@ -405,13 +405,13 @@ grpc = 99999
 		}
 	})
 
-	t.Run("vlog_url preserved", func(t *testing.T) {
+	t.Run("vops_url preserved", func(t *testing.T) {
 		t.Parallel()
 		dir := t.TempDir()
 		f := filepath.Join(dir, "ports.toml")
 		data := `rpc = 26657
 rest = 1317
-vlog_url = "http://localhost:8090/api/v1/ingest"
+vops_url = "http://localhost:8090/api/v1/ingest"
 `
 		if err := os.WriteFile(f, []byte(data), 0o644); err != nil {
 			t.Fatal(err)
@@ -420,8 +420,8 @@ vlog_url = "http://localhost:8090/api/v1/ingest"
 		if err != nil {
 			t.Fatalf("LoadPorts: %v", err)
 		}
-		if p.VLogURL != "http://localhost:8090/api/v1/ingest" {
-			t.Errorf("VLogURL = %q", p.VLogURL)
+		if p.VOpsURL != "http://localhost:8090/api/v1/ingest" {
+			t.Errorf("VOpsURL = %q", p.VOpsURL)
 		}
 	})
 }

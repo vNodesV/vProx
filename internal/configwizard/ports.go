@@ -46,7 +46,7 @@ func runPorts(home string) error {
 	grpc := readOptionalPort("grpc", defGRPC)
 	grpcWeb := readOptionalPort("grpc_web", defGRPCWeb)
 	api := readOptionalPort("api", defAPI)
-	vlogURL := readOptionalURL("vlog_url", existing.VLogURL)
+	vopsURL := readOptionalURL("vops_url", existing.VOpsURL)
 
 	section("Trusted Proxies")
 	fmt.Println("  CIDRs trusted to forward X-Forwarded-For (e.g. 127.0.0.1/32 for loopback).")
@@ -62,7 +62,7 @@ func runPorts(home string) error {
 		GRPC:           grpc,
 		GRPCWeb:        grpcWeb,
 		API:            api,
-		VLogURL:        vlogURL,
+		VOpsURL:        vopsURL,
 		TrustedProxies: trusted,
 	}
 

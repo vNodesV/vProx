@@ -1,0 +1,346 @@
+{{define "title"}}Account — {{.Account.IP}}{{end}}
+{{define "content"}}
+<nav class="page-nav">
+  <a href="{{.BasePath}}/">Dashboard</a>
+  <a href="{{.BasePath}}/accounts" class="active">Accounts</a>
+  <a href="{{.BasePath}}/settings">Settings</a>
+</nav>
+<div class="detail-header">
+  <h2 style="margin:0;">{{.Account.IP}}</h2>
+  <span class="badge badge-{{.Account.Status}}">{{.Account.Status}}</span>
+  {{if eq .Account.Status "blocked"}}
+  <button class="btn-block btn-unblock" onclick="doBlock('{{.Account.IP}}','{{.BasePath}}',false)">⊘ UNBLOCK</button>
+  {{else}}
+  <button class="btn-block" onclick="doBlock('{{.Account.IP}}','{{.BasePath}}',true)">⊘ BLOCK IP</button>
+  {{end}}
+</div>
+
+{{if eq .Account.Status "blocked"}}
+<!-- ── Blocked Status ── -->
+<article class="blocked-article">
+  <header><strong>⊘ IP Blocked</strong></header>
+  <p style="margin:0.5rem 0 0;font-size:0.9rem;">
+    This IP is currently blocked at the OS firewall level (UFW) and marked as blocked in the database.
+    Click <strong>UNBLOCK</strong> to remove the block.
+  </p>
+</article>
+{{end}}
+
+<!-- ── Account Details ── -->
+<article>
+  <header class="intel-card-header">
+    <strong>Account Details</strong>
+    <button class="btn-update btn-update-org" onclick="startUpdate('{{.Account.IP}}','{{.BasePath}}','/api/v1/osint/','Network Scan')">ORG UPDATE</button>
+  </header>
+
+  <div class="detail-grid">
+    <table style="font-size:0.85rem;">
+      <tbody>
+        <tr><td>Organization</td><td>{{if .Account.Org}}{{.Account.Org}}{{else}}<em>—</em>{{end}}</td></tr>
+        <tr><td>Country</td><td>{{if .Account.Country}}{{.Account.Country}}{{else}}<em>—</em>{{end}}</td></tr>
+        <tr><td>ASN</td><td>{{if .Account.ASN}}{{.Account.ASN}}{{else}}<em>—</em>{{end}}</td></tr>
+        <tr><td>Reverse DNS</td><td>{{if .Account.RDNS}}{{.Account.RDNS}}{{else}}<em>—</em>{{end}}</td></tr>
+        <tr><td>Protocol</td><td>{{if .Account.Protocol}}{{.Account.Protocol}}{{else}}<em>—</em>{{end}}</td></tr>
+        <tr><td>Latency</td><td>{{if ge .Account.PingMs 0.0}}{{printf "%.1f" .Account.PingMs}} ms{{else}}<em>—</em>{{end}}</td></tr>
+        <tr><td>OSINT Updated</td><td>{{if .Account.OSINTUpdatedAt}}{{.Account.OSINTUpdatedAt}}{{else}}<em>never</em>{{end}}</td></tr>
+      </tbody>
+    </table>
+
+    <div>
+      <div style="font-size:0.75rem;opacity:0.55;margin-bottom:0.4rem;font-weight:600;letter-spacing:0.05em;">PORT SCAN</div>
+      <div class="ports-row">
+        {{range .Ports}}
+        <div class="port-badge {{if .Open}}port-open{{else}}port-closed{{end}}">
+          <span class="port-dot">{{if .Open}}●{{else}}○{{end}}</span>
+          <span class="port-num">{{.Port}}</span>
+          <span class="port-label">{{.Label}}</span>
+        </div>
+        {{end}}
+        {{if not .Ports}}<em style="font-size:0.8rem;opacity:0.5;">No scan data yet</em>{{end}}
+      </div>
+      {{if .Account.Moniker}}
+      <div style="margin-top:1rem;font-size:0.85rem;">
+        <div style="font-size:0.75rem;opacity:0.55;margin-bottom:0.4rem;font-weight:600;letter-spacing:0.05em;">COSMOS NODE</div>
+        <div><strong>{{.Account.Moniker}}</strong> &nbsp;·&nbsp; {{.Account.ChainID}}</div>
+      </div>
+      {{end}}
+    </div>
+  </div>
+</article>
+
+<!-- ── Threat Intelligence ── -->
+<article>
+  <header class="intel-card-header">
+    <strong>Threat Intelligence</strong>
+    <button class="btn-update" onclick="startUpdate('{{.Account.IP}}','{{.BasePath}}','/api/v1/enrich/','Threat Update')">THREAT UPDATE</button>
+  </header>
+
+  <table style="font-size:0.85rem;">
+    <tbody>
+      <!-- VirusTotal row -->
+      <tr>
+        <td class="ti-icon-cell">
+          {{if lt .Account.VTMalicious 0}}<span class="ti-na" title="Not checked">—</span>
+          {{else if eq .Account.VTMalicious 0}}<span class="ti-clean" title="Clean">✓</span>
+          {{else if lt .Account.VTMalicious 3}}<span class="ti-suspicious" title="Minor — unconfirmed">&#x26A0;</span>
+          {{else if lt .Account.VTMalicious 10}}<span class="ti-suspicious" title="Suspicious">!</span>
+          {{else}}<span class="ti-malicious" title="High Risk">!</span>{{end}}
+        </td>
+        <td>VirusTotal</td>
+        <td>{{if lt .Account.VTMalicious 0}}<em>not checked</em>{{else if eq .Account.VTMalicious 0}}Clean{{else}}{{.Account.VTMalicious}} malicious detection(s){{end}}</td>
+      </tr>
+      <!-- AbuseIPDB row -->
+      <tr>
+        <td class="ti-icon-cell">
+          {{if lt .Account.AbuseScore 0}}<span class="ti-na" title="Not checked">—</span>
+          {{else if le .Account.AbuseScore 25}}<span class="ti-clean" title="Clean">✓</span>
+          {{else if lt .Account.AbuseScore 50}}<span class="ti-suspicious" title="Low confidence">&#x26A0;</span>
+          {{else}}<span class="ti-malicious" title="High Risk">!</span>{{end}}
+        </td>
+        <td>AbuseIPDB</td>
+        <td>{{if lt .Account.AbuseScore 0}}<em>not checked</em>{{else}}{{.Account.AbuseScore}}/100 confidence score{{end}}</td>
+      </tr>
+      <!-- Shodan row -->
+      <tr>
+        <td class="ti-icon-cell"><span class="ti-info" title="Recon data">◎</span></td>
+        <td>Shodan</td>
+        <td>
+          {{if .ShodanResult}}
+            {{if .ShodanResult.ISP}}{{.ShodanResult.ISP}}{{end}}
+            {{if .ShodanResult.Ports}} &middot; port(s)&nbsp;{{range $i,$p := .ShodanResult.Ports}}{{if $i}},&nbsp;{{end}}{{$p}}{{end}}{{end}}
+          {{else}}<em>not indexed</em>{{end}}
+        </td>
+      </tr>
+      <!-- Score row -->
+      <tr>
+        <td class="ti-icon-cell">
+          {{if lt .Account.ThreatScore 0}}<span class="ti-na">—</span>
+          {{else if le .Account.ThreatScore 19}}<span class="ti-clean" title="Clean">✓</span>
+          {{else if le .Account.ThreatScore 49}}<span class="ti-suspicious" title="Suspicious">&#x26A0;</span>
+          {{else}}<span class="ti-malicious" title="High Risk">!</span>{{end}}
+        </td>
+        <td>Threat Score</td>
+        <td><strong>{{.Account.ThreatScore}}/100</strong>{{if .ThreatFlagsArr}}&nbsp;
+          {{range .ThreatFlagsArr}}<span class="badge badge-malicious" style="font-size:0.7rem;margin-right:2px;">{{.}}</span>{{end}}
+        {{end}}</td>
+      </tr>
+      <tr><td></td><td>Intel Updated</td><td>{{if .Account.IntelUpdatedAt}}{{.Account.IntelUpdatedAt}}{{else}}<em>never</em>{{end}}</td></tr>
+    </tbody>
+  </table>
+
+  {{if and .ShodanResult .ShodanResult.Services}}
+  <div style="margin-top:1rem;">
+    <div style="font-size:0.75rem;opacity:0.55;margin-bottom:0.4rem;font-weight:600;letter-spacing:0.05em;">SHODAN SERVICES</div>
+    <table style="font-size:0.82rem;width:100%;">
+      <thead><tr><th>Port</th><th>Proto</th><th>Product</th><th>Version</th></tr></thead>
+      <tbody>
+        {{range .ShodanResult.Services}}
+        <tr>
+          <td>{{.Port}}</td>
+          <td>{{if .Transport}}{{.Transport}}{{else}}—{{end}}</td>
+          <td>{{if .Product}}{{.Product}}{{else}}<em>—</em>{{end}}</td>
+          <td>{{if .Version}}{{.Version}}{{else}}<em>—</em>{{end}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+  {{end}}
+</article>
+
+<!-- ── Account Events ── -->
+<article>
+  <header><strong>Activity</strong></header>
+  <table style="font-size:0.85rem;">
+    <tbody>
+      <tr><td>First Seen</td><td>{{.Account.FirstSeen}}</td></tr>
+      <tr><td>Last Seen</td><td>{{.Account.LastSeen}}</td></tr>
+      <tr><td>Total Requests</td><td>{{.Account.TotalRequests}}</td></tr>
+      <tr><td>Rate Limit Events</td><td>{{.Account.RatelimitEvents}}</td></tr>
+    </tbody>
+  </table>
+</article>
+
+{{if .Account.Notes}}
+<article>
+  <header><strong>Notes</strong></header>
+  <p>{{.Account.Notes}}</p>
+</article>
+{{end}}
+
+<article>
+  <header><strong>Recent Requests</strong> (last 20)</header>
+  {{if .RecentRequests}}
+  <div style="overflow-x:auto;">
+    <table>
+      <thead>
+        <tr><th>Timestamp</th><th>Method</th><th>Path</th><th>Host</th><th>Status</th><th>Country</th><th>User Agent</th></tr>
+      </thead>
+      <tbody>
+        {{range .RecentRequests}}
+        <tr>
+          <td>{{.Ts}}</td>
+          <td><code>{{.Method}}</code></td>
+          <td><code>{{.Path}}</code></td>
+          <td>{{.Host}}</td>
+          <td>{{.Status}}</td>
+          <td>{{.Country}}</td>
+          <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;">{{.UserAgent}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+  {{else}}<p>No request events recorded.</p>{{end}}
+</article>
+
+<article>
+  <header><strong>Recent Rate Limit Events</strong> (last 20)</header>
+  {{if .RecentLimits}}
+  <div style="overflow-x:auto;">
+    <table>
+      <thead>
+        <tr><th>Timestamp</th><th>Event</th><th>Reason</th><th>Method</th><th>Path</th><th>RPS</th><th>Burst</th></tr>
+      </thead>
+      <tbody>
+        {{range .RecentLimits}}
+        <tr>
+          <td>{{.Ts}}</td>
+          <td>{{.Event}}</td>
+          <td>{{.Reason}}</td>
+          <td><code>{{.Method}}</code></td>
+          <td><code>{{.Path}}</code></td>
+          <td>{{printf "%.1f" .RPS}}</td>
+          <td>{{.Burst}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+  {{else}}<p>No rate limit events recorded.</p>{{end}}
+</article>
+
+<!-- ── Shared Update Modal ── -->
+<div id="enrich-modal" class="enrich-overlay" style="display:none;" role="dialog" aria-modal="true">
+  <div class="enrich-popup">
+    <h4 id="enrich-title">Updating&hellip;</h4>
+    <div id="enrich-status" class="enrich-status-text">Initialising&hellip;</div>
+    <div class="enrich-bar-wrap"><div id="enrich-bar" class="enrich-bar"></div></div>
+    <div id="enrich-log" class="enrich-log"></div>
+    <button id="enrich-dismiss" class="enrich-dismiss" onclick="dismissEnrich()">Dismiss</button>
+  </div>
+</div>
+
+<script>
+function startUpdate(ip, base, endpoint, title) {
+  var modal   = document.getElementById('enrich-modal');
+  var bar     = document.getElementById('enrich-bar');
+  var stat    = document.getElementById('enrich-status');
+  var log     = document.getElementById('enrich-log');
+  var head    = document.getElementById('enrich-title');
+  var dismiss = document.getElementById('enrich-dismiss');
+
+  bar.className    = 'enrich-bar';
+  bar.style.width  = '0%';
+  stat.textContent = 'Initialising\u2026';
+  head.textContent = title + ' \u2014 ' + ip;
+  log.innerHTML    = '';
+  dismiss.className = 'enrich-dismiss';
+  modal.style.display = 'flex';
+
+  function setBar(pct) { bar.style.width = pct + '%'; }
+  function addLog(msg, cls) {
+    var li = document.createElement('div');
+    li.className = 'enrich-log-line' + (cls ? ' ' + cls : '');
+    li.textContent = msg;
+    log.appendChild(li);
+    log.scrollTop = log.scrollHeight;
+  }
+  function showDismiss() { dismiss.className = 'enrich-dismiss visible'; }
+
+  fetch(base + endpoint + ip, { method: 'POST' })
+    .then(function(res) {
+      if (!res.ok) {
+        return res.text().then(function(t) { throw new Error('HTTP ' + res.status + ': ' + t); });
+      }
+      var reader  = res.body.getReader();
+      var decoder = new TextDecoder();
+      var buf     = '';
+
+      function pump() {
+        return reader.read().then(function(chunk) {
+          if (chunk.done) {
+            if (bar.style.width !== '100%') {
+              bar.classList.add('enrich-done');
+              setBar(100);
+              stat.textContent = 'Complete \u2713';
+            }
+            showDismiss();
+            return;
+          }
+          buf += decoder.decode(chunk.value, { stream: true });
+          var lines = buf.split('\n');
+          buf = lines.pop();
+          lines.forEach(function(line) {
+            if (!line.startsWith('data: ')) return;
+            try { handleEvent(JSON.parse(line.slice(6))); } catch(e) {}
+          });
+          return pump();
+        });
+      }
+      return pump();
+    })
+    .catch(function(err) {
+      bar.classList.add('enrich-error');
+      setBar(100);
+      stat.textContent = 'Error';
+      addLog(err.message || 'Network error', 'enrich-log-err');
+      showDismiss();
+    });
+
+  function handleEvent(ev) {
+    if (!ev) return;
+    setBar(ev.pct || 0);
+    stat.textContent = ev.msg || '';
+
+    var cls = '';
+    if (ev.step && ev.step.endsWith('_err'))                                cls = 'enrich-log-err';
+    else if (ev.step && (ev.step.endsWith('_skip') || ev.step.endsWith('_cached') || ev.step.endsWith('_none'))) cls = 'enrich-log-dim';
+    else if (ev.step && (ev.step.endsWith('_done') || ev.step === 'done')) cls = 'enrich-log-ok';
+
+    var logSteps = ['vt_done','vt_err','vt_skip','vt_cached',
+                    'abuse_done','abuse_err','abuse_skip','abuse_cached',
+                    'shodan_done','shodan_err','shodan_skip','shodan_cached',
+                    'org_done','org_none',
+                    'rdns_done','rdns_none','ports_done','ports_none',
+                    'proto_done','proto_none','cosmos_done','cosmos_none',
+                    'score','save','done','error'];
+    if (logSteps.indexOf(ev.step) !== -1) addLog(ev.msg, cls);
+
+    if (ev.step === 'done') {
+      bar.classList.add('enrich-done');
+      showDismiss();
+    } else if (ev.step === 'error') {
+      bar.classList.add('enrich-error');
+      showDismiss();
+    }
+  }
+}
+function dismissEnrich() {
+  document.getElementById('enrich-modal').style.display = 'none';
+  window.location.reload();
+}
+function doBlock(ip, base, block) {
+  var url   = block ? (base + '/api/v1/block/' + ip) : (base + '/api/v1/unblock/' + ip);
+  var label = block ? 'Blocking ' + ip + '\u2026' : 'Unblocking ' + ip + '\u2026';
+  if (!confirm(label + '\nProceed?')) return;
+  fetch(url, { method: 'POST' })
+    .then(function(res) { return res.json(); })
+    .then(function(data) {
+      if (data.error) { alert('Error: ' + data.error); return; }
+      window.location.reload();
+    })
+    .catch(function(err) { alert('Error: ' + err.message); });
+}
+</script>
+{{end}}

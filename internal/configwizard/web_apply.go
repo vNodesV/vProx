@@ -18,7 +18,7 @@ import (
 	chainconfig "github.com/vNodesV/vProx/internal/config"
 	fleetcfg "github.com/vNodesV/vProx/internal/fleet/config"
 	fleetstate "github.com/vNodesV/vProx/internal/fleet/state"
-	vlogcfg "github.com/vNodesV/vProx/internal/vlog/config"
+	vopscfg "github.com/vNodesV/vProx/internal/vops/config"
 )
 
 const maxImportFileBytes int64 = 512 * 1024
@@ -50,7 +50,7 @@ func RemoveStepEntry(home, step, target string) error {
 		if strings.EqualFold(name, "ports.toml") {
 			return fmt.Errorf("ports.toml cannot be removed from this endpoint")
 		}
-		primary := configPath(home, "vlog", "chains", name)
+		primary := configPath(home, "vops", "chains", name)
 		legacy := configPath(home, "chains", name)
 		path := primary
 		if _, err := os.Stat(path); err != nil && !os.IsNotExist(err) {
@@ -114,8 +114,8 @@ func applyWebFields(home, step string, f map[string]any) error {
 		return applySettings(home, f)
 	case "chain":
 		return applyChain(home, f)
-	case "vlog":
-		return applyVLog(home, f)
+	case "vops":
+		return applyVOps(home, f)
 	case "fleet":
 		return applyFleet(home, f)
 	case "infra":
@@ -136,7 +136,7 @@ func applyPorts(home string, f map[string]any) error {
 		GRPC:    fieldInt(f, "grpc", 0),
 		GRPCWeb: fieldInt(f, "grpc_web", 0),
 		API:     fieldInt(f, "api", 0),
-		VLogURL: fieldStr(f, "vlog_url", ""),
+		VOpsURL: fieldStr(f, "vops_url", ""),
 	}
 	if raw := fieldStr(f, "trusted_proxies", ""); raw != "" {
 		for _, c := range strings.Split(raw, ",") {
@@ -218,7 +218,7 @@ func applyChain(home string, f map[string]any) error {
 		return fmt.Errorf("chain_ping_country is unsupported: %q", c.ChainPing.Country)
 	}
 
-	if err := writeConfigNoPrompt(configPath(home, "vlog", "chains", name+".toml"), c); err != nil {
+	if err := writeConfigNoPrompt(configPath(home, "vops", "chains", name+".toml"), c); err != nil {
 		return err
 	}
 	if err := patchLegacyChainSettings(home, name, f); err != nil {
@@ -568,16 +568,16 @@ func seedLegacyChainConfig(chainName string, f map[string]any) (chainconfig.Chai
 	return cfg, true, nil
 }
 
-func applyVLog(home string, f map[string]any) error {
-	path := configPath(home, "vlog", "vlog.toml")
-	existing := loadExistingVLog(path)
-	importedSecrets, err := loadImportedVLogSecrets(importSourcePath(f, "vlog"))
+func applyVOps(home string, f map[string]any) error {
+	path := configPath(home, "vops", "vops.toml")
+	existing := loadExistingVOps(path)
+	importedSecrets, err := loadImportedVOpsSecrets(importSourcePath(f, "vops"))
 	if err != nil {
 		return err
 	}
 
-	var cfg vlogcfg.Config
-	v := &cfg.VLog
+	var cfg vopscfg.Config
+	v := &cfg.VOps
 	v.Port = fieldInt(f, "port", 8889)
 	v.BindAddress = fieldStr(f, "bind_address", "127.0.0.1")
 	v.BasePath = fieldStr(f, "base_path", "")
@@ -592,11 +592,11 @@ func applyVLog(home string, f map[string]any) error {
 	v.ArchivesDir = fieldStr(f, "archives_dir", "")
 	v.VProxBin = fieldStr(f, "vprox_bin", "vprox")
 
-	v.APIKey = preserveRedactedStringFieldWithImport(f, "api_key", existing.VLog.APIKey, importedSecrets["api_key"])
-	v.Auth.PasswordHash = preserveRedactedStringFieldWithImport(f, "password_hash", existing.VLog.Auth.PasswordHash, importedSecrets["password_hash"])
-	v.Intel.Keys.AbuseIPDB = preserveRedactedStringFieldWithImport(f, "abuseipdb", existing.VLog.Intel.Keys.AbuseIPDB, importedSecrets["abuseipdb"])
-	v.Intel.Keys.VirusTotal = preserveRedactedStringFieldWithImport(f, "virustotal", existing.VLog.Intel.Keys.VirusTotal, importedSecrets["virustotal"])
-	v.Intel.Keys.Shodan = preserveRedactedStringFieldWithImport(f, "shodan", existing.VLog.Intel.Keys.Shodan, importedSecrets["shodan"])
+	v.APIKey = preserveRedactedStringFieldWithImport(f, "api_key", existing.VOps.APIKey, importedSecrets["api_key"])
+	v.Auth.PasswordHash = preserveRedactedStringFieldWithImport(f, "password_hash", existing.VOps.Auth.PasswordHash, importedSecrets["password_hash"])
+	v.Intel.Keys.AbuseIPDB = preserveRedactedStringFieldWithImport(f, "abuseipdb", existing.VOps.Intel.Keys.AbuseIPDB, importedSecrets["abuseipdb"])
+	v.Intel.Keys.VirusTotal = preserveRedactedStringFieldWithImport(f, "virustotal", existing.VOps.Intel.Keys.VirusTotal, importedSecrets["virustotal"])
+	v.Intel.Keys.Shodan = preserveRedactedStringFieldWithImport(f, "shodan", existing.VOps.Intel.Keys.Shodan, importedSecrets["shodan"])
 
 	return writeConfigNoPrompt(path, cfg)
 }
@@ -766,8 +766,8 @@ func applyBackup(home string, f map[string]any) error {
 	return writeConfigNoPrompt(configPath(home, "backup", "backup.toml"), cfg)
 }
 
-func loadExistingVLog(path string) vlogcfg.Config {
-	var cfg vlogcfg.Config
+func loadExistingVOps(path string) vopscfg.Config {
+	var cfg vopscfg.Config
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return cfg
@@ -785,7 +785,7 @@ func importSourcePath(f map[string]any, step string) string {
 	return path
 }
 
-func loadImportedVLogSecrets(sourcePath string) (map[string]string, error) {
+func loadImportedVOpsSecrets(sourcePath string) (map[string]string, error) {
 	secrets := map[string]string{
 		"api_key":       "",
 		"password_hash": "",
@@ -798,16 +798,16 @@ func loadImportedVLogSecrets(sourcePath string) (map[string]string, error) {
 	}
 	path, data, err := readImportTOML(sourcePath)
 	if err != nil {
-		return nil, fmt.Errorf("read imported vlog source: %w", err)
+		return nil, fmt.Errorf("read imported vops source: %w", err)
 	}
-	if err := validateImportLocation("vlog", path); err != nil {
+	if err := validateImportLocation("vops", path); err != nil {
 		return nil, err
 	}
-	var cfg vlogcfg.Config
+	var cfg vopscfg.Config
 	if err := toml.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("parse imported vlog TOML: %w", err)
+		return nil, fmt.Errorf("parse imported vops TOML: %w", err)
 	}
-	v := cfg.VLog
+	v := cfg.VOps
 	secrets["api_key"] = strings.TrimSpace(v.APIKey)
 	secrets["password_hash"] = strings.TrimSpace(v.Auth.PasswordHash)
 	secrets["abuseipdb"] = strings.TrimSpace(v.Intel.Keys.AbuseIPDB)
@@ -1184,8 +1184,8 @@ func unregisterRegisteredChains(home string, aliases []string) error {
 	}
 
 	dbPath := filepath.Join(home, "data", "push.db")
-	if cfg, err := vlogcfg.Load(configPath(home, "vlog", "vlog.toml")); err == nil {
-		if trimmed := strings.TrimSpace(cfg.VLog.Push.DBPath); trimmed != "" {
+	if cfg, err := vopscfg.Load(configPath(home, "vops", "vops.toml")); err == nil {
+		if trimmed := strings.TrimSpace(cfg.VOps.Push.DBPath); trimmed != "" {
 			dbPath = trimmed
 		}
 	}
@@ -1298,16 +1298,16 @@ func validateImportLocation(step, path string) error {
 			return fmt.Errorf("settings import expects .../config/vprox/settings.toml")
 		}
 	case "chain":
-		if strings.HasPrefix(rel, "vlog/chains/") && base != "" {
+		if strings.HasPrefix(rel, "vops/chains/") && base != "" {
 			return nil
 		}
 		if strings.HasPrefix(rel, "chains/") && base != "ports.toml" {
 			return nil // legacy chain layout
 		}
-		return fmt.Errorf("chain import expects .../config/vlog/chains/*.toml (or legacy .../config/chains/*.toml)")
-	case "vlog":
-		if rel != "vlog/vlog.toml" {
-			return fmt.Errorf("vlog import expects .../config/vlog/vlog.toml")
+		return fmt.Errorf("chain import expects .../config/vops/chains/*.toml (or legacy .../config/chains/*.toml)")
+	case "vops":
+		if rel != "vops/vops.toml" {
+			return fmt.Errorf("vops import expects .../config/vops/vops.toml")
 		}
 	case "fleet":
 		if rel != "fleet/settings.toml" {
@@ -1358,8 +1358,8 @@ func importFieldsFromTOML(step, path string, data []byte) (map[string]any, error
 		return importSettingsFields(data)
 	case "chain":
 		return importChainFields(path, data)
-	case "vlog":
-		return importVLogFields(data)
+	case "vops":
+		return importVOpsFields(data)
 	case "fleet":
 		return importFleetFields(data)
 	case "infra":
@@ -1385,7 +1385,7 @@ func importPortsFields(data []byte) (map[string]any, error) {
 		"grpc":            p.GRPC,
 		"grpc_web":        p.GRPCWeb,
 		"api":             p.API,
-		"vlog_url":        p.VLogURL,
+		"vops_url":        p.VOpsURL,
 		"trusted_proxies": strings.Join(p.TrustedProxies, ","),
 	}, nil
 }
@@ -1551,23 +1551,23 @@ func legacyChainCompanionPath(path, chainName string) string {
 	if !strings.EqualFold(filepath.Base(dir), "chains") {
 		return ""
 	}
-	if !strings.EqualFold(filepath.Base(filepath.Dir(dir)), "vlog") {
+	if !strings.EqualFold(filepath.Base(filepath.Dir(dir)), "vops") {
 		return ""
 	}
 	configDir := filepath.Dir(filepath.Dir(dir))
 	return filepath.Join(configDir, "chains", chainName+".toml")
 }
 
-func importVLogFields(data []byte) (map[string]any, error) {
+func importVOpsFields(data []byte) (map[string]any, error) {
 	rawLower := strings.ToLower(string(data))
-	if !strings.Contains(rawLower, "[vlog]") {
-		return nil, fmt.Errorf("file does not look like vlog.toml")
+	if !strings.Contains(rawLower, "[vops]") {
+		return nil, fmt.Errorf("file does not look like vops.toml")
 	}
-	var cfg vlogcfg.Config
+	var cfg vopscfg.Config
 	if err := toml.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("parse vlog TOML: %w", err)
+		return nil, fmt.Errorf("parse vops TOML: %w", err)
 	}
-	v := cfg.VLog
+	v := cfg.VOps
 	return map[string]any{
 		"port":              v.Port,
 		"bind_address":      v.BindAddress,

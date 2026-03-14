@@ -15,7 +15,7 @@ import (
 // If no VM is discovered in the new layout, it falls back to the legacy
 // config/chains/*.toml management model for backward compatibility.
 //
-// Chain identity is enriched from config/vlog/chains/*.toml.
+// Chain identity is enriched from config/vops/chains/*.toml.
 func LoadRuntimeConfig(home string, defaults FleetDefaults, legacyChainsDir, infraDir string) (*Config, error) {
 	if strings.TrimSpace(home) == "" {
 		return nil, fmt.Errorf("home is required")
@@ -28,7 +28,7 @@ func LoadRuntimeConfig(home string, defaults FleetDefaults, legacyChainsDir, inf
 	}
 
 	nodesDir := filepath.Join(home, "config", "vprox", "nodes")
-	vlogChainsDir := filepath.Join(home, "config", "vlog", "chains")
+	vopsChainsDir := filepath.Join(home, "config", "vops", "chains")
 
 	merged := &Config{}
 
@@ -60,14 +60,14 @@ func LoadRuntimeConfig(home string, defaults FleetDefaults, legacyChainsDir, inf
 		}
 	}
 
-	EnrichVMsFromVLogChains(merged.VMs, vlogChainsDir)
+	EnrichVMsFromVOpsChains(merged.VMs, vopsChainsDir)
 	return merged, nil
 }
 
-// EnrichVMsFromVLogChains fills missing chain identity metadata on VM entries
-// using config/vlog/chains/*.toml profiles.
-func EnrichVMsFromVLogChains(vms []VM, vlogChainsDir string) {
-	chains, err := chainconfig.LoadChains(vlogChainsDir)
+// EnrichVMsFromVOpsChains fills missing chain identity metadata on VM entries
+// using config/vops/chains/*.toml profiles.
+func EnrichVMsFromVOpsChains(vms []VM, vopsChainsDir string) {
+	chains, err := chainconfig.LoadChains(vopsChainsDir)
 	if err != nil || len(chains) == 0 {
 		return
 	}

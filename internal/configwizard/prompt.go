@@ -16,7 +16,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// validCountries is the set of supported probe country codes (mirrors countryNodes in vLog).
+// validCountries is the set of supported probe country codes (mirrors countryNodes in vOps).
 var validCountries = map[string]bool{
 	"CA": true, "US": true, "FR": true, "DE": true, "NL": true,
 	"GB": true, "UK": true, "FI": true, "JP": true, "SG": true,

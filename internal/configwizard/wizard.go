@@ -15,7 +15,7 @@ var ErrUnknownStep = errors.New("unknown step")
 // Run executes the terminal wizard.
 //
 // home is $VPROX_HOME.
-// step is an optional step name (ports|settings|chain|vlog|fleet|infra|backup|list|validate).
+// step is an optional step name (ports|settings|chain|vops|fleet|infra|backup|list|validate).
 // If step is "", all steps are run in order.
 // Extra args are passed to steps that accept them (chain <name>, infra <dc>).
 func Run(home, step string, args []string) error {
@@ -32,8 +32,8 @@ func Run(home, step string, args []string) error {
 			name = args[0]
 		}
 		return runChain(home, name)
-	case "vlog":
-		return runVLog(home)
+	case "vops":
+		return runVOps(home)
 	case "fleet":
 		return runFleet(home)
 	case "infra":
@@ -49,7 +49,7 @@ func Run(home, step string, args []string) error {
 	case "validate":
 		return runValidate(home)
 	default:
-		return fmt.Errorf("%w: %q (valid: ports|settings|chain|vlog|fleet|infra|backup|list|validate)", ErrUnknownStep, step)
+		return fmt.Errorf("%w: %q (valid: ports|settings|chain|vops|fleet|infra|backup|list|validate)", ErrUnknownStep, step)
 	}
 }
 
@@ -67,7 +67,7 @@ func runAll(home string) error {
 	}{
 		{"ports", func() error { return runPorts(home) }},
 		{"settings", func() error { return runSettings(home) }},
-		{"vlog", func() error { return runVLog(home) }},
+		{"vops", func() error { return runVOps(home) }},
 		{"fleet", func() error { return runFleet(home) }},
 		{"backup", func() error { return runBackup(home) }},
 	}

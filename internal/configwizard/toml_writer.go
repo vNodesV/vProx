@@ -108,7 +108,7 @@ func configFileMode(path string, existing os.FileMode) os.FileMode {
 
 func isSensitiveConfig(path string) bool {
 	lower := strings.ToLower(filepath.ToSlash(filepath.Clean(path)))
-	return strings.HasSuffix(lower, "config/vlog/vlog.toml")
+	return strings.HasSuffix(lower, "config/vops/vops.toml")
 }
 
 // printPreview prints the first n lines of data with indentation.

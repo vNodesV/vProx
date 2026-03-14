@@ -1424,19 +1424,19 @@ func main() {
 		}); err != nil {
 			log.Fatalf("Backup failed: %v", err)
 		}
-		// Notify vLog (non-fatal). Prefer services.toml/ports.toml vlog_url, fall back to env.
-		vlogURL := os.Getenv("VLOG_URL")
+		// Notify vOps (non-fatal). Prefer services.toml/ports.toml vops_url, fall back to env.
+		vopsURL := os.Getenv("VOPS_URL")
 		for _, p := range []string{
 			filepath.Join(chainsConfigDir, "services.toml"),
 			filepath.Join(chainsConfigDir, "ports.toml"),
 			filepath.Join(configDir, "ports.toml"),
 		} {
-			if pp, err := config.LoadPorts(p); err == nil && pp.VLogURL != "" {
-				vlogURL = pp.VLogURL
+			if pp, err := config.LoadPorts(p); err == nil && pp.VOpsURL != "" {
+				vopsURL = pp.VOpsURL
 				break
 			}
 		}
-		notifyVLog(vlogURL)
+		notifyVOps(vopsURL)
 		return
 	}
 
@@ -1834,14 +1834,14 @@ func main() {
 	}
 }
 
-// notifyVLog sends a POST to vLog's ingest endpoint after a successful backup.
-// Errors are silently ignored (vLog may not be running). The HTTP client has a 5s timeout.
-func notifyVLog(vlogURL string) {
-	if vlogURL == "" {
+// notifyVOps sends a POST to vOps's ingest endpoint after a successful backup.
+// Errors are silently ignored (vOps may not be running). The HTTP client has a 5s timeout.
+func notifyVOps(vopsURL string) {
+	if vopsURL == "" {
 		return
 	}
 	client := &http.Client{Timeout: 5 * time.Second}
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, vlogURL+"/api/v1/ingest", nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, vopsURL+"/api/v1/ingest", nil)
 	if err != nil {
 		return
 	}

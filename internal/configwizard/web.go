@@ -87,7 +87,7 @@ func (w *Web) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/config/ports", w.enforceLocalhost(w.handlePOST(w.saveStep("ports"))))
 	mux.HandleFunc("/api/config/settings", w.enforceLocalhost(w.handlePOST(w.saveStep("settings"))))
 	mux.HandleFunc("/api/config/chain", w.enforceLocalhost(w.handlePOST(w.saveStep("chain"))))
-	mux.HandleFunc("/api/config/vlog", w.enforceLocalhost(w.handlePOST(w.saveStep("vlog"))))
+	mux.HandleFunc("/api/config/vops", w.enforceLocalhost(w.handlePOST(w.saveStep("vops"))))
 	mux.HandleFunc("/api/config/fleet", w.enforceLocalhost(w.handlePOST(w.saveStep("fleet"))))
 	mux.HandleFunc("/api/config/infra", w.enforceLocalhost(w.handlePOST(w.saveStep("infra"))))
 	mux.HandleFunc("/api/config/backup", w.enforceLocalhost(w.handlePOST(w.saveStep("backup"))))
@@ -187,7 +187,7 @@ func CurrentSnapshot(home, mode string) map[string]any {
 	files := map[string]string{
 		"ports":    configPath(home, "chains", "ports.toml"),
 		"settings": configPath(home, "vprox", "settings.toml"),
-		"vlog":     configPath(home, "vlog", "vlog.toml"),
+		"vops":     configPath(home, "vops", "vops.toml"),
 		"fleet":    configPath(home, "fleet", "settings.toml"),
 		"backup":   configPath(home, "backup", "backup.toml"),
 	}
@@ -267,7 +267,7 @@ func redactSnapshotTOML(raw string) string {
 
 func loadChains(home string) []map[string]any {
 	chainDirs := []string{
-		configPath(home, "vlog", "chains"), // preferred layout
+		configPath(home, "vops", "chains"), // preferred layout
 		configPath(home, "chains"),         // legacy fallback
 	}
 

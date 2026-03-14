@@ -16,7 +16,7 @@ import (
 //	vprox config ports         # step 1 only
 //	vprox config settings      # step 2 only
 //	vprox config chain [name]  # step 3 (optional: edit existing chain)
-//	vprox config vlog          # step 4 only
+//	vprox config vops          # step 4 only
 //	vprox config fleet         # step 5 only
 //	vprox config infra [dc]    # step 6 (optional: target datacenter)
 //	vprox config backup        # step 7 only

@@ -1,0 +1,145 @@
+{{define "base"}}<!DOCTYPE html>
+<html lang="en" data-theme="{{ if .Theme }}{{ .Theme }}{{ else }}vnodes{{ end }}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>vLog — {{block "title" .}}Log Analyzer{{end}}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+  <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+  <link rel="stylesheet" href="{{.BasePath}}/static/vlog.css">
+  <script>
+  // initSortableTable must be defined in <head> so inline calls in content
+  // blocks can reference it without a ReferenceError.
+  function initSortableTable(tableId, spinnerId) {
+    var table = document.getElementById(tableId);
+    if (!table) return;
+    var spinner = spinnerId ? document.getElementById(spinnerId) : null;
+    var ths = table.querySelectorAll('thead th.sortable');
+    var state = {col: -1, asc: true};
+
+    // Persist sort state in URL (no navigation) and patch all nav links/forms
+    // so pagination, per-page, and search carry sort params through.
+    function persistSort(col, dir) {
+      var url = new URL(window.location.href);
+      url.searchParams.set('sort', col);
+      url.searchParams.set('dir', dir);
+      history.replaceState(null, '', url.toString());
+
+      // Patch pagination anchor links
+      document.querySelectorAll('.accounts-pagination a').forEach(function(a) {
+        try {
+          var u = new URL(a.href);
+          u.searchParams.set('sort', col); u.searchParams.set('dir', dir);
+          a.href = u.toString();
+        } catch(e) {}
+      });
+      // Patch per-page and search forms (inject/update hidden inputs)
+      document.querySelectorAll('.per-page-form, .search-form').forEach(function(form) {
+        ['sort', 'dir'].forEach(function(name) {
+          var val = (name === 'sort') ? col : dir;
+          var inp = form.querySelector('input[name="' + name + '"]');
+          if (inp) { inp.value = val; } else {
+            inp = document.createElement('input');
+            inp.type = 'hidden'; inp.name = name; inp.value = val;
+            form.appendChild(inp);
+          }
+        });
+      });
+      // Patch clear-search link
+      var cl = document.querySelector('.search-clear');
+      if (cl) {
+        try {
+          var u = new URL(cl.href);
+          u.searchParams.set('sort', col); u.searchParams.set('dir', dir);
+          cl.href = u.toString();
+        } catch(e) {}
+      }
+    }
+
+    function doSort(colIdx, asc, showSpinner) {
+      state.col = colIdx; state.asc = asc;
+      ths.forEach(function(t) { t.classList.remove('sort-asc','sort-desc'); });
+      ths[colIdx].classList.add(asc ? 'sort-asc' : 'sort-desc');
+      persistSort(colIdx, asc ? 'asc' : 'desc');
+      if (showSpinner && spinner) spinner.style.display = 'flex';
+      requestAnimationFrame(function() {
+        setTimeout(function() {
+          var tbody = table.querySelector('tbody');
+          var rows = Array.from(tbody.querySelectorAll('tr'));
+          rows.sort(function(a, b) {
+            var av = a.cells[colIdx] ? a.cells[colIdx].textContent.trim() : '';
+            var bv = b.cells[colIdx] ? b.cells[colIdx].textContent.trim() : '';
+            var an = parseFloat(av), bn = parseFloat(bv);
+            if (!isNaN(an) && !isNaN(bn)) return asc ? an - bn : bn - an;
+            return asc ? av.localeCompare(bv) : bv.localeCompare(av);
+          });
+          rows.forEach(function(r) { tbody.appendChild(r); });
+          if (showSpinner && spinner) spinner.style.display = 'none';
+        }, 0);
+      });
+    }
+
+    ths.forEach(function(th) {
+      th.addEventListener('click', function() {
+        var colIdx = Array.from(th.parentNode.children).indexOf(th);
+        var asc = (state.col === colIdx) ? !state.asc : true;
+        doSort(colIdx, asc, true);
+      });
+    });
+
+    // Restore sort from URL on page load (back-button / direct link with sort params)
+    var params = new URLSearchParams(window.location.search);
+    var sortParam = params.get('sort');
+    if (sortParam !== null) {
+      var col = parseInt(sortParam, 10);
+      if (!isNaN(col) && col >= 0 && col < ths.length) {
+        doSort(col, params.get('dir') !== 'desc', false);
+      }
+    }
+  }
+  </script>
+  <script>
+  // ── Theme switcher ──────────────────────────────────────────────────────
+  // Applies the active theme immediately from localStorage (flash-free).
+  // The server also injects data-theme server-side; localStorage wins on
+  // subsequent loads so the user's last choice is always respected.
+  (function() {
+    var saved = localStorage.getItem('vprox_theme');
+    if (saved && (saved === 'vnodes' || saved === 'dark-blue' || saved === 'light-blue')) {
+      document.documentElement.setAttribute('data-theme', saved);
+    }
+  })();
+
+  function setTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('vprox_theme', theme);
+    // Persist to server config + set cookie.
+    fetch('/settings/api/config/preferences', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({theme: theme})
+    }).catch(function() {}); // non-fatal
+    // Update swatch active state if swatches are present on the page.
+    document.querySelectorAll('.theme-swatch').forEach(function(el) {
+      el.classList.toggle('theme-swatch-active', el.dataset.theme === theme);
+    });
+  }
+  </script>
+</head>
+<body>
+  <main class="container">
+    {{if .AuthEnabled}}<div class="vlog-top-actions">
+      <a href="{{.BasePath}}/settings" class="vlog-top-link">⚙ Settings</a>
+      <form method="POST" action="{{.BasePath}}/logout" class="vlog-top-form">
+        <button type="submit" class="vlog-top-btn">↪ Logout</button>
+      </form>
+    </div>{{end}}
+    {{block "content" .}}{{end}}
+  </main>
+  <footer class="vlog-footer">vNodes[V] &nbsp;·&nbsp; vLog v1.1.0 &nbsp;·&nbsp; Infrastructure Intelligence</footer>
+</body>
+</html>
+{{end}}

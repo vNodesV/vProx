@@ -4,7 +4,7 @@
 //   - SSH-based deployment of chain scripts to remote VMs
 //   - Cosmos node status polling (height, governance, upgrade plan)
 //   - SQLite-backed deployment history and registered-chain registry
-//   - HTTP API handlers wired into the vLog web server
+//   - HTTP API handlers wired into the vOps web server
 package fleet
 
 import (
@@ -21,7 +21,7 @@ import (
 )
 
 // Service is the top-level fleet control plane.
-// Inject into the vLog web server for direct-call API handlers.
+// Inject into the vOps web server for direct-call API handlers.
 type Service struct {
 	cfg    *config.Config
 	db     *state.DB
@@ -98,7 +98,7 @@ func (s *Service) AddInfraConfigs(dir string) error {
 
 // AddChainConfigs merges VM entries derived from chain TOML [management] sections
 // into the service config. Chain-derived entries take precedence over vms.toml.
-// Call after New() (or NewEmpty()) when chains_dir is configured in vlog.toml.
+// Call after New() (or NewEmpty()) when chains_dir is configured in vops.toml.
 func (s *Service) AddChainConfigs(chainsDir string, defaults config.FleetDefaults) error {
 	chainCfg, err := config.LoadFromChainConfigs(chainsDir, defaults)
 	if err != nil {

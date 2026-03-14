@@ -5,9 +5,9 @@ BUILD_SRC := ./cmd/vprox
 BUILD_DIR := .build
 BUILD_OUT := $(BUILD_DIR)/$(APP_NAME)
 
-VLOG_NAME  := vLog
-VLOG_SRC   := ./cmd/vlog
-VLOG_BUILD := $(BUILD_DIR)/$(VLOG_NAME)
+VOPS_NAME  := vOps
+VOPS_SRC   := ./cmd/vops
+VOPS_BUILD := $(BUILD_DIR)/$(VOPS_NAME)
 
 VPROX_HOME := $(HOME)/.vProx
 DATA_DIR := $(VPROX_HOME)/data
@@ -18,16 +18,16 @@ INTERNAL_DIR := $(VPROX_HOME)/internal
 ARCHIVE_DIR := $(LOG_DIR)/archives
 SERVICE_DIR := $(VPROX_HOME)/service
 SERVICE_PATH := $(SERVICE_DIR)/vProx.service
-VLOG_SERVICE := $(SERVICE_DIR)/vLog.service
+VOPS_SERVICE := $(SERVICE_DIR)/vOps.service
 GEO_DIR := $(DATA_DIR)/geolocation
 SAMPLES_DIR := $(VPROX_HOME)/.samples
 DIR_LIST := $(DATA_DIR) $(LOG_DIR) $(CFG_DIR) $(CFG_DIR)/chains $(CFG_DIR)/backup \
-            $(CFG_DIR)/vlog $(CFG_DIR)/infra $(CFG_DIR)/vprox $(CFG_DIR)/fleet \
-            $(CFG_DIR)/vprox/nodes $(CFG_DIR)/vlog/chains \
+            $(CFG_DIR)/vops $(CFG_DIR)/infra $(CFG_DIR)/vprox $(CFG_DIR)/fleet \
+            $(CFG_DIR)/vprox/nodes $(CFG_DIR)/vops/chains \
             $(INTERNAL_DIR) $(ARCHIVE_DIR) $(SERVICE_DIR) $(GEO_DIR) \
             $(SAMPLES_DIR) $(SAMPLES_DIR)/chains $(SAMPLES_DIR)/backup \
-            $(SAMPLES_DIR)/vlog $(SAMPLES_DIR)/infra $(SAMPLES_DIR)/fleet \
-            $(SAMPLES_DIR)/vprox $(SAMPLES_DIR)/vprox/nodes $(SAMPLES_DIR)/vlog/chains
+            $(SAMPLES_DIR)/vops $(SAMPLES_DIR)/infra $(SAMPLES_DIR)/fleet \
+            $(SAMPLES_DIR)/vprox $(SAMPLES_DIR)/vprox/nodes $(SAMPLES_DIR)/vops/chains
 
 # Sample file revision — format: r{major}_{MMDDYY}_{seq}
 # Increment {seq} for multiple revisions on the same day; reset to 0 on new date.
@@ -52,8 +52,8 @@ _TOOLCHAIN_GOROOT := $(shell find $(GOPATH)/pkg/mod/golang.org -maxdepth 1 -name
 EFFECTIVE_GOROOT  := $(if $(_TOOLCHAIN_GOROOT),$(_TOOLCHAIN_GOROOT),$(GOROOT))
 
 .PHONY: all install clean ufw help \
-        validate-go dirs geo config config-vlog config-vprox config-modules \
-        build build-vlog systemd service-vlog samples-fleet
+        validate-go dirs geo config config-vops config-vprox config-modules \
+        build build-vops systemd service-vops samples-fleet
 
 all: help
 
@@ -61,19 +61,19 @@ all: help
 
 help:
 	@echo ""
-	@echo "  vProx / vLog — available targets"
+	@echo "  vProx / vOps — available targets"
 	@echo ""
-	@echo "  make install          Full install: vProx + vLog + SSH control plane, config, systemd"
-	@echo "  make add-<module>     Reinstall one module  (e.g. make add-vLog)"
+	@echo "  make install          Full install: vProx + vOps + SSH control plane, config, systemd"
+	@echo "  make add-<module>     Reinstall one module  (e.g. make add-vOps)"
 	@echo "  make clean            Remove local build artifacts"
-	@echo "  make ufw              Passwordless UFW sudoers for vLog block/unblock"
+	@echo "  make ufw              Passwordless UFW sudoers for vOps block/unblock"
 	@echo ""
 	@echo "  SSH control plane (fleet module) is installed automatically."
 	@echo "  Add VM hosts to: ~/.vProx/config/infra/{datacenter}.toml (e.g. qc.toml, rbx.toml)"
 	@echo "  Add chains to:   ~/.vProx/config/chains/{chain}.toml with [management] section"
 	@echo ""
 
-install: validate-go dirs geo config config-vlog config-vprox config-modules env samples-fleet
+install: validate-go dirs geo config config-vops config-vprox config-modules env samples-fleet
 
 ## Validate Go environment
 
@@ -206,9 +206,9 @@ config-vprox: dirs
 samples-fleet:
 	@mkdir -p \
 		"$(SAMPLES_DIR)/chains"       "$(SAMPLES_DIR)/backup" \
-		"$(SAMPLES_DIR)/vlog"         "$(SAMPLES_DIR)/infra" \
+		"$(SAMPLES_DIR)/vops"         "$(SAMPLES_DIR)/infra" \
 		"$(SAMPLES_DIR)/fleet"        "$(SAMPLES_DIR)/vprox" \
-		"$(SAMPLES_DIR)/vprox/nodes"  "$(SAMPLES_DIR)/vlog/chains"
+		"$(SAMPLES_DIR)/vprox/nodes"  "$(SAMPLES_DIR)/vops/chains"
 	@_rev="$(SAMPLE_REV)"; \
 	_archive() { \
 		local dst="$$1" sub="$$2" old_rev adir; \
@@ -222,7 +222,7 @@ samples-fleet:
 		fi; \
 	}; \
 	_copy() { sed "s/{{SAMPLE_REV}}/$$_rev/" "$$1" > "$$2" && echo "✓ $$2  [$$_rev]"; }; \
-	_archive "$(SAMPLES_DIR)/vlog/vlog.sample"          "vlog";         _copy ".samples/vlog/vlog.sample"              "$(SAMPLES_DIR)/vlog/vlog.sample"; \
+	_archive "$(SAMPLES_DIR)/vops/vops.sample"          "vops";         _copy ".samples/vops/vops.sample"              "$(SAMPLES_DIR)/vops/vops.sample"; \
 	_archive "$(SAMPLES_DIR)/chains/chain.sample"       "chains";       _copy ".samples/chains/chain.sample"           "$(SAMPLES_DIR)/chains/chain.sample"; \
 	_archive "$(SAMPLES_DIR)/chains/ports.sample"       "chains";       _copy ".samples/chains/ports.sample"           "$(SAMPLES_DIR)/chains/ports.sample"; \
 	_archive "$(SAMPLES_DIR)/chains/services.sample"    "chains";       _copy ".samples/chains/services.sample"        "$(SAMPLES_DIR)/chains/services.sample"; \
@@ -231,7 +231,7 @@ samples-fleet:
 	_archive "$(SAMPLES_DIR)/vprox/settings.sample"     "vprox";        _copy ".samples/vprox/settings.sample"         "$(SAMPLES_DIR)/vprox/settings.sample"; \
 	_archive "$(SAMPLES_DIR)/fleet/settings.sample"     "fleet";        _copy ".samples/fleet/settings.sample"         "$(SAMPLES_DIR)/fleet/settings.sample"; \
 	_archive "$(SAMPLES_DIR)/vprox/nodes/vprox-node.sample" "vprox/nodes"; _copy ".samples/vprox/nodes/vprox-node.sample" "$(SAMPLES_DIR)/vprox/nodes/vprox-node.sample"; \
-	_archive "$(SAMPLES_DIR)/vlog/chains/vlog-chain.sample" "vlog/chains"; _copy ".samples/vlog/chains/vlog-chain.sample" "$(SAMPLES_DIR)/vlog/chains/vlog-chain.sample"
+	_archive "$(SAMPLES_DIR)/vops/chains/vops-chain.sample" "vops/chains"; _copy ".samples/vops/chains/vops-chain.sample" "$(SAMPLES_DIR)/vops/chains/vops-chain.sample"
 	@echo "Done. Samples refreshed — $(SAMPLE_REV). See $(SAMPLES_DIR)/"
 
 ## Install modules registry stub
@@ -254,38 +254,38 @@ build:
 	@echo "✓ Build complete"
 	@echo "  Output: $(BUILD_OUT)"
 
-## Install vProx + vLog to GOPATH/bin and optional /usr/local/bin symlinks
+## Install vProx + vOps to GOPATH/bin and optional /usr/local/bin symlinks
 
 install:
-	@echo "Building $(APP_NAME) + $(VLOG_NAME)..."
+	@echo "Building $(APP_NAME) + $(VOPS_NAME)..."
 	GOROOT="$(EFFECTIVE_GOROOT)" go build -o "$(GOPATH_BIN)/$(APP_NAME)" "$(BUILD_SRC)"
-	GOROOT="$(EFFECTIVE_GOROOT)" go build -o "$(GOPATH_BIN)/$(VLOG_NAME)" "$(VLOG_SRC)"
+	GOROOT="$(EFFECTIVE_GOROOT)" go build -o "$(GOPATH_BIN)/$(VOPS_NAME)" "$(VOPS_SRC)"
 	@echo "✓ $(APP_NAME) → $(GOPATH_BIN)/$(APP_NAME)"
-	@echo "✓ $(VLOG_NAME) → $(GOPATH_BIN)/$(VLOG_NAME)"
+	@echo "✓ $(VOPS_NAME) → $(GOPATH_BIN)/$(VOPS_NAME)"
 	@echo ""
-	@echo "The next step creates symlinks at /usr/local/bin/{$(APP_NAME),$(VLOG_NAME)} and may require sudo."
+	@echo "The next step creates symlinks at /usr/local/bin/{$(APP_NAME),$(VOPS_NAME)} and may require sudo."
 	@read -p "Create symlinks? (y/n) " -n 1 -r; echo ""; \
 	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
 		sudo ln -sf "$(GOPATH_BIN)/$(APP_NAME)" "/usr/local/bin/$(APP_NAME)"; \
-		sudo ln -sf "$(GOPATH_BIN)/$(VLOG_NAME)" "/usr/local/bin/$(VLOG_NAME)"; \
-		echo "✓ Symlinks created at /usr/local/bin/{$(APP_NAME),$(VLOG_NAME)}"; \
+		sudo ln -sf "$(GOPATH_BIN)/$(VOPS_NAME)" "/usr/local/bin/$(VOPS_NAME)"; \
+		echo "✓ Symlinks created at /usr/local/bin/{$(APP_NAME),$(VOPS_NAME)}"; \
 		$(MAKE) systemd; \
-		$(MAKE) service-vlog; \
+		$(MAKE) service-vops; \
 	else \
 		echo "✓ Skipped symlinks. Run binaries from $(GOPATH_BIN)/"; \
 	fi
 	@echo ""
 
-## Reinstall a single module — make add-vLog | make add-vProx
+## Reinstall a single module — make add-vOps | make add-vProx
 
 add-%: validate-go dirs
 	@case "$*" in \
-	  vLog|vlog) \
-	    GOROOT="$(EFFECTIVE_GOROOT)" go build -o "$(GOPATH_BIN)/$(VLOG_NAME)" "$(VLOG_SRC)"; \
-	    echo "✓ $(VLOG_NAME) → $(GOPATH_BIN)/$(VLOG_NAME)"; \
-	    $(MAKE) config-vlog; \
+	  vOps|vops|vLog|vlog) \
+	    GOROOT="$(EFFECTIVE_GOROOT)" go build -o "$(GOPATH_BIN)/$(VOPS_NAME)" "$(VOPS_SRC)"; \
+	    echo "✓ $(VOPS_NAME) → $(GOPATH_BIN)/$(VOPS_NAME)"; \
+	    $(MAKE) config-vops; \
 	    $(MAKE) samples-fleet; \
-	    $(MAKE) service-vlog; \
+	    $(MAKE) service-vops; \
 	    ;; \
 	  vProx|vprox) \
 	    GOROOT="$(EFFECTIVE_GOROOT)" go build -o "$(GOPATH_BIN)/$(APP_NAME)" "$(BUILD_SRC)"; \
@@ -294,7 +294,7 @@ add-%: validate-go dirs
 	    ;; \
 	  *) \
 	    echo "ERROR: Unknown module '$*'"; \
-	    echo "       Available: vProx  vLog"; \
+	    echo "       Available: vProx  vOps"; \
 	    exit 1; \
 	    ;; \
 	esac
@@ -381,35 +381,35 @@ systemd:
 		fi; \
 	fi
 
-## ─── vLog targets ────────────────────────────────────────────────────────────
+## ─── vOps targets ────────────────────────────────────────────────────────────
 
-## Build vLog binary to .build/vLog  (does NOT rebuild vProx)
+## Build vOps binary to .build/vOps  (does NOT rebuild vProx)
 
-build-vlog:
-	@echo "Building $(VLOG_NAME)..."
+build-vops:
+	@echo "Building $(VOPS_NAME)..."
 	mkdir -p "$(BUILD_DIR)"
-	GOROOT="$(EFFECTIVE_GOROOT)" go build -o "$(VLOG_BUILD)" "$(VLOG_SRC)"
+	GOROOT="$(EFFECTIVE_GOROOT)" go build -o "$(VOPS_BUILD)" "$(VOPS_SRC)"
 	@echo "✓ Build complete"
-	@echo "  Output: $(VLOG_BUILD)"
+	@echo "  Output: $(VOPS_BUILD)"
 
-## Install .samples/vlog/vlog.sample → ~/.vProx/config/vlog/vlog.toml (only if absent)
+## Install .samples/vops/vops.sample → ~/.vProx/config/vops/vops.toml (only if absent)
 
-config-vlog: dirs
-	@echo "Installing vLog config..."
-	@mkdir -p "$(CFG_DIR)/vlog"
-	@if [[ -f ".samples/vlog/vlog.sample" ]]; then \
-		if [[ ! -f "$(CFG_DIR)/vlog/vlog.toml" ]]; then \
-			cp ".samples/vlog/vlog.sample" "$(CFG_DIR)/vlog/vlog.toml"; \
-			echo "✓ Copied vlog.sample to $(CFG_DIR)/vlog/vlog.toml"; \
-			echo "  Edit $(CFG_DIR)/vlog/vlog.toml to set your API keys."; \
+config-vops: dirs
+	@echo "Installing vOps config..."
+	@mkdir -p "$(CFG_DIR)/vops"
+	@if [[ -f ".samples/vops/vops.sample" ]]; then \
+		if [[ ! -f "$(CFG_DIR)/vops/vops.toml" ]]; then \
+			cp ".samples/vops/vops.sample" "$(CFG_DIR)/vops/vops.toml"; \
+			echo "✓ Copied vops.sample to $(CFG_DIR)/vops/vops.toml"; \
+			echo "  Edit $(CFG_DIR)/vops/vops.toml to set your API keys."; \
 		else \
-			echo "✓ $(CFG_DIR)/vlog/vlog.toml already exists — checking for missing fields..."; \
-			if ! grep -qE "^[[:space:]]*api_key[[:space:]]*=" "$(CFG_DIR)/vlog/vlog.toml" || grep -qE "^[[:space:]]*#.*api_key" "$(CFG_DIR)/vlog/vlog.toml"; then \
+			echo "✓ $(CFG_DIR)/vops/vops.toml already exists — checking for missing fields..."; \
+			if ! grep -qE "^[[:space:]]*api_key[[:space:]]*=" "$(CFG_DIR)/vops/vops.toml" || grep -qE "^[[:space:]]*#.*api_key" "$(CFG_DIR)/vops/vops.toml"; then \
 				echo ""; \
 				echo "┌─────────────────────────────────────────────────────────────────┐"; \
-				echo "│  ⚠  ACTION REQUIRED — vLog API Key not configured               │"; \
+				echo "│  ⚠  ACTION REQUIRED — vOps API Key not configured               │"; \
 				echo "├─────────────────────────────────────────────────────────────────┤"; \
-				echo "│  vLog uses HMAC-SHA256 to authenticate block/unblock requests.  │"; \
+				echo "│  vOps uses HMAC-SHA256 to authenticate block/unblock requests.  │"; \
 				echo "│  These endpoints manipulate UFW firewall rules and MUST be      │"; \
 				echo "│  protected with a secret key before use.                        │"; \
 				echo "│                                                                 │"; \
@@ -417,68 +417,68 @@ config-vlog: dirs
 				echo "│       openssl rand -hex 32                                      │"; \
 				echo "│                                                                 │"; \
 				echo "│  2. Add it to your config:                                      │"; \
-				echo "│       $(CFG_DIR)/vlog/vlog.toml"; \
-				echo "│     under [vlog]:                                               │"; \
+				echo "│       $(CFG_DIR)/vops/vops.toml"; \
+				echo "│     under [vops]:                                               │"; \
 				echo "│       api_key = \"your-generated-key\"                            │"; \
 				echo "│                                                                 │"; \
 				echo "│  Until this is set, block/unblock endpoints return 503.         │"; \
 				echo "└─────────────────────────────────────────────────────────────────┘"; \
 				echo ""; \
 			fi; \
-			if ! grep -qE "^[[:space:]]*base_path[[:space:]]*=" "$(CFG_DIR)/vlog/vlog.toml"; then \
-				echo "  ℹ  base_path not set — if vLog is served at a sub-path (e.g. /vlog)"; \
-				echo "     add to $(CFG_DIR)/vlog/vlog.toml under [vlog]:"; \
-				echo "       base_path = \"/vlog\""; \
-				echo "     See .vscode/vlog.apache2 for the matching Apache config."; \
+			if ! grep -qE "^[[:space:]]*base_path[[:space:]]*=" "$(CFG_DIR)/vops/vops.toml"; then \
+				echo "  ℹ  base_path not set — if vOps is served at a sub-path (e.g. /vops)"; \
+				echo "     add to $(CFG_DIR)/vops/vops.toml under [vops]:"; \
+				echo "       base_path = \"/vops\""; \
+				echo "     See .vscode/vops.apache2 for the matching Apache config."; \
 				echo ""; \
 			fi; \
 		fi; \
 	else \
-		echo "WARNING: .samples/vlog/vlog.sample not found in repo"; \
+		echo "WARNING: .samples/vops/vops.sample not found in repo"; \
 	fi
 
-## Create and optionally install vLog systemd service
+## Create and optionally install vOps systemd service
 
-service-vlog:
-	@echo "Rendering vLog systemd service file..."
+service-vops:
+	@echo "Rendering vOps systemd service file..."
 	@mkdir -p "$(SERVICE_DIR)"
 	@TMP_RENDERED="$$(mktemp)"; \
-	sed "s|__HOME__|$(HOME)|g; s|__USER__|$(USER)|g" vlog.service.template > "$$TMP_RENDERED"; \
-	if [[ -f "$(VLOG_SERVICE)" ]]; then \
-		if cmp -s "$$TMP_RENDERED" "$(VLOG_SERVICE)"; then \
-			echo "✓ Local vLog.service already up to date"; \
+	sed "s|__HOME__|$(HOME)|g; s|__USER__|$(USER)|g" vops.service.template > "$$TMP_RENDERED"; \
+	if [[ -f "$(VOPS_SERVICE)" ]]; then \
+		if cmp -s "$$TMP_RENDERED" "$(VOPS_SERVICE)"; then \
+			echo "✓ Local vOps.service already up to date"; \
 		else \
-			echo "⚠ vLog.service differs; applying update..."; \
-			cp "$$TMP_RENDERED" "$(VLOG_SERVICE)"; \
-			echo "✓ Updated $(VLOG_SERVICE)"; \
+			echo "⚠ vOps.service differs; applying update..."; \
+			cp "$$TMP_RENDERED" "$(VOPS_SERVICE)"; \
+			echo "✓ Updated $(VOPS_SERVICE)"; \
 		fi; \
 	else \
-		cp "$$TMP_RENDERED" "$(VLOG_SERVICE)"; \
-		echo "✓ Created $(VLOG_SERVICE)"; \
+		cp "$$TMP_RENDERED" "$(VOPS_SERVICE)"; \
+		echo "✓ Created $(VOPS_SERVICE)"; \
 	fi; \
 	rm -f "$$TMP_RENDERED"
 	@echo ""
-	@read -p "Install vLog.service to /etc/systemd/system? (y/n) " -n 1 -r; echo ""; \
+	@read -p "Install vOps.service to /etc/systemd/system? (y/n) " -n 1 -r; echo ""; \
 	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
-		if sudo cp "$(VLOG_SERVICE)" "/etc/systemd/system/vLog.service" && \
+		if sudo cp "$(VOPS_SERVICE)" "/etc/systemd/system/vOps.service" && \
 		   sudo systemctl daemon-reload && \
-		   sudo systemctl enable vLog.service; \
+		   sudo systemctl enable vOps.service; \
 		then \
-			echo "✓ vLog.service installed. Start with: sudo service vLog start"; \
+			echo "✓ vOps.service installed. Start with: sudo service vOps start"; \
 		else \
-			echo "✗ Failed. Check: sudo systemctl status vLog.service"; \
+			echo "✗ Failed. Check: sudo systemctl status vOps.service"; \
 		fi; \
 	else \
 		echo "✓ Skipped. Install manually:"; \
-		echo "  sudo cp $(VLOG_SERVICE) /etc/systemd/system/vLog.service"; \
-		echo "  sudo systemctl daemon-reload && sudo systemctl enable vLog.service"; \
+		echo "  sudo cp $(VOPS_SERVICE) /etc/systemd/system/vOps.service"; \
+		echo "  sudo systemctl daemon-reload && sudo systemctl enable vOps.service"; \
 	fi
 
-## ─── UFW passwordless setup for vLog ─────────────────────────────────────────
+## ─── UFW passwordless setup for vOps ─────────────────────────────────────────
 
-## Set up passwordless UFW block/unblock for vLog
+## Set up passwordless UFW block/unblock for vOps
 ufw:
-	@SUDOERS_FILE="/etc/sudoers.d/vlog"; \
+	@SUDOERS_FILE="/etc/sudoers.d/vops"; \
 	SUDOERS_LINE="$(USER) ALL=(ALL) NOPASSWD: /usr/sbin/ufw deny from *, /usr/sbin/ufw delete deny from *"; \
 	if [[ -f "$$SUDOERS_FILE" ]]; then \
 		if grep -qF "$$SUDOERS_LINE" "$$SUDOERS_FILE"; then \
@@ -497,8 +497,8 @@ ufw:
 			fi; \
 		fi; \
 	else \
-		echo "Setting up passwordless UFW block/unblock for vLog..."; \
-		echo "  Allows 'Block IP' and 'Unblock' buttons in vLog UI without password prompt."; \
+		echo "Setting up passwordless UFW block/unblock for vOps..."; \
+		echo "  Allows 'Block IP' and 'Unblock' buttons in vOps UI without password prompt."; \
 		read -p "Create sudoers rule? (y/n) " -n 1 -r; echo ""; \
 		if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
 			echo "$$SUDOERS_LINE" | sudo tee "$$SUDOERS_FILE" > /dev/null; \
@@ -510,3 +510,14 @@ ufw:
 			echo "  sudo chmod 0440 $$SUDOERS_FILE"; \
 		fi; \
 	fi
+
+## ─── Compatibility aliases (vLog → vOps) ─────────────────────────────────────
+
+## These targets preserve backward compatibility for scripts and muscle memory
+## that reference the old vLog name. They simply delegate to the vOps targets.
+
+.PHONY: build-vlog config-vlog service-vlog
+
+build-vlog: build-vops
+config-vlog: config-vops
+service-vlog: service-vops

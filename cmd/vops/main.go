@@ -17,11 +17,11 @@ import (
 
 	"github.com/vNodesV/vProx/internal/fleet"
 	fleetcfg "github.com/vNodesV/vProx/internal/fleet/config"
-	"github.com/vNodesV/vProx/internal/vlog/config"
-	"github.com/vNodesV/vProx/internal/vlog/db"
-	"github.com/vNodesV/vProx/internal/vlog/ingest"
-	"github.com/vNodesV/vProx/internal/vlog/intel"
-	"github.com/vNodesV/vProx/internal/vlog/web"
+	"github.com/vNodesV/vProx/internal/vops/config"
+	"github.com/vNodesV/vProx/internal/vops/db"
+	"github.com/vNodesV/vProx/internal/vops/ingest"
+	"github.com/vNodesV/vProx/internal/vops/intel"
+	"github.com/vNodesV/vProx/internal/vops/web"
 )
 
 const version = "1.0.0"
@@ -31,16 +31,16 @@ const version = "1.0.0"
 // ---------------------------------------------------------------------------
 
 func printHelp() {
-	fmt.Print(`vLog v` + version + ` — vProx log archive analyzer
+	fmt.Print(`vOps v` + version + ` — vProx log archive analyzer
 
 Usage:
-  vlog <command> [flags]
-  vlog [one-shot flags]
+  vops <command> [flags]
+  vops [one-shot flags]
 
 Commands:
-  start    Start vLog server (foreground)
-  stop     Stop vLog service (sudo service vLog stop)
-  restart  Restart vLog service (sudo service vLog restart)
+  start    Start vOps server (foreground)
+  stop     Stop vOps service (sudo service vOps stop)
+  restart  Restart vOps service (sudo service vOps restart)
   ingest   Run one-shot archive ingest and exit
   status   Show database stats and exit
 
@@ -50,12 +50,12 @@ One-shot flags:
   -t, --list-threats           List flagged IPs sorted by threat score desc
   -e, --enrich <ip>            Enrich an IP via all intel sources and exit
   -x, --purge-cache <ip|all>   Clear intel cache (one IP or all) and exit
-  -V, --validate               Validate vlog.toml and exit
+  -V, --validate               Validate vops.toml and exit
   -i, --info                   Show resolved config summary and exit
   -n, --dry-run                Load config + open DB, verify, exit without starting
 
 Runtime flags (start):
-  -d, --daemon                 Start as background daemon (sudo service vLog start)
+  -d, --daemon                 Start as background daemon (sudo service vOps start)
   -W, --no-watch               Disable archive file watcher
   -E, --no-enrich              Disable intel auto-enrichment worker
   -w, --watch-interval N       Override watch_interval_sec
@@ -70,16 +70,16 @@ Global flags:
   -h, --help                   Show this help
 
 Examples:
-  vlog start
-  vlog start -d
-  vlog start --port 9000 --no-watch --no-enrich
-  vlog ingest --home /opt/vprox
-  vlog status
-  vlog -A
-  vlog --list-threats
-  vlog -e 1.2.3.4
-  vlog -x all
-  vlog --validate
+  vops start
+  vops start -d
+  vops start --port 9000 --no-watch --no-enrich
+  vops ingest --home /opt/vprox
+  vops status
+  vops -A
+  vops --list-threats
+  vops -e 1.2.3.4
+  vops -x all
+  vops --validate
 `)
 }
 
@@ -179,7 +179,7 @@ func main() {
 func run() int {
 	f, rest, err := parseFlags(os.Args[1:])
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "vlog: %v\n\n", err)
+		fmt.Fprintf(os.Stderr, "vops: %v\n\n", err)
 		printHelp()
 		return 1
 	}
@@ -189,7 +189,7 @@ func run() int {
 		return 0
 	}
 	if f.version {
-		fmt.Println("vLog " + version)
+		fmt.Println("vOps " + version)
 		return 0
 	}
 
@@ -234,7 +234,7 @@ func run() int {
 	case "status":
 		return cmdStatus(f)
 	default:
-		fmt.Fprintf(os.Stderr, "vlog: unknown command %q\n\n", cmd)
+		fmt.Fprintf(os.Stderr, "vops: unknown command %q\n\n", cmd)
 		printHelp()
 		return 1
 	}
@@ -251,18 +251,18 @@ func resolveHome(flagVal string) string {
 	return config.FindHome()
 }
 
-// vlogConfigPath returns the canonical vlog.toml path under home.
-// New layout: $home/config/vlog/vlog.toml (isolated from vProx chain scanner).
-// Falls back to legacy $home/config/vlog.toml if the new path doesn't exist
+// vopsConfigPath returns the canonical vops.toml path under home.
+// New layout: $home/config/vops/vops.toml (isolated from vProx chain scanner).
+// Falls back to legacy $home/config/vops.toml if the new path doesn't exist
 // and the old one does, printing a migration hint.
-func vlogConfigPath(home string) string {
-	newPath := filepath.Join(home, "config", "vlog", "vlog.toml")
+func vopsConfigPath(home string) string {
+	newPath := filepath.Join(home, "config", "vops", "vops.toml")
 	if _, err := os.Stat(newPath); err == nil {
 		return newPath
 	}
-	oldPath := filepath.Join(home, "config", "vlog.toml")
+	oldPath := filepath.Join(home, "config", "vops.toml")
 	if _, err := os.Stat(oldPath); err == nil {
-		fmt.Fprintf(os.Stderr, "vlog: WARNING: config at %s — move to %s to prevent vProx loading it as a chain\n", oldPath, newPath)
+		fmt.Fprintf(os.Stderr, "vops: WARNING: config at %s — move to %s to prevent vProx loading it as a chain\n", oldPath, newPath)
 		return oldPath
 	}
 	return newPath // neither exists; Load() will return defaults gracefully
@@ -273,7 +273,7 @@ func loadConfig(f flags) (cfg config.Config, home string, err error) {
 
 	cfgPath := f.config
 	if cfgPath == "" {
-		cfgPath = vlogConfigPath(home)
+		cfgPath = vopsConfigPath(home)
 	}
 
 	cfg, err = config.Load(cfgPath)
@@ -282,10 +282,10 @@ func loadConfig(f flags) (cfg config.Config, home string, err error) {
 	}
 
 	if f.port > 0 {
-		cfg.VLog.Port = f.port
+		cfg.VOps.Port = f.port
 	}
 	if f.watchInterval > 0 {
-		cfg.VLog.WatchIntervalSec = f.watchInterval
+		cfg.VOps.WatchIntervalSec = f.watchInterval
 	}
 
 	if err := cfg.Validate(); err != nil {
@@ -301,7 +301,7 @@ func openDB(f flags) (config.Config, string, *db.DB, error) {
 	if err != nil {
 		return cfg, home, nil, err
 	}
-	database, err := db.Open(cfg.VLog.DBPath)
+	database, err := db.Open(cfg.VOps.DBPath)
 	if err != nil {
 		return cfg, home, nil, err
 	}
@@ -309,7 +309,7 @@ func openDB(f flags) (config.Config, string, *db.DB, error) {
 }
 
 // ---------------------------------------------------------------------------
-// vlog start
+// vops start
 // ---------------------------------------------------------------------------
 
 func cmdStart(f flags) int {
@@ -321,9 +321,9 @@ func cmdStart(f flags) int {
 		}
 		time.Sleep(1500 * time.Millisecond)
 		if serviceIsActive() {
-			fmt.Fprintln(os.Stdout, "✓ vLog service started successfully.")
+			fmt.Fprintln(os.Stdout, "✓ vOps service started successfully.")
 		} else {
-			fmt.Fprintln(os.Stderr, "✗ vLog service did not start. Check: journalctl -u vLog -n 50")
+			fmt.Fprintln(os.Stderr, "✗ vOps service did not start. Check: journalctl -u vOps -n 50")
 			return 1
 		}
 		return 0
@@ -331,36 +331,36 @@ func cmdStart(f flags) int {
 
 	cfg, home, err := loadConfig(f)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "vlog: config error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "vops: config error: %v\n", err)
 		return 1
 	}
 
 	if !f.quiet {
-		intelAbuseIPDB := yesNo(cfg.VLog.Intel.Keys.AbuseIPDB != "")
-		intelVirusTotal := yesNo(cfg.VLog.Intel.Keys.VirusTotal != "")
-		intelShodan := yesNo(cfg.VLog.Intel.Keys.Shodan != "")
-		fmt.Fprintf(os.Stdout, "vLog %s\n", version)
+		intelAbuseIPDB := yesNo(cfg.VOps.Intel.Keys.AbuseIPDB != "")
+		intelVirusTotal := yesNo(cfg.VOps.Intel.Keys.VirusTotal != "")
+		intelShodan := yesNo(cfg.VOps.Intel.Keys.Shodan != "")
+		fmt.Fprintf(os.Stdout, "vOps %s\n", version)
 		fmt.Fprintf(os.Stdout, "  home:     %s\n", home)
-		fmt.Fprintf(os.Stdout, "  db:       %s\n", cfg.VLog.DBPath)
-		fmt.Fprintf(os.Stdout, "  archives: %s\n", cfg.VLog.ArchivesDir)
-		fmt.Fprintf(os.Stdout, "  port:     :%d\n", cfg.VLog.Port)
+		fmt.Fprintf(os.Stdout, "  db:       %s\n", cfg.VOps.DBPath)
+		fmt.Fprintf(os.Stdout, "  archives: %s\n", cfg.VOps.ArchivesDir)
+		fmt.Fprintf(os.Stdout, "  port:     :%d\n", cfg.VOps.Port)
 		fmt.Fprintf(os.Stdout, "  intel:    abuseipdb=%s virustotal=%s shodan=%s\n",
 			intelAbuseIPDB, intelVirusTotal, intelShodan)
 		fmt.Fprintln(os.Stdout)
 	}
 
-	database, err := db.Open(cfg.VLog.DBPath)
+	database, err := db.Open(cfg.VOps.DBPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "vlog: database error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "vops: database error: %v\n", err)
 		return 1
 	}
 	defer database.Close()
 
-	ingester := ingest.New(database, cfg.VLog.ArchivesDir)
+	ingester := ingest.New(database, cfg.VOps.ArchivesDir)
 
 	processed, err := ingester.IngestAll()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "vlog: initial ingest error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "vops: initial ingest error: %v\n", err)
 		return 1
 	}
 	if !f.quiet && processed > 0 {
@@ -370,14 +370,14 @@ func cmdStart(f flags) int {
 	// Enricher — skip if --no-enrich.
 	var enricher *intel.Enricher
 	if !f.noEnrich {
-		enricher = intel.NewEnricher(cfg.VLog.Intel, database)
+		enricher = intel.NewEnricher(cfg.VOps.Intel, database)
 		enricher.Start()
 	}
 
 	// Watcher — skip if --no-watch.
 	var watcher *ingest.Watcher
-	if !f.noWatch && cfg.VLog.WatchIntervalSec > 0 {
-		watcher = ingest.NewWatcher(ingester, cfg.VLog.WatchIntervalSec)
+	if !f.noWatch && cfg.VOps.WatchIntervalSec > 0 {
+		watcher = ingest.NewWatcher(ingester, cfg.VOps.WatchIntervalSec)
 		watcher.Start()
 	}
 
@@ -385,28 +385,28 @@ func cmdStart(f flags) int {
 	// VM registry is sourced from:
 	//   1) config/vprox/nodes/*.toml + config/infra/*.toml (preferred)
 	//   2) config/chains/*.toml [management] (legacy fallback)
-	// and enriched by config/vlog/chains/*.toml chain profiles.
+	// and enriched by config/vops/chains/*.toml chain profiles.
 	var fleetSvc *fleet.Service
 	{
 		defs := fleetcfg.FleetDefaults{
-			User:    cfg.VLog.Push.Defaults.User,
-			KeyPath: cfg.VLog.Push.Defaults.KeyPath,
+			User:    cfg.VOps.Push.Defaults.User,
+			KeyPath: cfg.VOps.Push.Defaults.KeyPath,
 		}
 
-		runtimeCfg, err := fleetcfg.LoadRuntimeConfig(home, defs, cfg.VLog.Push.ChainsDir, cfg.VLog.Push.InfraDir)
+		runtimeCfg, err := fleetcfg.LoadRuntimeConfig(home, defs, cfg.VOps.Push.ChainsDir, cfg.VOps.Push.InfraDir)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "vlog: fleet config warning: %v\n", err)
+			fmt.Fprintf(os.Stderr, "vops: fleet config warning: %v\n", err)
 		} else if len(runtimeCfg.VMs) > 0 {
-			svc, err := fleet.NewEmpty(cfg.VLog.Push.DBPath)
+			svc, err := fleet.NewEmpty(cfg.VOps.Push.DBPath)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "vlog: fleet db error: %v\n", err)
+				fmt.Fprintf(os.Stderr, "vops: fleet db error: %v\n", err)
 			} else {
 				svc.SetConfig(runtimeCfg)
 				fleetSvc = svc
 				defer svc.Close()
-				go svc.StartPolling(context.Background(), time.Duration(cfg.VLog.Push.PollIntervalSec)*time.Second)
+				go svc.StartPolling(context.Background(), time.Duration(cfg.VOps.Push.PollIntervalSec)*time.Second)
 				if !f.quiet {
-					fmt.Fprintf(os.Stdout, "  fleet:    chain management (%ds poll)\n", cfg.VLog.Push.PollIntervalSec)
+					fmt.Fprintf(os.Stdout, "  fleet:    chain management (%ds poll)\n", cfg.VOps.Push.PollIntervalSec)
 				}
 			}
 		}
@@ -414,7 +414,7 @@ func cmdStart(f flags) int {
 
 	server, err := web.New(database, enricher, ingester, cfg, fleetSvc)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "vlog: web server error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "vops: web server error: %v\n", err)
 		return 1
 	}
 
@@ -427,7 +427,7 @@ func cmdStart(f flags) int {
 	}()
 
 	if !f.quiet {
-		fmt.Fprintf(os.Stdout, "Listening on :%d\n", cfg.VLog.Port)
+		fmt.Fprintf(os.Stdout, "Listening on :%d\n", cfg.VOps.Port)
 	}
 
 	sigCh := make(chan os.Signal, 1)
@@ -440,7 +440,7 @@ func cmdStart(f flags) int {
 		}
 	case err := <-serverErr:
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "vlog: server error: %v\n", err)
+			fmt.Fprintf(os.Stderr, "vops: server error: %v\n", err)
 		}
 	}
 
@@ -454,40 +454,40 @@ func cmdStart(f flags) int {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := server.Shutdown(shutdownCtx); err != nil {
-		fmt.Fprintf(os.Stderr, "vlog: shutdown error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "vops: shutdown error: %v\n", err)
 	}
 
 	database.Close()
 
 	if !f.quiet {
-		fmt.Fprintln(os.Stdout, "vLog stopped.")
+		fmt.Fprintln(os.Stdout, "vOps stopped.")
 	}
 	return 0
 }
 
 // ---------------------------------------------------------------------------
-// vlog ingest
+// vops ingest
 // ---------------------------------------------------------------------------
 
 func cmdIngest(f flags) int {
 	cfg, _, err := loadConfig(f)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "vlog: config error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "vops: config error: %v\n", err)
 		return 1
 	}
 
-	database, err := db.Open(cfg.VLog.DBPath)
+	database, err := db.Open(cfg.VOps.DBPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "vlog: database error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "vops: database error: %v\n", err)
 		return 1
 	}
 	defer database.Close()
 
-	ingester := ingest.New(database, cfg.VLog.ArchivesDir)
+	ingester := ingest.New(database, cfg.VOps.ArchivesDir)
 
 	processed, err := ingester.IngestAll()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "vlog: ingest error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "vops: ingest error: %v\n", err)
 		return 1
 	}
 
@@ -498,25 +498,25 @@ func cmdIngest(f flags) int {
 }
 
 // ---------------------------------------------------------------------------
-// vlog status
+// vops status
 // ---------------------------------------------------------------------------
 
 func cmdStatus(f flags) int {
 	_, _, database, err := openDB(f)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "vlog: %v\n", err)
+		fmt.Fprintf(os.Stderr, "vops: %v\n", err)
 		return 1
 	}
 	defer database.Close()
 
 	stats, err := database.Stats()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "vlog: stats error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "vops: stats error: %v\n", err)
 		return 1
 	}
 
 	ts := time.Now().UTC().Format(time.RFC3339)
-	fmt.Fprintf(os.Stdout, "vLog status — %s\n\n", ts)
+	fmt.Fprintf(os.Stdout, "vOps status — %s\n\n", ts)
 	fmt.Fprintf(os.Stdout, "  Archives ingested:  %s\n", fmtInt(stats["total_archives"]))
 	fmt.Fprintf(os.Stdout, "  IP accounts:        %s\n", fmtInt(stats["total_ips"]))
 	fmt.Fprintf(os.Stdout, "  Request events:     %s\n", fmtInt(stats["total_requests"]))
@@ -533,14 +533,14 @@ func cmdStatus(f flags) int {
 func cmdListArchives(f flags) int {
 	_, _, database, err := openDB(f)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "vlog: %v\n", err)
+		fmt.Fprintf(os.Stderr, "vops: %v\n", err)
 		return 1
 	}
 	defer database.Close()
 
 	archives, err := database.ListIngestedArchives(0) // 0 = all
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "vlog: list archives: %v\n", err)
+		fmt.Fprintf(os.Stderr, "vops: list archives: %v\n", err)
 		return 1
 	}
 
@@ -566,14 +566,14 @@ func cmdListArchives(f flags) int {
 func cmdListAccounts(f flags) int {
 	_, _, database, err := openDB(f)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "vlog: %v\n", err)
+		fmt.Fprintf(os.Stderr, "vops: %v\n", err)
 		return 1
 	}
 	defer database.Close()
 
 	accounts, err := database.ListIPAccounts(50, 0)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "vlog: list accounts: %v\n", err)
+		fmt.Fprintf(os.Stderr, "vops: list accounts: %v\n", err)
 		return 1
 	}
 
@@ -600,14 +600,14 @@ func cmdListAccounts(f flags) int {
 func cmdListThreats(f flags) int {
 	_, _, database, err := openDB(f)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "vlog: %v\n", err)
+		fmt.Fprintf(os.Stderr, "vops: %v\n", err)
 		return 1
 	}
 	defer database.Close()
 
 	threats, err := database.ListTopThreatAccounts(100)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "vlog: list threats: %v\n", err)
+		fmt.Fprintf(os.Stderr, "vops: list threats: %v\n", err)
 		return 1
 	}
 
@@ -634,25 +634,25 @@ func cmdListThreats(f flags) int {
 func cmdEnrich(f flags) int {
 	ip := strings.TrimSpace(f.enrich)
 	if ip == "" {
-		fmt.Fprintf(os.Stderr, "vlog: --enrich requires an IP address\n\n")
+		fmt.Fprintf(os.Stderr, "vops: --enrich requires an IP address\n\n")
 		printHelp()
 		return 1
 	}
 
 	cfg, _, err := loadConfig(f)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "vlog: config error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "vops: config error: %v\n", err)
 		return 1
 	}
 
-	database, err := db.Open(cfg.VLog.DBPath)
+	database, err := db.Open(cfg.VOps.DBPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "vlog: database error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "vops: database error: %v\n", err)
 		return 1
 	}
 	defer database.Close()
 
-	enricher := intel.NewEnricher(cfg.VLog.Intel, database)
+	enricher := intel.NewEnricher(cfg.VOps.Intel, database)
 
 	if !f.quiet {
 		fmt.Fprintf(os.Stdout, "Enriching %s...\n", ip)
@@ -660,7 +660,7 @@ func cmdEnrich(f flags) int {
 
 	acc, err := enricher.EnrichNow(ip)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "vlog: enrich %s: %v\n", ip, err)
+		fmt.Fprintf(os.Stderr, "vops: enrich %s: %v\n", ip, err)
 		return 1
 	}
 
@@ -685,14 +685,14 @@ func cmdEnrich(f flags) int {
 func cmdPurgeCache(f flags) int {
 	target := strings.TrimSpace(f.purgeCache)
 	if target == "" {
-		fmt.Fprintf(os.Stderr, "vlog: --purge-cache requires <ip> or \"all\"\n\n")
+		fmt.Fprintf(os.Stderr, "vops: --purge-cache requires <ip> or \"all\"\n\n")
 		printHelp()
 		return 1
 	}
 
 	_, _, database, err := openDB(f)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "vlog: %v\n", err)
+		fmt.Fprintf(os.Stderr, "vops: %v\n", err)
 		return 1
 	}
 	defer database.Close()
@@ -704,7 +704,7 @@ func cmdPurgeCache(f flags) int {
 
 	n, err := database.PurgeIntelCache(purgeIP)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "vlog: purge cache: %v\n", err)
+		fmt.Fprintf(os.Stderr, "vops: purge cache: %v\n", err)
 		return 1
 	}
 
@@ -725,10 +725,10 @@ func cmdPurgeCache(f flags) int {
 func cmdValidate(f flags) int {
 	_, _, err := loadConfig(f)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "vlog: validation failed: %v\n", err)
+		fmt.Fprintf(os.Stderr, "vops: validation failed: %v\n", err)
 		return 1
 	}
-	fmt.Fprintln(os.Stdout, "vlog.toml OK")
+	fmt.Fprintln(os.Stdout, "vops.toml OK")
 	return 0
 }
 
@@ -741,32 +741,32 @@ func cmdInfo(f flags) int {
 
 	cfgPath := f.config
 	if cfgPath == "" {
-		cfgPath = vlogConfigPath(home)
+		cfgPath = vopsConfigPath(home)
 	}
 
 	cfg, err := config.Load(cfgPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "vlog: config error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "vops: config error: %v\n", err)
 		return 1
 	}
 	if f.port > 0 {
-		cfg.VLog.Port = f.port
+		cfg.VOps.Port = f.port
 	}
 
-	fmt.Fprintf(os.Stdout, "vLog %s — config\n\n", version)
+	fmt.Fprintf(os.Stdout, "vOps %s — config\n\n", version)
 	fmt.Fprintf(os.Stdout, "  home:          %s\n", home)
 	fmt.Fprintf(os.Stdout, "  config:        %s\n", cfgPath)
-	fmt.Fprintf(os.Stdout, "  db:            %s\n", cfg.VLog.DBPath)
-	fmt.Fprintf(os.Stdout, "  archives:      %s\n", cfg.VLog.ArchivesDir)
-	fmt.Fprintf(os.Stdout, "  port:          %d\n", cfg.VLog.Port)
-	fmt.Fprintf(os.Stdout, "  watch:         %ds\n", cfg.VLog.WatchIntervalSec)
-	fmt.Fprintf(os.Stdout, "  auto-enrich:   %s\n", yesNo(cfg.VLog.Intel.AutoEnrich))
-	fmt.Fprintf(os.Stdout, "  cache ttl:     %dh\n", cfg.VLog.Intel.CacheTTLHours)
-	fmt.Fprintf(os.Stdout, "  rate limit:    %d rpm\n", cfg.VLog.Intel.RateLimitRPM)
+	fmt.Fprintf(os.Stdout, "  db:            %s\n", cfg.VOps.DBPath)
+	fmt.Fprintf(os.Stdout, "  archives:      %s\n", cfg.VOps.ArchivesDir)
+	fmt.Fprintf(os.Stdout, "  port:          %d\n", cfg.VOps.Port)
+	fmt.Fprintf(os.Stdout, "  watch:         %ds\n", cfg.VOps.WatchIntervalSec)
+	fmt.Fprintf(os.Stdout, "  auto-enrich:   %s\n", yesNo(cfg.VOps.Intel.AutoEnrich))
+	fmt.Fprintf(os.Stdout, "  cache ttl:     %dh\n", cfg.VOps.Intel.CacheTTLHours)
+	fmt.Fprintf(os.Stdout, "  rate limit:    %d rpm\n", cfg.VOps.Intel.RateLimitRPM)
 	fmt.Fprintf(os.Stdout, "  intel keys:\n")
-	fmt.Fprintf(os.Stdout, "    abuseipdb:   %s\n", yesNo(cfg.VLog.Intel.Keys.AbuseIPDB != ""))
-	fmt.Fprintf(os.Stdout, "    virustotal:  %s\n", yesNo(cfg.VLog.Intel.Keys.VirusTotal != ""))
-	fmt.Fprintf(os.Stdout, "    shodan:      %s\n", yesNo(cfg.VLog.Intel.Keys.Shodan != ""))
+	fmt.Fprintf(os.Stdout, "    abuseipdb:   %s\n", yesNo(cfg.VOps.Intel.Keys.AbuseIPDB != ""))
+	fmt.Fprintf(os.Stdout, "    virustotal:  %s\n", yesNo(cfg.VOps.Intel.Keys.VirusTotal != ""))
+	fmt.Fprintf(os.Stdout, "    shodan:      %s\n", yesNo(cfg.VOps.Intel.Keys.Shodan != ""))
 	return 0
 }
 
@@ -777,19 +777,19 @@ func cmdInfo(f flags) int {
 func cmdDryRun(f flags) int {
 	cfg, _, err := loadConfig(f)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "vlog: config error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "vops: config error: %v\n", err)
 		return 1
 	}
 	fmt.Fprintln(os.Stdout, "Config OK")
 
-	database, err := db.Open(cfg.VLog.DBPath)
+	database, err := db.Open(cfg.VOps.DBPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "vlog: database error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "vops: database error: %v\n", err)
 		return 1
 	}
 	database.Close()
-	fmt.Fprintf(os.Stdout, "Database OK (%s)\n", cfg.VLog.DBPath)
-	fmt.Fprintln(os.Stdout, "vLog is ready to start (dry-run — not starting)")
+	fmt.Fprintf(os.Stdout, "Database OK (%s)\n", cfg.VOps.DBPath)
+	fmt.Fprintln(os.Stdout, "vOps is ready to start (dry-run — not starting)")
 	return 0
 }
 
@@ -799,33 +799,33 @@ func cmdDryRun(f flags) int {
 
 func runServiceCommand(action string) int {
 	sudo, err := exec.LookPath("sudo")
-	args := []string{"service", "vLog", action}
+	args := []string{"service", "vOps", action}
 	var cmd *exec.Cmd
 	if err == nil {
 		cmd = exec.Command(sudo, args...)
 	} else {
-		cmd = exec.Command("service", "vLog", action)
+		cmd = exec.Command("service", "vOps", action)
 	}
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
 	if err := cmd.Run(); err != nil {
-		fmt.Fprintf(os.Stderr, "vlog: service %s: %v\n", action, err)
+		fmt.Fprintf(os.Stderr, "vops: service %s: %v\n", action, err)
 		return 1
 	}
 	return 0
 }
 
-// serviceIsActive returns true when systemctl reports the vLog unit as active.
+// serviceIsActive returns true when systemctl reports the vOps unit as active.
 func serviceIsActive() bool {
-	out, _ := exec.Command("systemctl", "is-active", "vLog").Output()
+	out, _ := exec.Command("systemctl", "is-active", "vOps").Output()
 	return strings.TrimSpace(string(out)) == "active"
 }
 
-// printServiceStatus appends the full systemctl status for vLog.
+// printServiceStatus appends the full systemctl status for vOps.
 // Silently skips on systems without systemctl or when the unit is unknown.
 func printServiceStatus() {
-	cmd := exec.Command("systemctl", "status", "vLog", "--no-pager", "-l")
+	cmd := exec.Command("systemctl", "status", "vOps", "--no-pager", "-l")
 	out, _ := cmd.CombinedOutput() // exit!=0 when inactive; output is still useful
 	if len(out) > 0 {
 		fmt.Fprintf(os.Stdout, "\nService:\n%s", string(out))

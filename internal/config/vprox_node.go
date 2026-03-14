@@ -14,7 +14,7 @@ import (
 //
 // It contains proxy routing, service exposure, and optional fleet management settings.
 // Chain identity (chain_id, dashboard_name, validator info, etc.) lives in a separate
-// config/vlog/chains/<chain>.toml and is joined via ChainIdentity.Node (basename match)
+// config/vops/chains/<chain>.toml and is joined via ChainIdentity.Node (basename match)
 // or ChainIdentity.TreeName fallback.
 //
 // v1.4.0 layout: replaces the proxy sections of the old merged config/chains/<chain>.toml.

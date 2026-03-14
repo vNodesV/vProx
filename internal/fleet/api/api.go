@@ -1,5 +1,5 @@
 // Package api exposes fleet Service functionality as HTTP JSON handlers.
-// Handlers are methods on Handlers and are wired into the vLog mux by server.go.
+// Handlers are methods on Handlers and are wired into the vOps mux by server.go.
 package api
 
 import (
