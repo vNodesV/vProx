@@ -14,7 +14,7 @@ schema_version = 2
 
 # ── Identity ────────────────────────────────────────────────────────────────────
 # tree_name links this node to config/vlog/chains/<chain>.toml via chain.node field.
-tree_name = "your_chain"   # chain slug, e.g. "osmosis", "cheqd", "cosmoshub"
+tree_name = "your_chain"   # chain slug, e.g. "cosmoshub", "stride", "juno"
 
 # ── Proxy Routing ───────────────────────────────────────────────────────────────
 host = "your_chain.example.com"   # public hostname vProx serves

@@ -588,6 +588,7 @@ func applyVOps(home string, f map[string]any) error {
 	v.Push.Defaults.User = fieldStr(f, "push_user", "")
 	v.Push.Defaults.KeyPath = fieldStr(f, "push_key_path", "")
 	v.Push.PollIntervalSec = fieldInt(f, "poll_interval_sec", 60)
+	v.WatchIntervalSec = fieldInt(f, "watch_interval_sec", 60)
 	v.DBPath = fieldStr(f, "db_path", "")
 	v.ArchivesDir = fieldStr(f, "archives_dir", "")
 	v.VProxBin = fieldStr(f, "vprox_bin", "vprox")
@@ -606,6 +607,7 @@ func applyFleet(home string, f map[string]any) error {
 	s.SSH.User = fieldStr(f, "ssh_user", "ubuntu")
 	s.SSH.KeyPath = fieldStr(f, "ssh_key_path", "")
 	s.SSH.Port = fieldInt(f, "ssh_port", 22)
+	s.SSH.TimeoutSec = fieldInt(f, "ssh_timeout_sec", 15)
 	s.Poll.IntervalSec = fieldInt(f, "poll_interval_sec", 60)
 	s.Defaults.Datacenter = fieldStr(f, "datacenter", "")
 	return writeConfigNoPrompt(configPath(home, "fleet", "settings.toml"), s)
@@ -759,7 +761,11 @@ func applyBackup(home string, f map[string]any) error {
 	b.MaxSizeMB = int64(fieldInt(f, "max_size_mb", 100))
 	b.CheckIntervalMin = fieldInt(f, "check_interval_min", 10)
 	b.Destination = fieldStr(f, "destination", "")
-	b.Compression = "tar.gz"
+	compression := fieldStr(f, "compression", "tar.gz")
+	if compression == "" {
+		compression = "tar.gz"
+	}
+	b.Compression = compression
 	b.Files.Logs = splitList(fieldStr(f, "files_logs", "main.log"))
 	b.Files.Data = splitList(fieldStr(f, "files_data", "access-counts.json"))
 	b.Files.Config = splitList(fieldStr(f, "files_config", "chains/ports.toml"))
@@ -1569,24 +1575,25 @@ func importVOpsFields(data []byte) (map[string]any, error) {
 	}
 	v := cfg.VOps
 	return map[string]any{
-		"port":              v.Port,
-		"bind_address":      v.BindAddress,
-		"base_path":         v.BasePath,
-		"api_key":           "",
-		"username":          v.Auth.Username,
-		"password_hash":     "",
-		"auto_enrich":       v.Intel.AutoEnrich,
-		"cache_ttl_hours":   v.Intel.CacheTTLHours,
-		"rate_limit_rpm":    v.Intel.RateLimitRPM,
-		"abuseipdb":         "",
-		"virustotal":        "",
-		"shodan":            "",
-		"push_user":         v.Push.Defaults.User,
-		"push_key_path":     v.Push.Defaults.KeyPath,
-		"poll_interval_sec": v.Push.PollIntervalSec,
-		"db_path":           v.DBPath,
-		"archives_dir":      v.ArchivesDir,
-		"vprox_bin":         v.VProxBin,
+		"port":               v.Port,
+		"bind_address":       v.BindAddress,
+		"base_path":          v.BasePath,
+		"api_key":            "",
+		"username":           v.Auth.Username,
+		"password_hash":      "",
+		"auto_enrich":        v.Intel.AutoEnrich,
+		"cache_ttl_hours":    v.Intel.CacheTTLHours,
+		"rate_limit_rpm":     v.Intel.RateLimitRPM,
+		"abuseipdb":          "",
+		"virustotal":         "",
+		"shodan":             "",
+		"push_user":          v.Push.Defaults.User,
+		"push_key_path":      v.Push.Defaults.KeyPath,
+		"poll_interval_sec":  v.Push.PollIntervalSec,
+		"watch_interval_sec": v.WatchIntervalSec,
+		"db_path":            v.DBPath,
+		"archives_dir":       v.ArchivesDir,
+		"vprox_bin":          v.VProxBin,
 	}, nil
 }
 
@@ -1603,6 +1610,7 @@ func importFleetFields(data []byte) (map[string]any, error) {
 		"ssh_user":          s.SSH.User,
 		"ssh_key_path":      s.SSH.KeyPath,
 		"ssh_port":          s.SSH.Port,
+		"ssh_timeout_sec":   s.SSH.TimeoutSec,
 		"poll_interval_sec": s.Poll.IntervalSec,
 		"datacenter":        s.Defaults.Datacenter,
 	}, nil

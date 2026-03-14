@@ -24,10 +24,10 @@ func writeNodeFile(t *testing.T, dir, name, content string) {
 }
 
 const validNodeTOML = `
-tree        = "cheqd"
+tree        = "mychain"
 role        = "validator"
 datacenter  = "ca1"
-host        = "cheqd.srvs.example.net"
+host        = "mychain.srvs.example.net"
 ip          = "10.0.0.66"
 
 [proxy]
@@ -55,7 +55,7 @@ func TestLoadServiceNodes_BasicLoad(t *testing.T) {
 	tmp := makeNodesDir(t)
 	nodesDir := filepath.Join(tmp, "config", "services", "nodes")
 
-	writeNodeFile(t, nodesDir, "cheqd-validator-ca1.toml", validNodeTOML)
+	writeNodeFile(t, nodesDir, "mychain-validator-ca1.toml", validNodeTOML)
 
 	nodes, err := LoadServiceNodes(tmp)
 	if err != nil {
@@ -66,8 +66,8 @@ func TestLoadServiceNodes_BasicLoad(t *testing.T) {
 	}
 
 	n := nodes[0]
-	if n.Tree != "cheqd" {
-		t.Errorf("Tree: want cheqd, got %q", n.Tree)
+	if n.Tree != "mychain" {
+		t.Errorf("Tree: want mychain, got %q", n.Tree)
 	}
 	if n.Role != "validator" {
 		t.Errorf("Role: want validator, got %q", n.Role)
@@ -75,8 +75,8 @@ func TestLoadServiceNodes_BasicLoad(t *testing.T) {
 	if n.Datacenter != "ca1" {
 		t.Errorf("Datacenter: want ca1, got %q", n.Datacenter)
 	}
-	if n.Host != "cheqd.srvs.example.net" {
-		t.Errorf("Host: want cheqd.srvs.example.net, got %q", n.Host)
+	if n.Host != "mychain.srvs.example.net" {
+		t.Errorf("Host: want mychain.srvs.example.net, got %q", n.Host)
 	}
 	if n.IP != "10.0.0.66" {
 		t.Errorf("IP: want 10.0.0.66, got %q", n.IP)
@@ -86,7 +86,7 @@ func TestLoadServiceNodes_BasicLoad(t *testing.T) {
 func TestLoadServiceNodes_ProxyFields(t *testing.T) {
 	tmp := makeNodesDir(t)
 	nodesDir := filepath.Join(tmp, "config", "services", "nodes")
-	writeNodeFile(t, nodesDir, "cheqd.toml", validNodeTOML)
+	writeNodeFile(t, nodesDir, "mychain.toml", validNodeTOML)
 
 	nodes, err := LoadServiceNodes(tmp)
 	if err != nil {
@@ -114,7 +114,7 @@ func TestLoadServiceNodes_ProxyFields(t *testing.T) {
 func TestLoadServiceNodes_ServicesFields(t *testing.T) {
 	tmp := makeNodesDir(t)
 	nodesDir := filepath.Join(tmp, "config", "services", "nodes")
-	writeNodeFile(t, nodesDir, "cheqd.toml", validNodeTOML)
+	writeNodeFile(t, nodesDir, "mychain.toml", validNodeTOML)
 
 	nodes, err := LoadServiceNodes(tmp)
 	if err != nil || len(nodes) != 1 {
@@ -139,7 +139,7 @@ func TestLoadServiceNodes_ServicesFields(t *testing.T) {
 func TestLoadServiceNodes_ManagementFields(t *testing.T) {
 	tmp := makeNodesDir(t)
 	nodesDir := filepath.Join(tmp, "config", "services", "nodes")
-	writeNodeFile(t, nodesDir, "cheqd.toml", validNodeTOML)
+	writeNodeFile(t, nodesDir, "mychain.toml", validNodeTOML)
 
 	nodes, err := LoadServiceNodes(tmp)
 	if err != nil || len(nodes) != 1 {
@@ -158,13 +158,13 @@ func TestLoadServiceNodes_ManagementFields(t *testing.T) {
 func TestLoadServiceNodes_SourceFilePopulated(t *testing.T) {
 	tmp := makeNodesDir(t)
 	nodesDir := filepath.Join(tmp, "config", "services", "nodes")
-	writeNodeFile(t, nodesDir, "cheqd.toml", `tree = "cheqd"`)
+	writeNodeFile(t, nodesDir, "mychain.toml", `tree = "mychain"`)
 
 	nodes, err := LoadServiceNodes(tmp)
 	if err != nil || len(nodes) != 1 {
 		t.Fatalf("load failed: err=%v len=%d", err, len(nodes))
 	}
-	want := filepath.Join(nodesDir, "cheqd.toml")
+	want := filepath.Join(nodesDir, "mychain.toml")
 	if nodes[0].SourceFile != want {
 		t.Errorf("SourceFile: want %q, got %q", want, nodes[0].SourceFile)
 	}
@@ -173,8 +173,8 @@ func TestLoadServiceNodes_SourceFilePopulated(t *testing.T) {
 func TestLoadServiceNodes_MultipleFiles(t *testing.T) {
 	tmp := makeNodesDir(t)
 	nodesDir := filepath.Join(tmp, "config", "services", "nodes")
-	writeNodeFile(t, nodesDir, "cheqd-validator.toml", `tree = "cheqd"`)
-	writeNodeFile(t, nodesDir, "osmosis-rpc.toml", `tree = "osmosis"`)
+	writeNodeFile(t, nodesDir, "mychain-validator.toml", `tree = "mychain"`)
+	writeNodeFile(t, nodesDir, "other-chain-rpc.toml", `tree = "other-chain"`)
 
 	nodes, err := LoadServiceNodes(tmp)
 	if err != nil {
@@ -213,10 +213,10 @@ func TestLoadServiceNodes_SkipsNonToml(t *testing.T) {
 	nodesDir := filepath.Join(tmp, "config", "services", "nodes")
 
 	// These should be skipped
-	writeNodeFile(t, nodesDir, "cheqd.sample", `tree = "cheqd"`)
+	writeNodeFile(t, nodesDir, "mychain.sample", `tree = "mychain"`)
 	writeNodeFile(t, nodesDir, "README.md", `# nodes`)
 	// This should load
-	writeNodeFile(t, nodesDir, "osmosis.toml", `tree = "osmosis"`)
+	writeNodeFile(t, nodesDir, "other-chain.toml", `tree = "other-chain"`)
 
 	nodes, err := LoadServiceNodes(tmp)
 	if err != nil {
@@ -225,8 +225,8 @@ func TestLoadServiceNodes_SkipsNonToml(t *testing.T) {
 	if len(nodes) != 1 {
 		t.Fatalf("expected 1 node (.sample/.md skipped), got %d", len(nodes))
 	}
-	if nodes[0].Tree != "osmosis" {
-		t.Errorf("expected osmosis, got %q", nodes[0].Tree)
+	if nodes[0].Tree != "other-chain" {
+		t.Errorf("expected other-chain, got %q", nodes[0].Tree)
 	}
 }
 
@@ -235,7 +235,7 @@ func TestLoadServiceNodes_MalformedFileSkipped(t *testing.T) {
 	nodesDir := filepath.Join(tmp, "config", "services", "nodes")
 
 	writeNodeFile(t, nodesDir, "bad.toml", `this is not valid toml @@@@`)
-	writeNodeFile(t, nodesDir, "good.toml", `tree = "osmosis"`)
+	writeNodeFile(t, nodesDir, "good.toml", `tree = "other-chain"`)
 
 	nodes, err := LoadServiceNodes(tmp)
 	if err != nil {
@@ -244,8 +244,8 @@ func TestLoadServiceNodes_MalformedFileSkipped(t *testing.T) {
 	if len(nodes) != 1 {
 		t.Fatalf("expected 1 valid node (bad skipped), got %d", len(nodes))
 	}
-	if nodes[0].Tree != "osmosis" {
-		t.Errorf("expected osmosis, got %q", nodes[0].Tree)
+	if nodes[0].Tree != "other-chain" {
+		t.Errorf("expected other-chain, got %q", nodes[0].Tree)
 	}
 }
 
@@ -259,7 +259,7 @@ func TestJoinChainTree_Integration(t *testing.T) {
 	if err := os.MkdirAll(chainsDir, 0755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(chainsDir, "cheqd.sample"), []byte(`tree_name = "cheqd"`), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(chainsDir, "mychain.sample"), []byte(`tree_name = "mychain"`), 0644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -268,10 +268,10 @@ func TestJoinChainTree_Integration(t *testing.T) {
 	if err := os.MkdirAll(nodesDir, 0755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(nodesDir, "cheqd-val.toml"), []byte(`tree = "cheqd"`), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(nodesDir, "mychain-val.toml"), []byte(`tree = "mychain"`), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(nodesDir, "osmosis-rpc.toml"), []byte(`tree = "osmosis"`), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(nodesDir, "other-chain-rpc.toml"), []byte(`tree = "other-chain"`), 0644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -291,9 +291,9 @@ func TestJoinChainTree_Integration(t *testing.T) {
 	}
 	result := JoinChainTree(identities[0], nodes)
 	if len(result) != 1 {
-		t.Fatalf("expected 1 node for cheqd, got %d", len(result))
+		t.Fatalf("expected 1 node for mychain, got %d", len(result))
 	}
-	if result[0].Tree != "cheqd" {
-		t.Errorf("expected cheqd, got %q", result[0].Tree)
+	if result[0].Tree != "mychain" {
+		t.Errorf("expected mychain, got %q", result[0].Tree)
 	}
 }

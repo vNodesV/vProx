@@ -17,7 +17,7 @@ schema_version = 3
 
 # ── Identity ──────────────────────────────────────────────────────────────────
 
-chain_id     = "chain-id"          # official chain-id (e.g. "cheqd-testnet-6")
+chain_id     = "chain-id"          # official chain-id (e.g. "your-chain-testnet-1")
 chain_name   = "chain"             # slug — used in log filenames and as default tree_name
 display_name = "Pretty Chain Name" # display name in dashboard; empty = cosmos.directory pretty_name
 
@@ -27,7 +27,7 @@ display_name = "Pretty Chain Name" # display name in dashboard; empty = cosmos.d
 tree_name = ""
 
 # node: join key — basename (without .toml) of the primary vprox/nodes file for this chain.
-# Example: node = "cheqdvaloper1mhlj3w27lzls8d4vr7fwkycd2ptjmm6aydyq8u"
+# Example: node = "<valoper-address>"
 # When empty, vLog falls back to matching tree_name against nodes' tree field.
 node = ""
 
@@ -44,7 +44,7 @@ explorers           = []   # cosmos.directory explorer list; set here to overrid
 # Leave address empty to hide that row in the dashboard.
 
 [validator.mainnet]
-address = ""   # valoper operator address (e.g. cheqdvaloper1mhlj3w27lzls8d4vr7fwkycd2ptjmm6aydyq8u)
+address = ""   # valoper operator address (e.g. <chain>valoper1...)
 
 # Auto-filled by cosmos.directory / chain RPC (do not set manually):
 # active          = false

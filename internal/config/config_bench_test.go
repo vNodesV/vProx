@@ -71,7 +71,7 @@ func BenchmarkIsValidHostname(b *testing.B) {
 
 	hosts := []string{
 		"rpc.cosmos.example.com",
-		"api.osmosis.zone",
+		"api.example.com",
 		"node1.stargaze.example.network",
 		"a.co",
 		"my-long-subdomain.with-many.parts.example.org",

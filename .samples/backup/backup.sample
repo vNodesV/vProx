@@ -31,7 +31,7 @@ check_interval_min = 10
 #
 # NOTE: all *.log files in the logs directory are auto-discovered and included
 # automatically (archived + rotated). You do NOT need to list chain log files here
-# (e.g. cheqd.log, meme_chain.log are picked up without any declaration).
+# (e.g. chain1.log, chain2.log are picked up without any declaration).
 # main.log is always included regardless of this list.
 #
 # Use this list for non-.log files you want included (e.g. .jsonl, .json).

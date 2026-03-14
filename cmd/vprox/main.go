@@ -263,8 +263,6 @@ func warnChainProxyDeprecation(dir, filename string, c *config.ChainConfig) {
 		base, base)
 }
 
-
-
 // rewriteRegexes holds pre-compiled patterns for a given (IP, host) pair.
 type rewriteRegexes struct {
 	rpcIP, rpcHost   *regexp.Regexp

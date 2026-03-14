@@ -226,6 +226,59 @@ func (s *Service) pollAll(ctx context.Context) {
 			}()
 		}
 	}
+
+	// Load ServiceNodes from config/services/nodes/*.toml (v1.4.0 additive path).
+	// VMs and registered chains take precedence — skip if already in active set.
+	if home := s.home; home != "" {
+		nodes, err := chainconfig.LoadServiceNodes(home)
+		if err == nil && len(nodes) > 0 {
+			identities, _ := chainconfig.LoadChainIdentities(home)
+			idMap := make(map[string]chainconfig.ChainSample, len(identities))
+			for _, id := range identities {
+				idMap[id.TreeName] = id
+			}
+			for _, node := range nodes {
+				node := node
+				key := node.Tree
+				if key == "" {
+					key = node.Host
+				}
+				if _, exists := active[key]; exists {
+					continue // VM or registered chain already covers this
+				}
+				if key != "" {
+					active[key] = struct{}{}
+				}
+				identity := idMap[node.Tree]
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					var rpcURL, restURL string
+					if node.Services.RPC && node.IP != "" {
+						rpcURL = "http://" + node.IP + ":26657"
+					}
+					if node.Services.REST && node.IP != "" {
+						restURL = "http://" + node.IP + ":1317"
+					}
+					st := status.Poll(ctx, key, rpcURL, restURL)
+					st.Type = "service-node"
+					if identity.NetworkType != "" {
+						st.NetworkType = identity.NetworkType
+					}
+					if identity.DashboardName != "" {
+						st.DashboardName = identity.DashboardName
+					}
+					if identity.ChainID != "" {
+						st.ChainID = identity.ChainID
+					}
+					s.mu.Lock()
+					s.statuses[key] = st
+					s.mu.Unlock()
+				}()
+			}
+		}
+	}
+
 	wg.Wait()
 
 	// Prune stale entries so removed/unregistered chains disappear after apply/poll.

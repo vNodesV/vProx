@@ -1,15 +1,15 @@
-# chains/cheqd-testnet.sample — Chain identity (v1.4.0)
+# chains/testnet-chain.sample — Chain identity (v1.4.0) — TESTNET EXAMPLE
 # READ-ONLY template. Copy to services/nodes/<node>.toml to create a service node.
 # This file contains identity only — no proxy or service fields.
 # Proxy config lives in config/services/nodes/*.toml
 
-chain_id        = "cheqd-testnet-6"
-tree_name       = "cheqd-testnet"     # join key used by services/nodes/*.toml
-dashboard_name  = "cheqd Testnet"
-network_type    = "testnet"           # mainnet | testnet | devnet
+chain_id        = "your-chain-testnet-1"
+tree_name       = "your-chain-testnet"  # join key used by services/nodes/*.toml
+dashboard_name  = "Your Chain Testnet"
+network_type    = "testnet"             # mainnet | testnet | devnet
 
 [explorer]
-base_url        = "https://testnet-explorer.cheqd.io"
+base_url        = "https://testnet-explorer.example.com"
 tx_path         = "/transactions/{txhash}"
 block_path      = "/blocks/{height}"
 account_path    = "/accounts/{address}"

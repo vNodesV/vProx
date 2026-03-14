@@ -15,11 +15,11 @@
 # ── VM Entries ────────────────────────────────────────────────────────────────
 
 [[vm]]
-name       = "cheqd-node"      # display name in Infrastructure block
+name       = "chain-node-1"    # display name in Infrastructure block
 lan_ip     = "10.0.0.66"       # LAN IP — SSH target + shown in dashboard
 port       = 22                # SSH port
-user       = "vnodesv"         # SSH user; empty = inherits [ssh].user from settings.toml
-chain_name = "cheqd"           # links to config/vlog/chains/cheqd.toml
+user       = ""                # SSH user; empty = inherits [ssh].user from settings.toml
+chain_name = "your-chain"      # links to config/vlog/chains/your-chain.toml
 type       = "validator"       # validator | sp | relayer | node (comma-separated for multi-role)
 # key_path = ""               # override SSH key only if different from settings.toml [ssh].key
 
@@ -28,11 +28,11 @@ country  = "CA"
 provider = ""
 
 [[vm]]
-name       = "akash-val"
+name       = "chain-node-2"
 lan_ip     = "10.0.0.67"
 port       = 22
-user       = "vnodesv"
-chain_name = "akash"
+user       = ""
+chain_name = "other-chain"
 type       = "validator"
 
 [vm.ping]

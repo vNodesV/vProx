@@ -29,13 +29,13 @@ func TestLoadChainIdentities_BasicLoad(t *testing.T) {
 	tmp := makeChainDir(t)
 	chainsDir := filepath.Join(tmp, "config", "chains")
 
-	writeSampleFile(t, chainsDir, "cheqd.sample", `
-tree_name           = "cheqd"
-chain_id            = "cheqd-mainnet-1"
-dashboard_name      = "CHEQd"
+	writeSampleFile(t, chainsDir, "mychain.sample", `
+tree_name           = "mychain"
+chain_id            = "mychain-mainnet-1"
+dashboard_name      = "MyChain"
 network_type        = "mainnet"
-recommended_version = "v3.0.1"
-explorers           = ["https://explorer.cheqd.io"]
+recommended_version = "v1.0.0"
+explorers           = ["https://explorer.example.com"]
 `)
 
 	samples, err := LoadChainIdentities(tmp)
@@ -47,22 +47,22 @@ explorers           = ["https://explorer.cheqd.io"]
 	}
 
 	s := samples[0]
-	if s.TreeName != "cheqd" {
-		t.Errorf("TreeName: want cheqd, got %q", s.TreeName)
+	if s.TreeName != "mychain" {
+		t.Errorf("TreeName: want mychain, got %q", s.TreeName)
 	}
-	if s.ChainID != "cheqd-mainnet-1" {
-		t.Errorf("ChainID: want cheqd-mainnet-1, got %q", s.ChainID)
+	if s.ChainID != "mychain-mainnet-1" {
+		t.Errorf("ChainID: want mychain-mainnet-1, got %q", s.ChainID)
 	}
-	if s.DashboardName != "CHEQd" {
-		t.Errorf("DashboardName: want CHEQd, got %q", s.DashboardName)
+	if s.DashboardName != "MyChain" {
+		t.Errorf("DashboardName: want MyChain, got %q", s.DashboardName)
 	}
 	if s.NetworkType != "mainnet" {
 		t.Errorf("NetworkType: want mainnet, got %q", s.NetworkType)
 	}
-	if s.RecommendedVersion != "v3.0.1" {
-		t.Errorf("RecommendedVersion: want v3.0.1, got %q", s.RecommendedVersion)
+	if s.RecommendedVersion != "v1.0.0" {
+		t.Errorf("RecommendedVersion: want v1.0.0, got %q", s.RecommendedVersion)
 	}
-	if len(s.Explorers) != 1 || s.Explorers[0] != "https://explorer.cheqd.io" {
+	if len(s.Explorers) != 1 || s.Explorers[0] != "https://explorer.example.com" {
 		t.Errorf("Explorers: unexpected value %v", s.Explorers)
 	}
 	if s.SourceFile == "" {
@@ -74,8 +74,8 @@ func TestLoadChainIdentities_MultipleFiles(t *testing.T) {
 	tmp := makeChainDir(t)
 	chainsDir := filepath.Join(tmp, "config", "chains")
 
-	writeSampleFile(t, chainsDir, "cheqd.sample", `tree_name = "cheqd"`)
-	writeSampleFile(t, chainsDir, "osmosis.sample", `tree_name = "osmosis"`)
+	writeSampleFile(t, chainsDir, "mychain.sample", `tree_name = "mychain"`)
+	writeSampleFile(t, chainsDir, "other-chain.sample", `tree_name = "other-chain"`)
 
 	samples, err := LoadChainIdentities(tmp)
 	if err != nil {
@@ -88,8 +88,8 @@ func TestLoadChainIdentities_MultipleFiles(t *testing.T) {
 	for _, s := range samples {
 		names[s.TreeName] = true
 	}
-	if !names["cheqd"] || !names["osmosis"] {
-		t.Errorf("expected cheqd and osmosis in results, got %v", names)
+	if !names["mychain"] || !names["other-chain"] {
+		t.Errorf("expected mychain and other-chain in results, got %v", names)
 	}
 }
 
@@ -98,9 +98,9 @@ func TestLoadChainIdentities_SkipsTomlFiles(t *testing.T) {
 	chainsDir := filepath.Join(tmp, "config", "chains")
 
 	// .toml files must NOT be loaded by LoadChainIdentities
-	writeSampleFile(t, chainsDir, "cheqd.toml", `tree_name = "cheqd"`)
+	writeSampleFile(t, chainsDir, "mychain.toml", `tree_name = "mychain"`)
 	// .sample file should load
-	writeSampleFile(t, chainsDir, "osmosis.sample", `tree_name = "osmosis"`)
+	writeSampleFile(t, chainsDir, "other-chain.sample", `tree_name = "other-chain"`)
 
 	samples, err := LoadChainIdentities(tmp)
 	if err != nil {
@@ -109,8 +109,8 @@ func TestLoadChainIdentities_SkipsTomlFiles(t *testing.T) {
 	if len(samples) != 1 {
 		t.Fatalf("expected 1 sample (toml skipped), got %d", len(samples))
 	}
-	if samples[0].TreeName != "osmosis" {
-		t.Errorf("expected osmosis, got %q", samples[0].TreeName)
+	if samples[0].TreeName != "other-chain" {
+		t.Errorf("expected other-chain, got %q", samples[0].TreeName)
 	}
 }
 
@@ -118,9 +118,9 @@ func TestLoadChainIdentities_SkipsOtherExtensions(t *testing.T) {
 	tmp := makeChainDir(t)
 	chainsDir := filepath.Join(tmp, "config", "chains")
 
-	writeSampleFile(t, chainsDir, "cheqd.yaml", `tree_name: cheqd`)
+	writeSampleFile(t, chainsDir, "mychain.yaml", `tree_name: mychain`)
 	writeSampleFile(t, chainsDir, "README.md", `# chains`)
-	writeSampleFile(t, chainsDir, "cheqd.sample", `tree_name = "cheqd"`)
+	writeSampleFile(t, chainsDir, "mychain.sample", `tree_name = "mychain"`)
 
 	samples, err := LoadChainIdentities(tmp)
 	if err != nil {
@@ -161,7 +161,7 @@ func TestLoadChainIdentities_MalformedSampleSkipped(t *testing.T) {
 	// Malformed TOML — should be skipped, not fatal
 	writeSampleFile(t, chainsDir, "bad.sample", `this is not valid toml @@@@`)
 	// Valid one should still load
-	writeSampleFile(t, chainsDir, "good.sample", `tree_name = "osmosis"`)
+	writeSampleFile(t, chainsDir, "good.sample", `tree_name = "other-chain"`)
 
 	samples, err := LoadChainIdentities(tmp)
 	if err != nil {
@@ -170,15 +170,15 @@ func TestLoadChainIdentities_MalformedSampleSkipped(t *testing.T) {
 	if len(samples) != 1 {
 		t.Fatalf("expected 1 valid sample (bad skipped), got %d", len(samples))
 	}
-	if samples[0].TreeName != "osmosis" {
-		t.Errorf("expected osmosis, got %q", samples[0].TreeName)
+	if samples[0].TreeName != "other-chain" {
+		t.Errorf("expected other-chain, got %q", samples[0].TreeName)
 	}
 }
 
 func TestLoadChainIdentities_SourceFilePopulated(t *testing.T) {
 	tmp := makeChainDir(t)
 	chainsDir := filepath.Join(tmp, "config", "chains")
-	writeSampleFile(t, chainsDir, "cheqd.sample", `tree_name = "cheqd"`)
+	writeSampleFile(t, chainsDir, "mychain.sample", `tree_name = "mychain"`)
 
 	samples, err := LoadChainIdentities(tmp)
 	if err != nil {
@@ -187,7 +187,7 @@ func TestLoadChainIdentities_SourceFilePopulated(t *testing.T) {
 	if len(samples) != 1 {
 		t.Fatalf("expected 1 sample, got %d", len(samples))
 	}
-	want := filepath.Join(chainsDir, "cheqd.sample")
+	want := filepath.Join(chainsDir, "mychain.sample")
 	if samples[0].SourceFile != want {
 		t.Errorf("SourceFile: want %q, got %q", want, samples[0].SourceFile)
 	}
@@ -196,19 +196,19 @@ func TestLoadChainIdentities_SourceFilePopulated(t *testing.T) {
 // ---------- JoinChainTree ----------
 
 func TestJoinChainTree_ReturnsMatchingNodes(t *testing.T) {
-	identity := ChainSample{TreeName: "cheqd", ChainID: "cheqd-mainnet-1"}
+	identity := ChainSample{TreeName: "mychain", ChainID: "mychain-mainnet-1"}
 	nodes := []ServiceNode{
-		{Tree: "cheqd", Host: "cheqd-rpc.example.com"},
-		{Tree: "osmosis", Host: "osmosis-rpc.example.com"},
-		{Tree: "cheqd", Host: "cheqd-rest.example.com"},
+		{Tree: "mychain", Host: "mychain-rpc.example.com"},
+		{Tree: "other-chain", Host: "other-chain-rpc.example.com"},
+		{Tree: "mychain", Host: "mychain-rest.example.com"},
 	}
 
 	result := JoinChainTree(identity, nodes)
 	if len(result) != 2 {
-		t.Fatalf("expected 2 nodes for cheqd, got %d", len(result))
+		t.Fatalf("expected 2 nodes for mychain, got %d", len(result))
 	}
 	for _, n := range result {
-		if n.Tree != "cheqd" {
+		if n.Tree != "mychain" {
 			t.Errorf("unexpected tree in result: %q", n.Tree)
 		}
 	}
@@ -217,8 +217,8 @@ func TestJoinChainTree_ReturnsMatchingNodes(t *testing.T) {
 func TestJoinChainTree_NoMatch(t *testing.T) {
 	identity := ChainSample{TreeName: "cosmoshub"}
 	nodes := []ServiceNode{
-		{Tree: "cheqd"},
-		{Tree: "osmosis"},
+		{Tree: "mychain"},
+		{Tree: "other-chain"},
 	}
 	result := JoinChainTree(identity, nodes)
 	if result != nil {
@@ -227,7 +227,7 @@ func TestJoinChainTree_NoMatch(t *testing.T) {
 }
 
 func TestJoinChainTree_EmptyNodes(t *testing.T) {
-	identity := ChainSample{TreeName: "cheqd"}
+	identity := ChainSample{TreeName: "mychain"}
 	result := JoinChainTree(identity, nil)
 	if result != nil {
 		t.Errorf("expected nil for empty input, got %v", result)
@@ -235,10 +235,10 @@ func TestJoinChainTree_EmptyNodes(t *testing.T) {
 }
 
 func TestJoinChainTree_AllMatch(t *testing.T) {
-	identity := ChainSample{TreeName: "cheqd"}
+	identity := ChainSample{TreeName: "mychain"}
 	nodes := []ServiceNode{
-		{Tree: "cheqd", Role: "validator"},
-		{Tree: "cheqd", Role: "api"},
+		{Tree: "mychain", Role: "validator"},
+		{Tree: "mychain", Role: "api"},
 	}
 	result := JoinChainTree(identity, nodes)
 	if len(result) != 2 {
@@ -247,17 +247,17 @@ func TestJoinChainTree_AllMatch(t *testing.T) {
 }
 
 func TestJoinChainTree_ExactMatch(t *testing.T) {
-	// "cheqd-testnet" must NOT match "cheqd"
-	identity := ChainSample{TreeName: "cheqd"}
+	// "mychain-testnet" must NOT match "mychain"
+	identity := ChainSample{TreeName: "mychain"}
 	nodes := []ServiceNode{
-		{Tree: "cheqd-testnet"},
-		{Tree: "cheqd", Role: "validator"},
+		{Tree: "mychain-testnet"},
+		{Tree: "mychain", Role: "validator"},
 	}
 	result := JoinChainTree(identity, nodes)
 	if len(result) != 1 {
 		t.Fatalf("expected 1 exact match, got %d", len(result))
 	}
-	if result[0].Tree != "cheqd" {
+	if result[0].Tree != "mychain" {
 		t.Errorf("wrong match: %q", result[0].Tree)
 	}
 }

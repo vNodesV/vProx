@@ -402,6 +402,7 @@ func cmdStart(f flags) int {
 				fmt.Fprintf(os.Stderr, "vops: fleet db error: %v\n", err)
 			} else {
 				svc.SetConfig(runtimeCfg)
+				svc.SetHome(home)
 				fleetSvc = svc
 				defer svc.Close()
 				go svc.StartPolling(context.Background(), time.Duration(cfg.VOps.Push.PollIntervalSec)*time.Second)

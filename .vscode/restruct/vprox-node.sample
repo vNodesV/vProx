@@ -5,9 +5,9 @@
 #
 # Naming convention:
 #   Validators → named by valoper address:
-#     cheqdvaloper1mhlj3w27lzls8d4vr7fwkycd2ptjmm6aydyq8u.toml
+#     <valoper-address>.toml
 #   SP / API / RPC-only nodes → named by public hostname:
-#     cheqd-api.srvs.example.com.toml
+#     <chain>-api.srvs.example.com.toml
 #
 # This file controls:
 #   - Which chain this node belongs to (via tree → join key)

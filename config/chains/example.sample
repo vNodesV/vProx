@@ -1,0 +1,16 @@
+# config/chains/example.sample — Chain identity template (v1.4.0)
+# Copy and rename to: config/chains/<chain-slug>.sample
+# This file is READ-ONLY — it defines chain identity for vProx routing and the dashboard.
+# Proxy/service config lives in: config/services/nodes/*.toml
+
+# ── Identity ──────────────────────────────────────────────────────────────────
+tree_name           = "your-chain"           # join key — must match 'tree' in service node files
+chain_id            = "your-chain-mainnet-1" # official chain-id (cosmos.directory key)
+dashboard_name      = "Your Chain"           # display name; empty = cosmos.directory pretty_name
+network_type        = "mainnet"              # mainnet | testnet | devnet
+recommended_version = ""                     # auto-filled from cosmos.directory when chain_id is set
+
+# Explorer links shown on the dashboard.
+# If empty, cosmos.directory explorers are used when chain_id is set.
+explorers = []
+# explorers = ["https://explorer.example.com"]

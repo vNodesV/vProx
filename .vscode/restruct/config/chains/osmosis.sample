@@ -1,11 +1,11 @@
-# chains/osmosis.sample — Chain identity (v1.4.0)
-chain_id        = "osmosis-1"
-tree_name       = "osmosis"
-dashboard_name  = "Osmosis"
+# chains/mainnet-chain.sample — Chain identity (v1.4.0) — MAINNET EXAMPLE
+chain_id        = "your-chain-mainnet-1"
+tree_name       = "your-chain"
+dashboard_name  = "Your Chain"
 network_type    = "mainnet"
 
 [explorer]
-base_url        = "https://www.mintscan.io/osmosis"
+base_url        = "https://explorer.example.com"
 tx_path         = "/txs/{txhash}"
 block_path      = "/blocks/{height}"
 account_path    = "/accounts/{address}"
