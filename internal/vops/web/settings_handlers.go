@@ -228,6 +228,7 @@ func (s *Server) handleAPISettingsPreferences(w http.ResponseWriter, r *http.Req
 		Path:     "/",
 		SameSite: http.SameSiteStrictMode,
 		HttpOnly: true,
+		Secure:   true,
 	})
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "theme": req.Theme})

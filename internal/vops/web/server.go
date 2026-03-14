@@ -70,6 +70,16 @@ type Server struct {
 	sessions   map[string]time.Time // token → expiry
 	sessionMu  sync.RWMutex
 	sessionKey []byte // 32-byte HMAC key, generated at startup
+
+	// Brute-force protection: per-IP failed login tracking.
+	loginMu      sync.Mutex
+	loginAttempts map[string]*loginAttempt
+}
+
+// loginAttempt tracks failed login attempts for a single source IP.
+type loginAttempt struct {
+	count       int
+	lockedUntil time.Time
 }
 
 // New creates a Server, parses embedded templates, registers all routes,
@@ -104,15 +114,16 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 	}
 
 	s := &Server{
-		db:         d,
-		enricher:   enricher,
-		ingester:   ingester,
-		cfg:        cfg,
-		home:       config.FindHome(),
-		cfgPath:    cfgPath,
-		pages:      pages,
-		sessions:   make(map[string]time.Time),
-		sessionKey: sessionKey,
+		db:            d,
+		enricher:      enricher,
+		ingester:      ingester,
+		cfg:           cfg,
+		home:          config.FindHome(),
+		cfgPath:       cfgPath,
+		pages:         pages,
+		sessions:      make(map[string]time.Time),
+		sessionKey:    sessionKey,
+		loginAttempts: make(map[string]*loginAttempt),
 	}
 	if fleetSvc != nil {
 		s.fleet = api.New(fleetSvc)
@@ -283,6 +294,67 @@ func (s *Server) checkCredentials(username, password string) bool {
 		return false
 	}
 	return bcrypt.CompareHashAndPassword([]byte(s.cfg.VOps.Auth.PasswordHash), []byte(password)) == nil
+}
+
+// checkLoginLock returns (true, retryAfterSeconds) when clientIP is locked out,
+// (false, 0) otherwise. Stale entries older than 30 min are pruned on each call.
+func (s *Server) checkLoginLock(clientIP string) (locked bool, retryAfter int) {
+	const lockDuration = 5 * time.Minute
+	const staleCutoff = 30 * time.Minute
+
+	s.loginMu.Lock()
+	defer s.loginMu.Unlock()
+
+	now := time.Now()
+	// Prune stale entries.
+	for ip, att := range s.loginAttempts {
+		if now.Sub(att.lockedUntil) > staleCutoff && att.lockedUntil.IsZero() {
+			delete(s.loginAttempts, ip)
+		} else if !att.lockedUntil.IsZero() && now.Sub(att.lockedUntil) > staleCutoff {
+			delete(s.loginAttempts, ip)
+		}
+	}
+
+	att, ok := s.loginAttempts[clientIP]
+	if !ok || att.lockedUntil.IsZero() {
+		return false, 0
+	}
+	if now.Before(att.lockedUntil) {
+		remaining := int(att.lockedUntil.Sub(now).Seconds()) + 1
+		return true, remaining
+	}
+	// Lock expired — reset.
+	att.count = 0
+	att.lockedUntil = time.Time{}
+	return false, 0
+}
+
+// recordLoginFailure increments the failed attempt counter for clientIP.
+// After 5 failures, the IP is locked out for 5 minutes.
+func (s *Server) recordLoginFailure(clientIP string) {
+	const maxAttempts = 5
+	const lockDuration = 5 * time.Minute
+
+	s.loginMu.Lock()
+	defer s.loginMu.Unlock()
+
+	att, ok := s.loginAttempts[clientIP]
+	if !ok {
+		att = &loginAttempt{}
+		s.loginAttempts[clientIP] = att
+	}
+	att.count++
+	if att.count >= maxAttempts {
+		att.lockedUntil = time.Now().Add(lockDuration)
+		att.count = 0
+	}
+}
+
+// clearLoginAttempts resets the failure counter for clientIP on successful login.
+func (s *Server) clearLoginAttempts(clientIP string) {
+	s.loginMu.Lock()
+	delete(s.loginAttempts, clientIP)
+	s.loginMu.Unlock()
 }
 
 // requireAPIKey is middleware that enforces API key authentication.

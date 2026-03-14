@@ -1221,14 +1221,33 @@ func (s *Server) handleLoginSubmit(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
+
+	// Extract real client IP (Apache sets X-Real-IP; fall back to TCP remote addr).
+	clientIP := r.Header.Get("X-Real-IP")
+	if clientIP == "" {
+		clientIP = r.RemoteAddr
+		if i := strings.LastIndex(clientIP, ":"); i >= 0 {
+			clientIP = clientIP[:i]
+		}
+	}
+
+	// Enforce brute-force lockout before checking credentials.
+	if locked, retryAfter := s.checkLoginLock(clientIP); locked {
+		w.Header().Set("Retry-After", strconv.Itoa(retryAfter))
+		http.Error(w, "too many failed login attempts", http.StatusTooManyRequests)
+		return
+	}
+
 	username := r.FormValue("username")
 	password := r.FormValue("password")
 
 	if !s.checkCredentials(username, password) {
+		s.recordLoginFailure(clientIP)
 		http.Redirect(w, r, s.cfg.VOps.BasePath+"/login?error=invalid", http.StatusFound)
 		return
 	}
 
+	s.clearLoginAttempts(clientIP)
 	token, err := s.newSession()
 	if err != nil {
 		http.Error(w, "internal server error", http.StatusInternalServerError)
