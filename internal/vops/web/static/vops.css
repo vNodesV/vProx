@@ -7,12 +7,13 @@
 /* ── vNodes[V] design tokens ── */
 :root {
   --vn-bg:           #000000;
-  --vn-bg-card:      rgba(0, 6, 0, 0.78);
+  --vn-bg-card:      rgba(0, 6, 0, 0.62);
   --vn-green:        #00ff00;
   --vn-green-hover:  #6df36d;
   --vn-green-dim:    rgba(0, 255, 0, 0.08);
   --vn-green-border: rgba(0, 255, 0, 0.18);
   --vn-green-glow:   rgba(0, 255, 0, 0.18);
+  --vn-btn-bg:       rgba(0, 6, 0, 0.85);
   --vn-text:         #c8c8c8;
   --vn-text-muted:   #888888;
   --vn-border:       rgba(0, 255, 0, 0.10);
@@ -40,8 +41,8 @@ body {
   font-size: 0.9rem;
   line-height: 1.5;
   color: var(--vn-text);
-  /* Full image always visible — stretches to fill viewport, aspect ratio adjusts to screen */
-  background: #000000 url('content_bg.png') center center / 100% 100% no-repeat fixed;
+  /* Default (vnodes): new 2026 vOps background */
+  background: #000000 url('2026_logos/default/background/bg.png') center center / cover no-repeat fixed;
   /* Flex column so footer sticks to the floor */
   display: flex;
   flex-direction: column;
@@ -59,6 +60,41 @@ body::before {
 /* Content above overlay */
 body > * { position: relative; z-index: 1; }
 main.container { flex: 1; }
+
+/* ── vOps Site Header ── */
+.vops-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: .5rem 1.2rem .3rem;
+  position: relative;
+  z-index: 10;
+}
+
+.vops-logo-link {
+  display: block;
+  text-decoration: none;
+  flex-shrink: 0;
+}
+
+/* Logo: CSS background-image swapped per theme — 180px wide, preserves aspect ratio */
+.vops-logo {
+  width: 180px;
+  height: 50px;
+  background: url('2026_logos/default/logo/logo.png') left center / contain no-repeat;
+}
+[data-theme="dark-blue"] .vops-logo {
+  background-image: url('2026_logos/dark_blue/logo/logo.png');
+}
+[data-theme="light-blue"] .vops-logo {
+  background-image: url('2026_logos/white_blue/logo/logo.png');
+}
+
+/* Push top-actions to the right; keep it aligned with logo */
+.vops-header .vlog-top-actions {
+  padding: 0;
+  margin-left: auto;
+}
 
 /* ── Footer ── */
 .vlog-footer {
@@ -145,18 +181,18 @@ input:focus, select:focus {
   box-shadow: 0 0 0 2px rgba(0,255,0,0.20) !important;
 }
 
-/* ── Primary action buttons — reversed (dark bg + green text + green border) ── */
+/* ── Primary action buttons — use theme variables (no hardcoded colours) ── */
 [role="button"]:not(.outline):not(.secondary),
 button[type="submit"]:not(.btn-block):not(.btn-unblock):not(.btn-investigate):not(.btn-update):not(.enrich-dismiss) {
-  background: #001700 !important;
+  background: var(--vn-btn-bg) !important;
   border: 1px solid var(--vn-green) !important;
   color: var(--vn-green) !important;
-  box-shadow: 0 0 8px rgba(0,255,0,0.15);
+  box-shadow: 0 0 8px var(--vn-green-glow);
 }
 [role="button"]:not(.outline):not(.secondary):hover,
 button[type="submit"]:not(.btn-block):not(.btn-unblock):not(.btn-investigate):not(.btn-update):not(.enrich-dismiss):hover {
-  background: rgba(0,255,0,0.08) !important;
-  box-shadow: 0 0 14px rgba(0,255,0,0.30);
+  background: var(--vn-green-dim) !important;
+  box-shadow: 0 0 14px var(--vn-green-glow);
 }
 /* Outline buttons (e.g. View in blocked table) */
 [role="button"].outline {
@@ -165,7 +201,7 @@ button[type="submit"]:not(.btn-block):not(.btn-unblock):not(.btn-investigate):no
   color: var(--vn-green) !important;
 }
 [role="button"].outline:hover {
-  background: rgba(0,255,0,0.08) !important;
+  background: var(--vn-green-dim) !important;
 }
 .badge {
 display: inline-block;
@@ -1027,9 +1063,9 @@ summary { list-style: none; }
   accent-color: var(--vn-green);
 }
 .settings-grid label.check:has(input[type="checkbox"]:checked) {
-  border-color: rgba(76,175,80,.55);
-  background: rgba(76,175,80,.12);
-  color: #7ff0a3;
+  border-color: var(--vn-green-border);
+  background: var(--vn-green-dim);
+  color: var(--vn-green);
 }
 .settings-actions {
   margin-top: .6rem;
@@ -1119,7 +1155,7 @@ summary { list-style: none; }
   color: var(--vn-green) !important;
 }
 .settings-card button.outline:hover {
-  background: rgba(0,255,0,.08) !important;
+  background: var(--vn-green-dim) !important;
 }
 .settings-card button.danger {
   border: 1px solid rgba(255,138,138,.45) !important;
@@ -1364,7 +1400,9 @@ summary { list-style: none; }
   max-height: calc(100vh - 1.8rem);
   padding: .65rem .72rem;
   border: 1px solid var(--vn-green-border);
-  background: rgba(6, 10, 6, .97);
+  background: var(--vn-bg-card);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   display: flex;
   flex-direction: column;
   gap: .35rem;
@@ -1375,7 +1413,8 @@ summary { list-style: none; }
   font-size: .74rem;
   letter-spacing: .09em;
   text-transform: uppercase;
-  color: rgba(0,255,0,.75);
+  color: var(--vn-green);
+  opacity: .75;
 }
 
 .settings-editor-copy {
@@ -1395,7 +1434,7 @@ summary { list-style: none; }
   overflow: auto;
   border: 1px solid var(--vn-green-border);
   border-radius: 7px;
-  background: rgba(0,0,0,.26);
+  background: var(--vn-green-dim);
   padding: .32rem .55rem;
   width: 100%;
 }
@@ -1440,10 +1479,10 @@ summary { list-style: none; }
   min-height: 1.72rem;
 }
 
-/* Checked checkbox rows get green tint */
+/* Checked checkbox rows get accent tint (theme-aware) */
 .settings-editor-host .settings-grid label.check:has(input:checked) {
-  border-color: rgba(0,255,0,.35);
-  background: rgba(0,255,0,.06);
+  border-color: var(--vn-green-border);
+  background: var(--vn-green-dim);
   color: var(--vn-green);
 }
 
@@ -1464,7 +1503,7 @@ summary { list-style: none; }
 .settings-editor-host .settings-grid label > select {
   flex: 1;
   min-width: 0;
-  max-width: none;
+  max-width: 480px;
   width: auto;
   height: 1.72rem;
   padding: 0 .38rem;
@@ -1472,9 +1511,28 @@ summary { list-style: none; }
   font-size: .78rem;
   border: 1px solid var(--vn-border);
   border-radius: 3px;
-  background: rgba(255,255,255,.04);
+  background: var(--pico-form-element-background-color, rgba(255,255,255,.06));
   color: var(--vn-text);
   box-sizing: border-box;
+}
+
+/* Smart input widths: port fields (max 65535 = 5 digits) */
+.settings-editor-host input[type="number"][max="65535"],
+.settings-editor-host input[name$="port"],
+.settings-editor-host input[name*="_port"] {
+  max-width: 80px;
+  flex: none;
+}
+/* Short numeric fields (RPS, burst, thresholds) */
+.settings-editor-host input[type="number"]:not([max="65535"]) {
+  max-width: 110px;
+  flex: none;
+}
+/* Short text codes (country, provider abbreviations) */
+.settings-editor-host input[name*="country"],
+.settings-editor-host input[name*="provider"] {
+  max-width: 70px;
+  flex: none;
 }
 
 /* .full labels stack vertically so long text + input fill the full row */
@@ -1489,6 +1547,7 @@ summary { list-style: none; }
 .settings-editor-host .settings-grid label.full > select,
 .settings-editor-host .settings-grid label.full > textarea {
   width: 100%;
+  max-width: 100%;
   height: 1.72rem;
   flex: none;
 }
@@ -1544,8 +1603,8 @@ summary { list-style: none; }
 }
 
 .settings-pill-dismiss {
-  color: rgba(255,255,255,.72);
-  border-color: rgba(255,255,255,.2);
+  color: var(--vn-text);
+  border-color: var(--vn-border);
 }
 
 .vlog-top-actions {
@@ -1566,8 +1625,8 @@ summary { list-style: none; }
   gap: .35rem;
   text-decoration: none;
   background: none;
-  border: 1px solid rgba(0,255,0,0.35);
-  color: #00ff00;
+  border: 1px solid var(--vn-green-border);
+  color: var(--vn-green);
   padding: .3rem .8rem;
   border-radius: 4px;
   cursor: pointer;
@@ -1578,8 +1637,8 @@ summary { list-style: none; }
 
 .vlog-top-link:hover,
 .vlog-top-btn:hover {
-  background: rgba(0,255,0,.10);
-  border-color: #00ff00;
+  background: var(--vn-green-dim);
+  border-color: var(--vn-green);
 }
 
 .settings-pill-validate.is-ready,
@@ -1645,55 +1704,73 @@ html {
 
 /* ── Theme 1: vNodes[V] (explicit selector — mirrors :root, default) ── */
 [data-theme="vnodes"] {
+  color-scheme: dark;
   --vn-bg:           #000000;
-  --vn-bg-card:      rgba(0, 6, 0, 0.78);
+  --vn-bg-card:      rgba(0, 6, 0, 0.62);
   --vn-green:        #00ff00;
   --vn-green-hover:  #6df36d;
   --vn-green-dim:    rgba(0, 255, 0, 0.08);
   --vn-green-border: rgba(0, 255, 0, 0.18);
   --vn-green-glow:   rgba(0, 255, 0, 0.18);
+  --vn-btn-bg:       rgba(0, 6, 0, 0.85);
   --vn-text:         #c8c8c8;
   --vn-text-muted:   #888888;
   --vn-border:       rgba(0, 255, 0, 0.10);
   /* Pico overrides */
-  --pico-background-color:      var(--vn-bg);
-  --pico-card-background-color: var(--vn-bg-card);
-  --pico-card-border-color:     var(--vn-green-border);
-  --pico-primary:               var(--vn-green);
-  --pico-primary-hover:         var(--vn-green-hover);
-  --pico-color:                 var(--vn-text);
-  --pico-muted-color:           var(--vn-text-muted);
-  --pico-muted-border-color:    var(--vn-border);
-  --pico-table-border-color:    var(--vn-border);
+  --pico-background-color:              var(--vn-bg);
+  --pico-card-background-color:         var(--vn-bg-card);
+  --pico-card-border-color:             var(--vn-green-border);
+  --pico-primary:                       var(--vn-green);
+  --pico-primary-hover:                 var(--vn-green-hover);
+  --pico-color:                         var(--vn-text);
+  --pico-muted-color:                   var(--vn-text-muted);
+  --pico-muted-border-color:            var(--vn-border);
+  --pico-table-border-color:            var(--vn-border);
+  --pico-form-element-background-color: rgba(0, 255, 0, 0.04);
+  --pico-form-element-border-color:     var(--vn-green-border);
+  --pico-form-element-color:            var(--vn-text);
 }
 
 /* ── Theme 2: Dark Blue ── */
 [data-theme="dark-blue"] {
+  color-scheme: dark;
   --vn-bg:           #0a0e1a;
-  --vn-bg-card:      rgba(10, 18, 40, 0.82);
+  --vn-bg-card:      rgba(10, 18, 40, 0.68);
   --vn-green:        #4fc3f7;
   --vn-green-hover:  #81d4fa;
   --vn-green-dim:    rgba(79, 195, 247, 0.10);
   --vn-green-border: rgba(79, 195, 247, 0.22);
   --vn-green-glow:   rgba(79, 195, 247, 0.18);
+  --vn-btn-bg:       rgba(10, 18, 40, 0.85);
   --vn-text:         #cdd6f4;
   --vn-text-muted:   #7f8cb0;
   --vn-border:       rgba(79, 195, 247, 0.12);
   /* Pico overrides */
-  --pico-background-color:      var(--vn-bg);
-  --pico-card-background-color: var(--vn-bg-card);
-  --pico-card-border-color:     var(--vn-green-border);
-  --pico-primary:               var(--vn-green);
-  --pico-primary-hover:         var(--vn-green-hover);
-  --pico-color:                 var(--vn-text);
-  --pico-muted-color:           var(--vn-text-muted);
-  --pico-muted-border-color:    var(--vn-border);
-  --pico-table-border-color:    var(--vn-border);
+  --pico-background-color:              var(--vn-bg);
+  --pico-card-background-color:         var(--vn-bg-card);
+  --pico-card-border-color:             var(--vn-green-border);
+  --pico-primary:                       var(--vn-green);
+  --pico-primary-hover:                 var(--vn-green-hover);
+  --pico-color:                         var(--vn-text);
+  --pico-muted-color:                   var(--vn-text-muted);
+  --pico-muted-border-color:            var(--vn-border);
+  --pico-table-border-color:            var(--vn-border);
+  --pico-form-element-background-color: rgba(79, 195, 247, 0.05);
+  --pico-form-element-border-color:     var(--vn-green-border);
+  --pico-form-element-color:            var(--vn-text);
+}
+
+/* ── vNodes body background ── */
+html[data-theme="vnodes"] body {
+  background: #000000 url('2026_logos/default/background/bg.png') center center / cover no-repeat fixed;
+}
+html[data-theme="vnodes"] body::before {
+  background: rgba(0, 0, 0, 0.52);
 }
 
 /* ── Dark Blue: body background ── */
 html[data-theme="dark-blue"] body {
-  background: #0a0e1a url('bg_wide.png') center center / 100% 100% no-repeat fixed;
+  background: #0a0e1a url('2026_logos/dark_blue/background/bg.png') center center / cover no-repeat fixed;
 }
 html[data-theme="dark-blue"] body::before {
   background: rgba(10, 14, 26, 0.55);
@@ -1704,37 +1781,107 @@ html[data-theme="dark-blue"] .vlog-footer {
   background: rgba(10, 14, 26, 0.55);
 }
 
+/* ── Dark themes: force article/card/block backgrounds via Pico vars ── */
+/* Without color-scheme:dark Pico might fall through to light defaults */
+html[data-theme="vnodes"] article,
+html[data-theme="vnodes"] .v-block,
+html[data-theme="vnodes"] .v-card,
+html[data-theme="vnodes"] .stat-card,
+html[data-theme="vnodes"] .chart-block,
+html[data-theme="vnodes"] .intel-card,
+html[data-theme="dark-blue"] article,
+html[data-theme="dark-blue"] .v-block,
+html[data-theme="dark-blue"] .v-card,
+html[data-theme="dark-blue"] .stat-card,
+html[data-theme="dark-blue"] .chart-block,
+html[data-theme="dark-blue"] .intel-card {
+  background: var(--vn-bg-card) !important;
+  border-color: var(--vn-green-border) !important;
+  color: var(--vn-text);
+}
+
+/* Dark themes: details/summary inside settings blocks inherit dark bg */
+html[data-theme="vnodes"] details,
+html[data-theme="dark-blue"] details {
+  background: transparent;
+}
+html[data-theme="vnodes"] summary,
+html[data-theme="dark-blue"] summary {
+  color: var(--vn-text);
+}
+
+/* Dark themes: settings list table rows stay dark */
+html[data-theme="vnodes"] .settings-list-table tbody tr,
+html[data-theme="dark-blue"] .settings-list-table tbody tr {
+  background: transparent;
+}
+html[data-theme="vnodes"] .settings-list-table tbody tr:hover,
+html[data-theme="dark-blue"] .settings-list-table tbody tr:hover {
+  background: var(--vn-green-dim);
+}
+
+/* Dark themes: settings-vm-row / chain-service-row article */
+html[data-theme="vnodes"] .settings-vm-row,
+html[data-theme="dark-blue"] .settings-vm-row {
+  background: rgba(0, 0, 0, 0.28) !important;
+}
+
+/* ── Dark themes: editor popup inherits correct theme bg ── */
+html[data-theme="vnodes"] .settings-editor-popup,
+html[data-theme="dark-blue"] .settings-editor-popup {
+  background: var(--vn-bg-card) !important;
+}
+
+/* ── Light theme: editor popup uses white background ── */
+html[data-theme="light-blue"] .settings-editor-popup {
+  background: #ffffff !important;
+}
+
+html[data-theme="light-blue"] .settings-editor-host {
+  background: rgba(21, 101, 192, 0.04) !important;
+}
+
 /* ── Theme 3: Light Blue (Classic) ── */
 [data-theme="light-blue"] {
-  --vn-bg:           #f0f4f8;
-  --vn-bg-card:      rgba(255, 255, 255, 0.97);
+  color-scheme: light;
+  --vn-bg:           #e8edf3;
+  --vn-bg-card:      rgba(255, 255, 255, 0.88);
   --vn-green:        #1565c0;
   --vn-green-hover:  #1976d2;
   --vn-green-dim:    rgba(21, 101, 192, 0.07);
   --vn-green-border: rgba(21, 101, 192, 0.22);
-  --vn-green-glow:   none;
-  --vn-text:         #212121;
-  --vn-text-muted:   #616161;
+  --vn-green-glow:   transparent;
+  --vn-btn-bg:       transparent;
+  --vn-text:         #263238;
+  --vn-text-muted:   #455a64;
   --vn-border:       rgba(0, 0, 0, 0.12);
   /* Pico overrides */
-  --pico-background-color:      var(--vn-bg);
-  --pico-card-background-color: var(--vn-bg-card);
-  --pico-card-border-color:     var(--vn-green-border);
-  --pico-primary:               var(--vn-green);
-  --pico-primary-hover:         var(--vn-green-hover);
-  --pico-color:                 var(--vn-text);
-  --pico-muted-color:           var(--vn-text-muted);
-  --pico-muted-border-color:    var(--vn-border);
-  --pico-table-border-color:    var(--vn-border);
+  --pico-background-color:              var(--vn-bg);
+  --pico-card-background-color:         var(--vn-bg-card);
+  --pico-card-border-color:             var(--vn-green-border);
+  --pico-primary:                       var(--vn-green);
+  --pico-primary-hover:                 var(--vn-green-hover);
+  --pico-color:                         var(--vn-text);
+  --pico-muted-color:                   var(--vn-text-muted);
+  --pico-muted-border-color:            var(--vn-border);
+  --pico-table-border-color:            var(--vn-border);
+  --pico-form-element-background-color: #ffffff;
+  --pico-form-element-border-color:     rgba(21, 101, 192, 0.30);
+  --pico-form-element-color:            #263238;
 }
 
 /* ── Light Blue: body ── */
 html[data-theme="light-blue"] body {
-  background: #f0f4f8;
-  color: #212121;
+  background: #d4e4f7 url('2026_logos/white_blue/background/bg.png') center center / cover no-repeat fixed;
+  color: #263238;
 }
 html[data-theme="light-blue"] body::before {
-  display: none;
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.42);
+  pointer-events: none;
+  z-index: 0;
 }
 html[data-theme="light-blue"] h1,
 html[data-theme="light-blue"] h2,
@@ -1746,18 +1893,18 @@ html[data-theme="light-blue"] a { color: #1565c0; }
 html[data-theme="light-blue"] a:hover { color: #1976d2; }
 html[data-theme="light-blue"] nav strong { color: #1565c0; }
 
-/* ── Light Blue: cards / glass blocks — solid white, no blur glow ── */
+/* ── Light Blue: cards / glass blocks — semi-transparent with blur ── */
 html[data-theme="light-blue"] .stat-card,
 html[data-theme="light-blue"] .chart-block,
 html[data-theme="light-blue"] .intel-card,
 html[data-theme="light-blue"] article,
 html[data-theme="light-blue"] .v-block,
 html[data-theme="light-blue"] .v-card {
-  background: #ffffff;
+  background: rgba(255, 255, 255, 0.88);
   border: 1px solid rgba(21, 101, 192, 0.18);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 /* ── Light Blue: tables ── */
@@ -1783,16 +1930,27 @@ html[data-theme="light-blue"] select:focus {
   box-shadow: 0 0 0 2px rgba(21, 101, 192, 0.18) !important;
 }
 
-/* ── Light Blue: buttons ── */
-html[data-theme="light-blue"] [role="button"]:not(.outline):not(.secondary),
-html[data-theme="light-blue"] button[type="submit"]:not(.btn-block):not(.btn-unblock):not(.btn-investigate):not(.btn-update):not(.enrich-dismiss) {
-  background: transparent;
-  color: #1565c0;
-  border: 1px solid rgba(21, 101, 192, 0.40);
+/* ── Light Blue: buttons — global var(--vn-btn-bg/--vn-green) handles colours;
+   override box-shadow which is still hardcoded in the hover rule above ── */
+html[data-theme="light-blue"] [role="button"],
+html[data-theme="light-blue"] button {
+  box-shadow: none !important;
 }
-html[data-theme="light-blue"] [role="button"]:not(.outline):not(.secondary):hover,
-html[data-theme="light-blue"] button[type="submit"]:not(.btn-block):not(.btn-unblock):not(.btn-investigate):not(.btn-update):not(.enrich-dismiss):hover {
-  background: rgba(21, 101, 192, 0.08);
+
+/* ── Light Blue: settings checkbox labels ── */
+html[data-theme="light-blue"] .settings-editor-host .settings-grid label.check {
+  background: rgba(21, 101, 192, 0.04);
+  border-color: rgba(21, 101, 192, 0.18);
+  color: #263238;
+}
+html[data-theme="light-blue"] .settings-editor-host .settings-grid label.check:has(input:checked) {
+  border-color: rgba(21, 101, 192, 0.55);
+  background: rgba(21, 101, 192, 0.12);
+  color: #1565c0;
+}
+html[data-theme="light-blue"] .settings-grid label.check:has(input[type="checkbox"]:checked) {
+  border-color: rgba(21, 101, 192, 0.45);
+  background: rgba(21, 101, 192, 0.10);
   color: #1565c0;
 }
 

@@ -528,8 +528,8 @@
 
     <section class="panel active" id="panel-ports">
       <div class="helper-blob">
-        <strong>Helper — Ports</strong>
-        <p>Writes <code>config/chains/ports.toml</code>. Keep <code>rpc</code> and <code>rest</code> valid; use <code>0</code> for optional ports you want disabled.</p>
+        <strong>Ports</strong>
+        <p>Set the default proxy ports registered across all chains. <code>rpc</code> and <code>rest</code> are required — use <code>0</code> to disable optional ports. You can override any port on a per-service basis in the Chain profile step or in <code>config/chains/ports.toml</code>.</p>
       </div>
       <div class="import-toggle">
         <label><input class="wizard-import-check" data-step="ports" type="checkbox"> I want to convert an existing toml files</label>
@@ -556,8 +556,8 @@
 
     <section class="panel" id="panel-settings">
       <div class="helper-blob">
-        <strong>Helper — Settings</strong>
-        <p>Writes <code>config/vprox/settings.toml</code>. Tune global rate limiting, quarantine thresholds, and debug listener values.</p>
+        <strong>Settings</strong>
+        <p>Configure the vProx proxy engine global rate limits and security controls. <code>rps</code> / <code>burst</code> limit request throughput; auto-quarantine temporarily throttles IPs that exceed thresholds within a rolling window. Per-chain rate overrides can be set in each chain's profile.</p>
       </div>
       <div class="import-toggle">
         <label><input class="wizard-import-check" data-step="settings" type="checkbox"> I want to convert an existing toml files</label>
@@ -585,8 +585,8 @@
 
     <section class="panel" id="panel-chain">
       <div class="helper-blob">
-        <strong>Helper — Chain</strong>
-        <p>Writes one chain profile file: <code>config/vops/chains/&lt;chain_name&gt;.toml</code>. Required identity fields are <code>chain_name</code> and <code>chain_id</code>, plus at least one <code>[[chain_services]]</code> entry.</p>
+        <strong>Chain Profile</strong>
+        <p>Define a chain proxy profile: identity (<code>chain_name</code>, <code>chain_id</code>), network endpoints, service toggles (RPC / REST / gRPC / WebSocket), and security features. One file per chain. Each <code>[[chain_services]]</code> row maps a service node. You can edit chain profiles at any time from the Settings → Chain Profiles tab.</p>
       </div>
       <div class="import-toggle">
         <label><input class="wizard-import-check" data-step="chain" type="checkbox"> I want to convert an existing toml files</label>
@@ -645,8 +645,8 @@
 
     <section class="panel" id="panel-vlog">
       <div class="helper-blob">
-        <strong>Helper — vLog</strong>
-        <p>Writes <code>config/vops/vops.toml</code>. Password input expects a bcrypt hash value; keep it empty only if you intentionally disable auth.</p>
+        <strong>vOps Core</strong>
+        <p>Configure the vOps intelligence engine: database location, API keys for threat intelligence (VirusTotal, AbuseIPDB, Shodan), log archive monitoring, and access authentication. <code>password_hash</code> expects a bcrypt-hashed value — leave empty only to intentionally disable auth. Keys can be rotated at any time from the Settings → vOps tab.</p>
       </div>
       <div class="import-toggle">
         <label><input class="wizard-import-check" data-step="vops" type="checkbox"> I want to convert an existing toml files</label>
@@ -683,8 +683,8 @@
 
     <section class="panel" id="panel-fleet">
       <div class="helper-blob">
-        <strong>Helper — Fleet</strong>
-        <p>Writes <code>config/fleet/settings.toml</code>. These SSH values become operational defaults for managed hosts.</p>
+        <strong>Fleet SSH Defaults</strong>
+        <p>Set the SSH connection details vOps uses to reach your validator VMs for deployments and status polling. The user and key path defined here apply globally to all VMs unless overridden per-VM in the Infrastructure file. <code>poll_interval_sec</code> controls how frequently vOps checks chain heights and upgrade plans.</p>
       </div>
       <div class="import-toggle">
         <label><input class="wizard-import-check" data-step="fleet" type="checkbox"> I want to convert an existing toml files</label>
@@ -708,8 +708,8 @@
 
     <section class="panel" id="panel-infra">
       <div class="helper-blob">
-        <strong>Helper — Infra</strong>
-        <p>Writes <code>config/infra/&lt;datacenter&gt;.toml</code>. <code>[host]</code> is optional; each VM row should include at least <code>name</code> and <code>host</code>.</p>
+        <strong>Infrastructure</strong>
+        <p>Register your physical hosts and virtual machines into a datacenter inventory file. Fleet uses this registry for SSH deployments; Chain Status uses it for ping routing and latency probing. Each datacenter gets its own <code>config/infra/&lt;datacenter&gt;.toml</code> file. You can register as many datacenters as needed — add more from Settings → Infrastructure.</p>
       </div>
       <div class="import-toggle">
         <label><input class="wizard-import-check" data-step="infra" type="checkbox"> I want to convert an existing toml files</label>
@@ -782,8 +782,8 @@
 
     <section class="panel" id="panel-backup">
       <div class="helper-blob">
-        <strong>Helper — Backup</strong>
-        <p>Writes <code>config/backup/backup.toml</code>. File lists are comma-separated; toggle <code>automation</code> to enable scheduled backups.</p>
+        <strong>Backup</strong>
+        <p>Configure automated backup schedule, destination, and file selections. Enable <code>automation</code> to run backups on a recurring schedule. <code>destination</code> accepts a local directory path. File lists are comma-separated — include the logs, data files, and config dirs you want archived. You can override these settings at any time from the Settings → Backup tab.</p>
       </div>
       <div class="import-toggle">
         <label><input class="wizard-import-check" data-step="backup" type="checkbox"> I want to convert an existing toml files</label>
@@ -904,7 +904,10 @@
         });
         const txt = await resp.text();
         if (!resp.ok) {
-          throw new Error(txt.trim() || `HTTP ${resp.status}`);
+          // Support both plain-text (standalone wizard) and JSON (vops embedded) error formats.
+          let msg = txt.trim();
+          try { const j = JSON.parse(msg); if (j && j.error) msg = j.error; } catch(_) {}
+          throw new Error(msg || `HTTP ${resp.status}`);
         }
         setStatus(`Saved: ${endpoint}`, "ok");
         await loadCurrent();

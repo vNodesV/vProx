@@ -33,6 +33,8 @@ type pageBase struct {
 	// Injected server-side so the <html data-theme> attribute is set before
 	// any CSS loads, preventing a flash of unstyled content.
 	Theme string
+	// Version is the running vOps binary version string (e.g. "1.0.0").
+	Version string
 }
 
 type dashboardData struct {
@@ -104,6 +106,7 @@ func (s *Server) newPageBase() pageBase {
 		BasePath:    s.cfg.VOps.BasePath,
 		AuthEnabled: s.authEnabled(),
 		Theme:       theme,
+		Version:     s.version,
 	}
 }
 

@@ -233,3 +233,24 @@ func (s *Server) handleAPISettingsPreferences(w http.ResponseWriter, r *http.Req
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "theme": req.Theme})
 }
+
+// handleWizardPage serves the embedded configwizard HTML at /settings/wizard.
+// The wizard uses relative API paths (e.g. "api/config/ports") which, when served
+// from /settings/wizard, resolve to /settings/api/config/ports — matching the
+// existing settings API routes registered on this server.
+func (s *Server) handleWizardPage(w http.ResponseWriter, _ *http.Request) {
+	html, err := configwizard.WizardHTML()
+	if err != nil {
+		http.Error(w, "wizard not available", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(html)
+}
+
+// handleAPISettingsDone is called by the wizard "Done" button.
+// It simply acknowledges completion — no server-side action needed.
+func (s *Server) handleAPISettingsDone(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]string{"status": "done"})
+}

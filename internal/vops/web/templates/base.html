@@ -1,9 +1,28 @@
 {{define "base"}}<!DOCTYPE html>
-<html lang="en" data-theme="{{ if .Theme }}{{ .Theme }}{{ else }}vnodes{{ end }}">
+<html lang="en" data-theme="{{ if .Theme }}{{ .Theme }}{{ else }}light-blue{{ end }}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>vLog — {{block "title" .}}Log Analyzer{{end}}</title>
+  <title>vOps — {{block "title" .}}vOps{{end}}</title>
+
+  <!-- Open Graph / social preview (uses default theme; update per-request if needed) -->
+  <meta property="og:type"        content="website">
+  <meta property="og:title"       content="vOps — Proxy &amp; Access Intelligence">
+  <meta property="og:description" content="Infrastructure proxy management and access intelligence dashboard.">
+  <meta property="og:image"       content="{{.BasePath}}/static/2026_logos/default/og/og_preview.png">
+  <meta name="twitter:card"       content="summary_large_image">
+  <meta name="twitter:image"      content="{{.BasePath}}/static/2026_logos/default/og/og_preview.png">
+
+  <!-- Favicon — default (vnodes/green); swapped by setTheme() below -->
+  <link id="fav-ico"  rel="icon"       type="image/x-icon" href="{{.BasePath}}/static/2026_logos/default/favicon/favicon.ico">
+  <link id="fav-16"   rel="icon"       type="image/png"    sizes="16x16"   href="{{.BasePath}}/static/2026_logos/default/favicon/favicon_16.png">
+  <link id="fav-32"   rel="icon"       type="image/png"    sizes="32x32"   href="{{.BasePath}}/static/2026_logos/default/favicon/favicon_32.png">
+  <link id="fav-48"   rel="icon"       type="image/png"    sizes="48x48"   href="{{.BasePath}}/static/2026_logos/default/favicon/favicon_48.png">
+  <link id="fav-64"   rel="icon"       type="image/png"    sizes="64x64"   href="{{.BasePath}}/static/2026_logos/default/favicon/favicon_64.png">
+  <link id="fav-128"  rel="icon"       type="image/png"    sizes="128x128" href="{{.BasePath}}/static/2026_logos/default/favicon/favicon_128.png">
+  <link id="fav-256"  rel="icon"       type="image/png"    sizes="256x256" href="{{.BasePath}}/static/2026_logos/default/favicon/favicon_256.png">
+  <link id="fav-apple" rel="apple-touch-icon" sizes="256x256" href="{{.BasePath}}/static/2026_logos/default/favicon/favicon_256.png">
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -106,16 +125,46 @@
   // Applies the active theme immediately from localStorage (flash-free).
   // The server also injects data-theme server-side; localStorage wins on
   // subsequent loads so the user's last choice is always respected.
+
+  var _faviconFolders = {
+    'vnodes':     'default',
+    'dark-blue':  'dark_blue',
+    'light-blue': 'white_blue'
+  };
+  var _faviconSizes = ['ico','16','32','48','64','128','256'];
+
+  function _swapFavicons(theme) {
+    var folder = _faviconFolders[theme] || 'default';
+    var base = document.querySelector('base') ? document.querySelector('base').href : '';
+    // Resolve static prefix from any existing favicon link.
+    var ref = document.getElementById('fav-32');
+    if (!ref) return;
+    var prefix = ref.href.replace(/\/[^/]+\/favicon\/favicon_32\.png$/, '');
+    _faviconSizes.forEach(function(sz) {
+      var el = document.getElementById('fav-' + sz);
+      if (!el) return;
+      if (sz === 'ico') {
+        el.href = prefix + '/' + folder + '/favicon/favicon.ico';
+      } else {
+        el.href = prefix + '/' + folder + '/favicon/favicon_' + sz + '.png';
+      }
+    });
+    var apple = document.getElementById('fav-apple');
+    if (apple) apple.href = prefix + '/' + folder + '/favicon/favicon_256.png';
+  }
+
   (function() {
     var saved = localStorage.getItem('vprox_theme');
     if (saved && (saved === 'vnodes' || saved === 'dark-blue' || saved === 'light-blue')) {
       document.documentElement.setAttribute('data-theme', saved);
+      _swapFavicons(saved);
     }
   })();
 
   function setTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('vprox_theme', theme);
+    _swapFavicons(theme);
     // Persist to server config + set cookie.
     fetch('/settings/api/config/preferences', {
       method: 'POST',
@@ -130,16 +179,21 @@
   </script>
 </head>
 <body>
-  <main class="container">
+  <header class="vops-header">
+    <a href="{{.BasePath}}/" class="vops-logo-link" aria-label="vOps Home">
+      <div class="vops-logo" role="img" aria-label="vOps — Proxy &amp; Access Intelligence"></div>
+    </a>
     {{if .AuthEnabled}}<div class="vlog-top-actions">
       <a href="{{.BasePath}}/settings" class="vlog-top-link">⚙ Settings</a>
       <form method="POST" action="{{.BasePath}}/logout" class="vlog-top-form">
         <button type="submit" class="vlog-top-btn">↪ Logout</button>
       </form>
     </div>{{end}}
+  </header>
+  <main class="container">
     {{block "content" .}}{{end}}
   </main>
-  <footer class="vlog-footer">vNodes[V] &nbsp;·&nbsp; vLog v1.1.0 &nbsp;·&nbsp; Infrastructure Intelligence</footer>
+  <footer class="vlog-footer">vOps &nbsp;·&nbsp; v{{if .Version}}{{.Version}}{{else}}1.0.0{{end}} &nbsp;·&nbsp; Infrastructure Intelligence</footer>
 </body>
 </html>
 {{end}}

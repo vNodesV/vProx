@@ -176,7 +176,7 @@ func vopsStart(home string, quiet bool) int {
 		}
 	}
 
-	server, err := web.New(database, enricher, ingester, cfg, fleetSvc, cfgPath)
+	server, err := web.New(database, enricher, ingester, cfg, fleetSvc, cfgPath, "1.0.0")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "vops: web server error: %v\n", err)
 		return 1
@@ -288,7 +288,7 @@ func startVOpsInBackground(home string) (func(), error) {
 		}
 	}
 
-	server, err := web.New(database, enricher, ingester, cfg, fleetSvc, cfgPath)
+	server, err := web.New(database, enricher, ingester, cfg, fleetSvc, cfgPath, "1.0.0")
 	if err != nil {
 		if enricher != nil {
 			enricher.Stop()

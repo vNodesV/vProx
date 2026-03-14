@@ -24,7 +24,7 @@ import (
 	"github.com/vNodesV/vProx/internal/vops/web"
 )
 
-const version = "1.0.0"
+const version = "1.4.0"
 
 // ---------------------------------------------------------------------------
 // Help / usage
@@ -420,7 +420,7 @@ func cmdStart(f flags) int {
 		}
 	}
 
-	server, err := web.New(database, enricher, ingester, cfg, fleetSvc, resolvedCfgPath)
+	server, err := web.New(database, enricher, ingester, cfg, fleetSvc, resolvedCfgPath, version)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "vops: web server error: %v\n", err)
 		return 1

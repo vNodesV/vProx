@@ -61,6 +61,7 @@ type Server struct {
 	cfg      config.Config
 	home     string
 	cfgPath  string // resolved path to vops.toml (may be legacy or new layout)
+	version  string // binary version string, set at startup
 	httpSrv  *http.Server
 	pages    map[string]*template.Template
 	fleet    *api.Handlers // nil when fleet module is not configured
@@ -85,7 +86,7 @@ type loginAttempt struct {
 // New creates a Server, parses embedded templates, registers all routes,
 // and returns a server ready to Start().
 // fleetSvc is optional — pass nil to disable the fleet module routes.
-func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg config.Config, fleetSvc *fleet.Service, cfgPath string) (*Server, error) {
+func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg config.Config, fleetSvc *fleet.Service, cfgPath, appVersion string) (*Server, error) {
 	// Each page template is parsed together with the base layout so
 	// that block overrides (title, content) are scoped per page.
 	pageFiles := []string{"dashboard.html", "accounts.html", "account.html", "settings.html"}
@@ -120,6 +121,7 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 		cfg:           cfg,
 		home:          config.FindHome(),
 		cfgPath:       cfgPath,
+		version:       appVersion,
 		pages:         pages,
 		sessions:      make(map[string]time.Time),
 		sessionKey:    sessionKey,
@@ -150,6 +152,7 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 	mux.Handle("GET /accounts", s.requireSession(http.HandlerFunc(s.handleAccountList)))
 	mux.Handle("GET /accounts/{ip}", s.requireSession(http.HandlerFunc(s.handleAccountDetail)))
 	mux.Handle("GET /settings", s.requireSession(http.HandlerFunc(s.handleSettingsPage)))
+	mux.Handle("GET /settings/wizard", s.requireSession(http.HandlerFunc(s.handleWizardPage)))
 	mux.Handle("GET /settings/api/config/current", s.requireSession(http.HandlerFunc(s.handleAPISettingsCurrent)))
 	mux.Handle("POST /settings/api/config/import", s.requireSession(http.HandlerFunc(s.handleAPISettingsImport)))
 	mux.Handle("POST /settings/api/config/remove", s.requireSession(http.HandlerFunc(s.handleAPISettingsRemove)))
@@ -161,6 +164,7 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 	mux.Handle("POST /settings/api/config/fleet", s.requireSession(http.HandlerFunc(s.handleAPISettingsSave("fleet"))))
 	mux.Handle("POST /settings/api/config/infra", s.requireSession(http.HandlerFunc(s.handleAPISettingsSave("infra"))))
 	mux.Handle("POST /settings/api/config/backup", s.requireSession(http.HandlerFunc(s.handleAPISettingsSave("backup"))))
+	mux.Handle("POST /settings/api/config/done", s.requireSession(http.HandlerFunc(s.handleAPISettingsDone)))
 	mux.Handle("POST /settings/api/config/preferences", s.requireSession(http.HandlerFunc(s.handleAPISettingsPreferences)))
 
 	// API routes — session-protected.
