@@ -60,6 +60,7 @@ type Server struct {
 	ingester *ingest.Ingester
 	cfg      config.Config
 	home     string
+	cfgPath  string // resolved path to vops.toml (may be legacy or new layout)
 	httpSrv  *http.Server
 	pages    map[string]*template.Template
 	fleet    *api.Handlers // nil when fleet module is not configured
@@ -74,7 +75,7 @@ type Server struct {
 // New creates a Server, parses embedded templates, registers all routes,
 // and returns a server ready to Start().
 // fleetSvc is optional — pass nil to disable the fleet module routes.
-func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg config.Config, fleetSvc *fleet.Service) (*Server, error) {
+func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg config.Config, fleetSvc *fleet.Service, cfgPath string) (*Server, error) {
 	// Each page template is parsed together with the base layout so
 	// that block overrides (title, content) are scoped per page.
 	pageFiles := []string{"dashboard.html", "accounts.html", "account.html", "settings.html"}
@@ -108,6 +109,7 @@ func New(d *db.DB, enricher *intel.Enricher, ingester *ingest.Ingester, cfg conf
 		ingester:   ingester,
 		cfg:        cfg,
 		home:       config.FindHome(),
+		cfgPath:    cfgPath,
 		pages:      pages,
 		sessions:   make(map[string]time.Time),
 		sessionKey: sessionKey,

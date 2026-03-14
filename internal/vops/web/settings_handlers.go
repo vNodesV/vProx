@@ -191,8 +191,11 @@ func (s *Server) handleAPISettingsPreferences(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Load, patch, and write back vops.toml.
-	cfgPath := filepath.Join(s.home, "config", "vops", "vops.toml")
+	// Load, patch, and write back vops.toml using the resolved config path.
+	cfgPath := s.cfgPath
+	if cfgPath == "" {
+		cfgPath = filepath.Join(s.home, "config", "vops", "vops.toml")
+	}
 	cfg, err := vopscfg.Load(cfgPath)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not load vops.toml"})
@@ -210,7 +213,7 @@ func (s *Server) handleAPISettingsPreferences(w http.ResponseWriter, r *http.Req
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not create config directory"})
 		return
 	}
-	if err := os.WriteFile(cfgPath, data, 0o644); err != nil {
+	if err := os.WriteFile(cfgPath, data, 0o600); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not write vops.toml"})
 		return
 	}

@@ -335,6 +335,13 @@ func cmdStart(f flags) int {
 		return 1
 	}
 
+	// Resolve the config path used to load — needed to save preferences back
+	// to the same file (may be legacy or new layout).
+	resolvedCfgPath := f.config
+	if resolvedCfgPath == "" {
+		resolvedCfgPath = vopsConfigPath(home)
+	}
+
 	if !f.quiet {
 		intelAbuseIPDB := yesNo(cfg.VOps.Intel.Keys.AbuseIPDB != "")
 		intelVirusTotal := yesNo(cfg.VOps.Intel.Keys.VirusTotal != "")
@@ -413,7 +420,7 @@ func cmdStart(f flags) int {
 		}
 	}
 
-	server, err := web.New(database, enricher, ingester, cfg, fleetSvc)
+	server, err := web.New(database, enricher, ingester, cfg, fleetSvc, resolvedCfgPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "vops: web server error: %v\n", err)
 		return 1

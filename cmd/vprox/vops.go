@@ -175,7 +175,7 @@ func vopsStart(home string, quiet bool) int {
 		}
 	}
 
-	server, err := web.New(database, enricher, ingester, cfg, fleetSvc)
+	server, err := web.New(database, enricher, ingester, cfg, fleetSvc, cfgPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "vops: web server error: %v\n", err)
 		return 1
@@ -262,6 +262,7 @@ func startVOpsInBackground(home string) (func(), error) {
 
 	// Fleet module
 	var fleetSvc *fleet.Service
+	var cancelFleetPolling context.CancelFunc
 	{
 		defs := fleetcfg.FleetDefaults{
 			User:    cfg.VOps.Push.Defaults.User,
@@ -279,12 +280,14 @@ func startVOpsInBackground(home string) (func(), error) {
 				svc.SetConfig(runtimeCfg)
 				svc.SetHome(home)
 				fleetSvc = svc
-				go svc.StartPolling(context.Background(), time.Duration(cfg.VOps.Push.PollIntervalSec)*time.Second)
+				pollingCtx, cancelPoll := context.WithCancel(context.Background())
+				cancelFleetPolling = cancelPoll
+				go svc.StartPolling(pollingCtx, time.Duration(cfg.VOps.Push.PollIntervalSec)*time.Second)
 			}
 		}
 	}
 
-	server, err := web.New(database, enricher, ingester, cfg, fleetSvc)
+	server, err := web.New(database, enricher, ingester, cfg, fleetSvc, cfgPath)
 	if err != nil {
 		if enricher != nil {
 			enricher.Stop()
@@ -306,6 +309,9 @@ func startVOpsInBackground(home string) (func(), error) {
 
 	// Return cleanup function
 	shutdown := func() {
+		if cancelFleetPolling != nil {
+			cancelFleetPolling()
+		}
 		if watcher != nil {
 			watcher.Stop()
 		}

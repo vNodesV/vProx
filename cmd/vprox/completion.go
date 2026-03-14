@@ -30,7 +30,7 @@ _vprox_completions() {
     }
 
     local commands="start stop restart status fleet mod chain config completion vops"
-    local global_flags="--help --version --home --config --validate --info --dry-run --quiet --verbose --daemon --debug --with-vops -d"
+    local global_flags="--help --version --home --config --validate --info --dry-run --quiet --verbose --daemon --with-vops -d"
 
     if [[ $cword -eq 1 ]]; then
         COMPREPLY=($(compgen -W "${commands} ${global_flags}" -- "$cur"))
@@ -40,7 +40,7 @@ _vprox_completions() {
     local subcmd="${words[1]}"
     case "$subcmd" in
         config)
-            COMPREPLY=($(compgen -W "ports settings chain vlog fleet infra backup list validate" -- "$cur"))
+            COMPREPLY=($(compgen -W "ports settings chain vops fleet infra backup list validate" -- "$cur"))
             ;;
         fleet)
             COMPREPLY=($(compgen -W "list status push sync chains unregister" -- "$cur"))
@@ -49,7 +49,7 @@ _vprox_completions() {
             COMPREPLY=($(compgen -W "bash zsh fish --install-bash --install-zsh" -- "$cur"))
             ;;
         vops)
-            COMPREPLY=($(compgen -W "start stop status version archives accounts threats enrich cache ingest" -- "$cur"))
+            COMPREPLY=($(compgen -W "start stop restart status accounts threats cache ingest" -- "$cur"))
             ;;
         start|stop|restart|status)
             COMPREPLY=($(compgen -W "${global_flags}" -- "$cur"))
@@ -104,7 +104,6 @@ _vprox() {
         '--quiet:suppress non-error output'
         '--verbose:verbose logging output'
         '--daemon:start as background daemon via sudo service'
-        '--debug:enable debug mode'
         '--with-vops:start with vOps/dashboard module'
         '-d:alias for --daemon'
     )
@@ -125,7 +124,7 @@ _vprox() {
                         'ports[configure port assignments]' \
                         'settings[general proxy settings]' \
                         'chain[chain proxy config]' \
-                        'vlog[vLog/vOps config]' \
+                        'vops[vOps config]' \
                         'fleet[fleet SSH settings]' \
                         'infra[infra datacenter registry]' \
                         'backup[backup automation settings]' \
@@ -151,12 +150,10 @@ _vprox() {
                     _values 'vops subcommand' \
                         'start[start vOps standalone]' \
                         'stop[stop vOps]' \
+                        'restart[restart vOps]' \
                         'status[show vOps status]' \
-                        'version[show vOps version]' \
-                        'archives[list log archives]' \
                         'accounts[manage IP accounts]' \
                         'threats[view threat intelligence]' \
-                        'enrich[enrich IP addresses]' \
                         'cache[cache management]' \
                         'ingest[ingest log archives]'
                     ;;
@@ -207,7 +204,6 @@ complete -c vprox -l dry-run     -d 'Load everything but do not start server'
 complete -c vprox -l quiet       -d 'Suppress non-error output'
 complete -c vprox -l verbose     -d 'Verbose logging output'
 complete -c vprox -l daemon      -d 'Start as background daemon'
-complete -c vprox -l debug       -d 'Enable debug mode'
 complete -c vprox -l with-vops   -d 'Start with vOps/dashboard module'
 complete -c vprox -s d           -d 'Alias for --daemon'
 
@@ -215,7 +211,7 @@ complete -c vprox -s d           -d 'Alias for --daemon'
 complete -c vprox -n '__fish_seen_subcommand_from config' -a 'ports'    -d 'Configure port assignments'
 complete -c vprox -n '__fish_seen_subcommand_from config' -a 'settings' -d 'General proxy settings'
 complete -c vprox -n '__fish_seen_subcommand_from config' -a 'chain'    -d 'Chain proxy config'
-complete -c vprox -n '__fish_seen_subcommand_from config' -a 'vlog'     -d 'vLog/vOps config'
+complete -c vprox -n '__fish_seen_subcommand_from config' -a 'vops'     -d 'vOps config'
 complete -c vprox -n '__fish_seen_subcommand_from config' -a 'fleet'    -d 'Fleet SSH settings'
 complete -c vprox -n '__fish_seen_subcommand_from config' -a 'infra'    -d 'Infra datacenter registry'
 complete -c vprox -n '__fish_seen_subcommand_from config' -a 'backup'   -d 'Backup automation settings'
@@ -240,12 +236,10 @@ complete -c vprox -n '__fish_seen_subcommand_from completion' -l 'install-zsh'  
 # ---- vops subcommands ----
 complete -c vprox -n '__fish_seen_subcommand_from vops' -a 'start'    -d 'Start vOps standalone'
 complete -c vprox -n '__fish_seen_subcommand_from vops' -a 'stop'     -d 'Stop vOps'
+complete -c vprox -n '__fish_seen_subcommand_from vops' -a 'restart'  -d 'Restart vOps'
 complete -c vprox -n '__fish_seen_subcommand_from vops' -a 'status'   -d 'Show vOps status'
-complete -c vprox -n '__fish_seen_subcommand_from vops' -a 'version'  -d 'Show vOps version'
-complete -c vprox -n '__fish_seen_subcommand_from vops' -a 'archives' -d 'List log archives'
 complete -c vprox -n '__fish_seen_subcommand_from vops' -a 'accounts' -d 'Manage IP accounts'
 complete -c vprox -n '__fish_seen_subcommand_from vops' -a 'threats'  -d 'View threat intelligence'
-complete -c vprox -n '__fish_seen_subcommand_from vops' -a 'enrich'   -d 'Enrich IP addresses'
 complete -c vprox -n '__fish_seen_subcommand_from vops' -a 'cache'    -d 'Cache management'
 complete -c vprox -n '__fish_seen_subcommand_from vops' -a 'ingest'   -d 'Ingest log archives'
 `

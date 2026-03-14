@@ -586,7 +586,7 @@
     <section class="panel" id="panel-chain">
       <div class="helper-blob">
         <strong>Helper — Chain</strong>
-        <p>Writes one chain profile file: <code>config/vlog/chains/&lt;chain_name&gt;.toml</code>. Required identity fields are <code>chain_name</code> and <code>chain_id</code>, plus at least one <code>[[chain_services]]</code> entry.</p>
+        <p>Writes one chain profile file: <code>config/vops/chains/&lt;chain_name&gt;.toml</code>. Required identity fields are <code>chain_name</code> and <code>chain_id</code>, plus at least one <code>[[chain_services]]</code> entry.</p>
       </div>
       <div class="import-toggle">
         <label><input class="wizard-import-check" data-step="chain" type="checkbox"> I want to convert an existing toml files</label>
@@ -615,7 +615,7 @@
           <button type="button" class="wizard-save-next">Save &amp; Next</button>
         </div>
       </form>
-      <details><summary>Tip</summary><pre>Chain and infra files may be multiple. This form writes one chain profile file under config/vlog/chains based on chain_name.</pre></details>
+      <details><summary>Tip</summary><pre>Chain and infra files may be multiple. This form writes one chain profile file under config/vops/chains based on chain_name.</pre></details>
     </section>
 
     <template id="chain-service-template">
@@ -646,7 +646,7 @@
     <section class="panel" id="panel-vlog">
       <div class="helper-blob">
         <strong>Helper — vLog</strong>
-        <p>Writes <code>config/vlog/vlog.toml</code>. Password input expects a bcrypt hash value; keep it empty only if you intentionally disable auth.</p>
+        <p>Writes <code>config/vops/vops.toml</code>. Password input expects a bcrypt hash value; keep it empty only if you intentionally disable auth.</p>
       </div>
       <div class="import-toggle">
         <label><input class="wizard-import-check" data-step="vops" type="checkbox"> I want to convert an existing toml files</label>
