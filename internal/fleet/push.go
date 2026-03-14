@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	chainconfig "github.com/vNodesV/vProx/internal/config"
 	"github.com/vNodesV/vProx/internal/fleet/config"
 	"github.com/vNodesV/vProx/internal/fleet/runner"
 	"github.com/vNodesV/vProx/internal/fleet/state"
@@ -26,6 +27,8 @@ type Service struct {
 	cfg    *config.Config
 	db     *state.DB
 	runner *runner.Runner
+
+	home string // vProx home directory for loading v1.4.0 ServiceNode configs
 
 	mu       sync.RWMutex
 	statuses map[string]*status.ChainStatus // chain name → latest polled status
@@ -77,6 +80,15 @@ func (s *Service) SetConfig(cfg *config.Config) {
 	defer s.mu.Unlock()
 	s.cfg = cfg
 	s.statuses = make(map[string]*status.ChainStatus)
+}
+
+// SetHome sets the vProx home directory used to discover v1.4.0 ServiceNode
+// configs in config/services/nodes/*.toml. When set, pollAll() includes
+// ServiceNode-derived chains alongside VM and registered-chain polling.
+func (s *Service) SetHome(home string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.home = home
 }
 
 // AddInfraConfigs loads per-datacenter host files from dir (config/infra/*.toml)

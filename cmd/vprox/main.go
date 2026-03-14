@@ -46,6 +46,10 @@ var (
 	chains       = make(map[string]*config.ChainConfig)
 	defaultPorts config.Ports
 
+	// deprecationWarned tracks which chain names have already emitted a P5
+	// legacy proxy-fields deprecation warning. Prevents log spam on startup.
+	deprecationWarned sync.Map
+
 	vproxHome  string
 	configDir  string
 	chainsDir  string
@@ -137,6 +141,11 @@ func loadChains(dir string) error {
 				slug = strings.SplitN(c.ChainID, "-", 2)[0]
 			}
 		}
+
+		// P5 deprecation check: if this chain.toml carries proxy fields AND a
+		// corresponding *.sample file exists (migration started), warn once.
+		warnChainProxyDeprecation(dir, name, &c)
+
 		parsed = append(parsed, chainEntry{name: name, slug: slug, cfg: c})
 	}
 
@@ -218,7 +227,43 @@ func loadChains(dir string) error {
 	return nil
 }
 
-// --------------------- LINK REWRITE & BANNERS ---------------------
+// warnChainProxyDeprecation logs a one-time [DEPRECATED] warning when a legacy
+// chain.toml carries proxy-routing fields AND a matching *.sample identity file
+// already exists in the same directory (indicating migration has been started).
+//
+// The warning fires at most once per chain name per process lifetime (sync.Map guard).
+func warnChainProxyDeprecation(dir, filename string, c *config.ChainConfig) {
+	// Determine whether this chain.toml has any proxy fields set.
+	hasProxy := c.Services.RPC || c.Services.REST || c.Services.GRPC ||
+		c.Services.GRPCWeb || c.Services.WebSocket || c.Services.APIAlias ||
+		c.Expose.Path || c.Expose.VHost ||
+		c.Ports.RPC != 0 || c.Ports.REST != 0
+
+	if !hasProxy {
+		return
+	}
+
+	// Derive chain base name from filename (strip .toml suffix).
+	base := strings.TrimSuffix(filename, ".toml")
+
+	// Only warn if a .sample file exists — migration not started → skip.
+	samplePath := filepath.Join(dir, base+".sample")
+	if _, err := os.Stat(samplePath); err != nil {
+		return // no sample file; migration not started — stay quiet
+	}
+
+	// Emit at most once per chain name.
+	if _, loaded := deprecationWarned.LoadOrStore(base, struct{}{}); loaded {
+		return
+	}
+
+	log.Printf("[DEPRECATED] config/chains/%s.toml contains proxy fields. "+
+		"Migrate to config/services/nodes/<node>.toml. "+
+		"See config/chains/%s.sample for the identity-only format.",
+		base, base)
+}
+
+
 
 // rewriteRegexes holds pre-compiled patterns for a given (IP, host) pair.
 type rewriteRegexes struct {
@@ -1172,7 +1217,7 @@ func main() {
 		fmt.Fprintln(out, "  mod   <sub> [flags]     manage vProx ecosystem modules")
 		fmt.Fprintln(out, "  chain <sub> [flags]     chain node status and upgrade tracking")
 		fmt.Fprintln(out, "  config [step] [--web]   interactive TOML configuration wizard")
-		fmt.Fprintln(out, "  vops [sub] [flags]      vOps log analyzer (start|stop|restart|status)")
+		fmt.Fprintln(out, "  vops [sub] [flags]      vOps log analyzer (start|stop|restart|ingest|accounts|threats|cache|status)")
 		fmt.Fprintln(out, "  completion <shell>      generate shell completion script (bash|zsh|fish)")
 		fmt.Fprintln(out, "")
 		fmt.Fprintln(out, "Flags:")

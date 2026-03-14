@@ -1,0 +1,21 @@
+# Example: config/modules/infra/dc-toronto.toml
+# Physical host inventory for datacenter "toronto"
+# Use [[host]] array-of-tables (one [[host]] block per physical server).
+
+[[host]]
+name        = "hv-tor-01"
+public_ip   = "1.2.3.4"
+lan_ip      = "10.0.1.1"
+datacenter  = "toronto"
+user        = "ubuntu"
+ssh_key_path = "/home/deploy/.ssh/id_fleet"
+
+[host.ping]
+country  = "CA"
+provider = "ca1"
+
+[[host]]
+name        = "hv-tor-02"
+public_ip   = "1.2.3.5"
+lan_ip      = "10.0.1.2"
+datacenter  = "toronto"

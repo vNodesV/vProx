@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -43,11 +44,66 @@ func runVOpsCmd(home string, args []string) {
 	case "status":
 		code := vopsStatus(home)
 		os.Exit(code)
+	case "ingest":
+		code := vopsAPICall(home, http.MethodPost, "/api/v1/ingest")
+		os.Exit(code)
+	case "accounts":
+		code := vopsAPICall(home, http.MethodGet, "/api/v1/accounts?per_page=20")
+		os.Exit(code)
+	case "threats":
+		code := vopsAPICall(home, http.MethodGet, "/api/v1/threats")
+		os.Exit(code)
+	case "cache":
+		code := vopsAPICall(home, http.MethodGet, "/api/v1/intel/cache/stats")
+		os.Exit(code)
 	default:
 		fmt.Fprintf(os.Stderr, "vprox vops: unknown subcommand %q\n", sub)
-		fmt.Fprintln(os.Stderr, "Usage: vprox vops [start|stop|restart|status]")
+		fmt.Fprintln(os.Stderr, "Usage: vprox vops [start|stop|restart|ingest|accounts|threats|cache|status]")
 		os.Exit(1)
 	}
+}
+
+// vopsAPICall makes a one-shot HTTP request to the vOps API and prints the response body.
+// It reads the port from the vops config located at vopsConfigPath(home).
+func vopsAPICall(home, method, apiPath string) int {
+	cfgPath := vopsConfigPath(home)
+	cfg, err := vopscfg.Load(cfgPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "vops: config error: %v\n", err)
+		return 1
+	}
+
+	url := fmt.Sprintf("http://127.0.0.1:%d%s", cfg.VOps.Port, apiPath)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, method, url, nil)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "vops: build request: %v\n", err)
+		return 1
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "vops: request failed: %v\n", err)
+		return 1
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "vops: read response: %v\n", err)
+		return 1
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		fmt.Fprintf(os.Stderr, "vops: server returned %s: %s\n", resp.Status, string(body))
+		return 1
+	}
+
+	fmt.Print(string(body))
+	return 0
 }
 
 // vopsStart starts the vOps server (foreground). When quiet is true, startup
