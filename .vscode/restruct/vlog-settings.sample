@@ -1,0 +1,60 @@
+# vLog Configuration
+# rev: r2_031026_0
+#
+# Place in: $VPROX_HOME/config/vlog/vlog.toml
+#
+# SECURITY NOTE: Replace all placeholder values below before deploying.
+# Generate api_key: openssl rand -hex 32
+# Generate intel keys: register at abuseipdb.com, virustotal.com, shodan.io
+
+[vlog]
+port               = 8889          # TCP port for the embedded vLog web UI
+bind_address       = "127.0.0.1"   # loopback = most secure when Apache is on same machine
+                                   # set to LAN IP if Apache is on a different machine
+base_path          = "/vlog"       # URL base path when served behind a reverse proxy at a sub-path
+api_key            = ""            # protects /block + /unblock endpoints; empty = disable those endpoints
+db_path            = ""            # empty = $VPROX_HOME/data/vlog.db
+archives_dir       = ""            # empty = $VPROX_HOME/data/logs/archives
+vprox_bin          = "vProx"       # path to vProx binary used by the Refresh button
+watch_interval_sec = 60            # how often to poll archives_dir; 0 = on-demand only
+
+# ── Fleet Module ──────────────────────────────────────────────────────────────
+# Enables Deploy Wizard and Chain Status panels on the vLog dashboard.
+# Node configs (host, ip, proxy) are read from config/vprox/nodes/*.toml
+# Chain identity files (chain_id, validator) are read from config/vlog/chains/*.toml
+
+[vlog.fleet]
+nodes_dir        = ""    # empty = $VPROX_HOME/config/vprox/nodes
+chains_dir       = ""    # empty = $VPROX_HOME/config/vlog/chains
+db_path          = ""    # empty = $VPROX_HOME/data/fleet.db
+poll_interval_sec = 60   # chain status poll interval; 0 = on-demand only
+
+[vlog.fleet.defaults]
+user     = ""   # SSH user fallback; empty = config/vprox/fleet/settings.toml [ssh].user
+key_path = ""   # SSH key fallback; empty = config/vprox/fleet/settings.toml [ssh].key_path
+
+# ── IP Intelligence ───────────────────────────────────────────────────────────
+
+[vlog.intel]
+auto_enrich      = false   # automatically enrich new IP accounts on ingest
+cache_ttl_hours  = 24      # how long to cache intel API responses
+rate_limit_rpm   = 10      # max API calls per minute per source
+
+[vlog.intel.keys]
+abuseipdb  = ""   # https://www.abuseipdb.com/account/api
+virustotal = ""   # https://www.virustotal.com/gui/my-apikey
+shodan     = ""   # https://account.shodan.io/
+
+# ── Auth ──────────────────────────────────────────────────────────────────────
+# If password_hash is empty, dashboard is accessible without login.
+# To enable: htpasswd -nbBC 12 admin yourpassword | cut -d: -f2
+
+[vlog.auth]
+# username      = "admin"
+# password_hash = ""
+
+# ── Server Tuning ─────────────────────────────────────────────────────────────
+
+[vlog.server]
+read_timeout_sec  = 30
+write_timeout_sec = 30

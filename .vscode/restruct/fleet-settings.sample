@@ -1,0 +1,31 @@
+# vProx Fleet Control Settings
+# rev: r2_031026_0
+#
+# Place in: $VPROX_HOME/config/vprox/fleet/settings.toml
+#
+# Controls SSH defaults and polling behavior for the fleet module.
+# These settings apply to all managed nodes unless overridden in the
+# node's service file [management] section.
+#
+# SSH key setup (run once):
+#   ssh-keygen -t ed25519 -C "vprox-fleet" -f ~/.vprox/secret/id.push
+#   ssh-copy-id -i ~/.vprox/secret/id.push.pub <user>@<host>
+
+# ── SSH Defaults ──────────────────────────────────────────────────────────────
+# Inherited by all service nodes where [management] user or key_path are empty.
+
+[ssh]
+user     = "ubuntu"                    # SSH login user
+key_path = "~/.vprox/secret/id.push"  # path to SSH private key (no passphrase, $HOME expanded)
+port     = 22                          # SSH port
+
+# ── Polling ───────────────────────────────────────────────────────────────────
+# How often to poll each managed node for chain status (block height, gov, upgrade).
+
+[poll]
+interval_sec = 60   # seconds between polls, minimum 10
+
+# ── Defaults ──────────────────────────────────────────────────────────────────
+
+[defaults]
+datacenter = "Node"   # label applied to nodes with no datacenter set in their service file

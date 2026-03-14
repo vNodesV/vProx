@@ -1,0 +1,103 @@
+# vProx Node Proxy Config
+# rev: r2_031026_0
+#
+# One file per node. Place in: $VPROX_HOME/config/vprox/nodes/
+#
+# Naming convention:
+#   Validators → named by valoper address:
+#     cheqdvaloper1mhlj3w27lzls8d4vr7fwkycd2ptjmm6aydyq8u.toml
+#   SP / API / RPC-only nodes → named by public hostname:
+#     cheqd-api.srvs.example.com.toml
+#
+# This file controls:
+#   - Which chain this node belongs to (via tree → join key)
+#   - How vProx proxies and exposes this node's endpoints
+#   - SSH management via the fleet module (when managed_host = true)
+#
+# Chain identity (chain_id, display_name, validator addresses) lives in:
+#   config/vlog/chains/<chain_name>.toml  (vLog-only; not read by vProx)
+
+schema_version = 3
+
+# ── Chain Link ────────────────────────────────────────────────────────────────
+
+# tree: must match tree_name in config/vlog/chains/<chain>.toml
+# Defaults to the chain_name slug when empty.
+# This is the join key — mismatches silently orphan the node from the chain tree.
+tree = "chain"
+
+# ── Node Identity ─────────────────────────────────────────────────────────────
+
+host = "node.srvs.example.com"  # public service hostname (vProx serves this)
+ip   = "10.0.0.x"               # LAN IP of the node (internal routing target)
+
+# type: comma-separated roles for this node
+# Supported: validator | sp | rpc | api | relayer | node
+type = "validator,node"
+
+# ── Proxy Config ──────────────────────────────────────────────────────────────
+
+default_ports = true
+# When default_ports = false, define [ports] below.
+
+msg_rpc = false   # inject rpc_msg banner on RPC index page
+msg_api = false   # inject api_msg banner on REST/swagger
+
+[message]
+api_msg = ""
+rpc_msg = ""
+
+[expose]
+path  = true   # enable /rpc, /rest, /websocket on base host
+vhost = true   # enable rpc.<host>, api.<host> subdomains
+
+[expose.vhost_prefix]
+rpc  = "rpc"
+rest = "api"
+
+[services]
+# vProx auto-discovers active prefixes/suffixes from config/vprox/settings.toml
+rpc       = true
+rest      = true
+websocket = true
+grpc      = true
+grpc_web  = true
+api_alias = true
+
+[ws]
+idle_timeout_sec = 3600
+max_lifetime_sec = 0
+
+[features]
+rpc_address_masking = true
+mask_rpc            = ""
+swagger_masking     = false
+absolute_links      = "auto"
+
+# [ports] — only needed when default_ports = false
+# [ports]
+#   rpc      = 26657
+#   rest     = 1317
+#   grpc     = 9090
+#   grpc_web = 9091
+
+# ── Management (SSH / Fleet Module) ──────────────────────────────────────────
+# When managed_host = true, this node is registered with the fleet module,
+# enabling SSH-based script execution, apt upgrades, and deployment dispatch.
+#
+# SSH defaults (user, key_path) fall back to [ssh] in config/vprox/fleet/settings.toml
+# when the fields below are left empty.
+
+[management]
+managed_host     = false
+lan_ip           = ""     # SSH target IP; empty = use node ip above
+public_ip        = ""     # display-only in dashboard; optional
+user             = ""     # SSH user; empty = fleet/settings.toml [ssh].user
+key_path         = ""     # SSH private key path; empty = fleet/settings.toml [ssh].key_path
+port             = 0      # SSH port; 0 = default 22
+exposed_services = true   # true = vLog probes via public host; false = probe via lan_ip directly
+datacenter       = ""     # location label, e.g. "QC", "RBX", "AMS"
+
+[management.ping]
+country  = "CA"   # ISO 3166-1 alpha-2; supported: CA US FR DE NL GB FI JP SG BR IN
+provider = ""     # pin to specific check-host.net node; empty = random from country

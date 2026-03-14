@@ -1,0 +1,36 @@
+# vProx Infrastructure — VPS Entries
+# rev: r2_031026_0
+#
+# Place in: $VPROX_HOME/config/vprox/infra/vps.toml
+#
+# Use [[vps]] for externally-hosted VPS nodes with no physical host parent.
+# Only loaded when mode = "vps" or mode = "dual" in settings.toml.
+#
+# SSH key defaults to [ssh].key in settings.toml — override per-VPS only when needed.
+
+[[vps]]
+name       = "my-vps-rbx"
+ip_addr    = "1.2.3.4"    # public IP (use ip_addr OR hostname, not both)
+hostname   = ""           # public hostname; leave empty if using ip_addr
+user       = "ubuntu"
+# key      = ""           # override SSH key; empty = inherits [ssh].key from settings.toml
+datacenter = "RBX"
+chain_name = "meme"       # links to config/vlog/chains/meme.toml; empty = no chain link
+type       = "validator"
+
+[vps.ping]
+country  = "FR"
+provider = ""
+
+[[vps]]
+name       = "monitoring-vps"
+ip_addr    = "5.6.7.8"
+hostname   = ""
+user       = "ubuntu"
+datacenter = "AMS"
+chain_name = ""
+type       = "node"
+
+[vps.ping]
+country  = "DE"
+provider = ""

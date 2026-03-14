@@ -1,0 +1,58 @@
+# services/nodes/cheqd-testnet-validator-ca1.toml — Per-node service config (v1.4.0)
+# Replaces: the proxy/service/feature sections of config/chains/cheqd.toml
+# tree = "cheqd-testnet" links this node to chains/cheqd-testnet.sample
+
+tree            = "cheqd-testnet"     # join key → matches ChainIdentity.tree_name
+service_type    = "validator"          # validator | rpc | api | seed | sentry
+
+[host]
+name            = "cheqd-testnet"
+ip              = "10.0.0.66"
+port            = 26657
+
+[expose]
+vhost           = true
+path            = false
+vhost_prefix    = ""                   # e.g. "cheqd-testnet" → cheqd-testnet.yourdomain.com
+
+[services]
+rpc             = true
+rest            = true
+grpc            = false
+grpc_web        = false
+api             = false
+
+[ports]
+rpc             = 26657
+rest            = 1317
+grpc            = 9090
+
+[features]
+mask_rpc        = "cheqd-testnet.srvs.vnodesv.net"
+rpc_address_masking = true
+cache_status    = true
+cache_ttl       = 30
+
+[logging]
+requests        = true
+errors          = true
+access_log      = false
+
+[ws]
+enabled         = true
+idle_timeout    = 90
+lifetime        = 600
+
+[management]
+enabled         = true
+managed_host    = true
+ssh_user        = "ubuntu"
+script_component = "validator"
+
+[management.ping]
+country         = "CA"
+provider        = "ca1"
+
+[validator]
+moniker         = "vNodes_CA1"
+valoper         = "cheqdvaloper1example..."

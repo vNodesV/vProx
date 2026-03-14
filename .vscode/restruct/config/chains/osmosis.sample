@@ -1,0 +1,11 @@
+# chains/osmosis.sample — Chain identity (v1.4.0)
+chain_id        = "osmosis-1"
+tree_name       = "osmosis"
+dashboard_name  = "Osmosis"
+network_type    = "mainnet"
+
+[explorer]
+base_url        = "https://www.mintscan.io/osmosis"
+tx_path         = "/txs/{txhash}"
+block_path      = "/blocks/{height}"
+account_path    = "/accounts/{address}"

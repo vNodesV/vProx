@@ -1,0 +1,20 @@
+# vProx Backup Configuration
+# rev: r2_031026_0
+#
+# Place in: $VPROX_HOME/config/vprox/backup/settings.toml
+
+[backup]
+automation         = false      # true = auto backups on interval_days / max_size_mb
+compression        = "tar.gz"   # only "tar.gz" supported
+destination        = ""         # archive output dir; empty = $VPROX_HOME/data/logs/archives
+interval_days      = 7          # trigger backup every N days; 0 = disabled
+max_size_mb        = 100        # trigger when main.log exceeds N MB; 0 = disabled
+check_interval_min = 10         # how often (minutes) the auto loop evaluates triggers
+
+[backup.files]
+# NOTE: all *.log files in $VPROX_HOME/data/logs/ are auto-included.
+# main.log is always included regardless of this list.
+# Use this list only for non-.log files to include.
+logs   = ["rate-limit.jsonl"]
+data   = ["access-counts.json"]
+config = ["ports.toml"]

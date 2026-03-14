@@ -1,0 +1,47 @@
+# vProx Proxy Settings
+# rev: r2_031026_0
+#
+# Place in: $VPROX_HOME/config/vprox/settings.toml
+#
+# Controls global reverse proxy behavior: rate limiting, auto-quarantine,
+# trusted upstream proxies, and debug profiling.
+#
+# Priority: settings.toml values → environment variables → compiled defaults
+# All keys are optional — omit a section to keep the built-in default.
+
+# ── Rate Limiting ─────────────────────────────────────────────────────────────
+# Applied globally across all proxied chains. Per-IP sliding window token-bucket.
+
+[rate_limit]
+rps   = 25    # max sustained requests/sec per IP  (env: VPROX_RPS)
+burst = 100   # max burst above rps before throttling (env: VPROX_BURST)
+
+# ── Trusted Proxies ───────────────────────────────────────────────────────────
+# CIDRs of upstream proxies (Apache, nginx, Cloudflare) whose X-Forwarded-For
+# headers vProx should trust for real-IP extraction.
+# Leave empty to disable XFF trust (use REMOTE_ADDR as client IP).
+
+[trusted_proxies]
+cidrs = ["127.0.0.1/8", "10.0.0.0/8"]
+
+# ── Auto-Quarantine ───────────────────────────────────────────────────────────
+# Automatically penalises IPs exceeding a request-rate threshold within a
+# rolling time window. Quarantined IPs are throttled to penalty_rps/burst
+# for ttl_sec seconds before being restored.
+
+[auto_quarantine]
+enabled       = true   # env: VPROX_AUTO_ENABLED
+threshold     = 120    # requests within window_sec that triggers quarantine (env: VPROX_AUTO_THRESHOLD)
+window_sec    = 10     # rolling window in seconds (env: VPROX_AUTO_WINDOW_SEC)
+penalty_rps   = 1.0    # penalty RPS for quarantined IPs (env: VPROX_AUTO_RPS)
+penalty_burst = 1      # penalty burst for quarantined IPs (env: VPROX_AUTO_BURST)
+ttl_sec       = 900    # quarantine duration in seconds (env: VPROX_AUTO_TTL_SEC)
+
+# ── Debug ─────────────────────────────────────────────────────────────────────
+# Enable the pprof profiling endpoint on a separate debug port.
+# WARNING: Never expose the debug port publicly — bind to loopback only.
+# Equivalent to setting VPROX_DEBUG=1 and VPROX_DEBUG_PORT.
+
+[debug]
+enabled = false   # env: VPROX_DEBUG=1
+port    = 6060    # pprof HTTP port (env: VPROX_DEBUG_PORT)

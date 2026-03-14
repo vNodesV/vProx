@@ -1,0 +1,27 @@
+# vops.toml — Web application (dashboard + intel + accounts) settings (v1.4.0)
+# Replaces: config/vops.toml
+# Package rename: internal/vops → internal/vops
+
+[vops]
+port            = 8889
+bind_address    = "127.0.0.1"     # SSRF guard — loopback only
+base_path       = "/vops"         # Apache-proxied URL prefix
+db_path         = "data/vops.db"
+archives_dir    = "data/logs/archives"
+api_key         = ""              # Required for /block, /unblock
+watch_interval  = 60              # seconds between archive scans
+
+[vops.auth]
+password_hash   = ""              # bcrypt hash; empty = no auth required
+session_ttl_h   = 24
+
+[vops.intel]
+virustotal_key  = ""
+abuseipdb_key   = ""
+shodan_key      = ""
+
+[vops.ui]
+theme           = "vnodes"        # vnodes | dark-blue | light-blue
+items_per_page  = 50              # default accounts table page size
+date_format     = "relative"      # relative | absolute | iso8601
+refresh_interval = 65             # dashboard auto-refresh seconds

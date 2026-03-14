@@ -1,0 +1,60 @@
+# vProx Infrastructure Settings
+# rev: r2_031026_0
+#
+# Place in: $VPROX_HOME/config/vprox/infra/settings.toml
+#
+# This file defines:
+#   - Operating mode (vm | vps | dual)
+#   - Default SSH credentials for all VMs
+#   - Physical host registry ([[host]] entries)
+#
+# Per-host VM inventories live in separate files:
+#   config/vprox/infra/{host.name}.toml  (e.g. BHE_QC.toml, RBX_FR.toml)
+#
+# VPS entries (no physical host parent) live in:
+#   config/vprox/infra/vps.toml
+#
+# ── Mode ──────────────────────────────────────────────────────────────────────
+# vm   → load host + VM files only (ignore vps.toml)
+# vps  → load vps.toml only (SSH key section still read)
+# dual → load all
+
+mode = "dual"
+
+# ── SSH Defaults ──────────────────────────────────────────────────────────────
+# Applied to all VMs/VPS unless overridden per-entry.
+# Generate key: ssh-keygen -t ed25519 -C "vprox-fleet" -f ~/.vprox/secret/id.push
+# Authorize:    ssh-copy-id -i ~/.vprox/secret/id.push.pub <user>@<host>
+
+[ssh]
+key  = "~/.vprox/secret/id.push"   # path to SSH private key ($HOME expanded)
+user = "ubuntu"                     # default SSH login user
+
+# ── Physical Hosts ─────────────────────────────────────────────────────────────
+# Add one [[host]] block per physical server (hypervisor / bare-metal).
+# VMs on each host are defined in config/vprox/infra/{host.name}.toml
+#
+# The name field is the join key — it must match the filename of the VM file.
+# Example: name = "BHE_QC"  →  reads BHE_QC.toml for this host's VMs.
+
+[[host]]
+name       = "BHE_QC"       # unique identifier; also used as VM file basename
+lan_ip     = "10.0.0.1"     # physical host LAN / management IP
+datacenter = "QC"            # location label shown on Infrastructure dashboard
+enable     = true            # when false, host + all its VMs are hidden
+
+[host.ping]
+# country: ISO 3166-1 alpha-2 code for the datacenter probe (check-host.net)
+# Supported: CA  US  FR  DE  NL  GB  FI  JP  SG  BR  IN
+country  = "CA"
+provider = ""   # pin to specific node (e.g. "ca1"); empty = random from country
+
+[[host]]
+name       = "RBX_FR"
+lan_ip     = "192.168.1.1"
+datacenter = "RBX"
+enable     = true
+
+[host.ping]
+country  = "FR"
+provider = ""

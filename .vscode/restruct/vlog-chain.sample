@@ -1,0 +1,67 @@
+# vLog Chain Identity Config
+# rev: r2_031026_0
+#
+# One file per chain. Place in: $VPROX_HOME/config/vlog/chains/
+# Example: config/vlog/chains/mychain.toml
+#
+# This file is READ BY vLog ONLY — vProx does not load it.
+# Proxy routing, ports, and SSH management live in:
+#   config/vprox/nodes/<valoper_or_hostname>.toml
+#
+# When chain_id is set, vLog auto-fetches chain metadata from:
+#   https://chains.cosmos.directory/{chain_name}
+#   https://validators.cosmos.directory/chains/{chain_name}
+# Local settings always take precedence over remote data.
+
+schema_version = 3
+
+# ── Identity ──────────────────────────────────────────────────────────────────
+
+chain_id     = "chain-id"          # official chain-id (e.g. "cheqd-testnet-6")
+chain_name   = "chain"             # slug — used in log filenames and as default tree_name
+display_name = "Pretty Chain Name" # display name in dashboard; empty = cosmos.directory pretty_name
+
+# tree_name: grouping key for the Chain Services dashboard tree.
+# All vprox/nodes files with tree = "<tree_name>" are grouped under this chain.
+# Defaults to chain_name when empty — only set this if you need a custom key.
+tree_name = ""
+
+# node: join key — basename (without .toml) of the primary vprox/nodes file for this chain.
+# Example: node = "cheqdvaloper1mhlj3w27lzls8d4vr7fwkycd2ptjmm6aydyq8u"
+# When empty, vLog falls back to matching tree_name against nodes' tree field.
+node = ""
+
+# ── Auto-filled from cosmos.directory when chain_id is set ───────────────────
+# Do not set these manually — they are overwritten on startup/reload.
+
+network_type        = ""   # e.g. "mainnet" or "testnet"
+recommended_version = ""   # e.g. "v4.2.1"
+explorers           = []   # cosmos.directory explorer list; set here to override
+
+# ── Validator ─────────────────────────────────────────────────────────────────
+# Validator operator addresses for governance tracking and cosmos.directory enrichment.
+# Active/synced/jailed/missed_blocks are auto-filled at runtime — do not set manually.
+# Leave address empty to hide that row in the dashboard.
+
+[validator.mainnet]
+address = ""   # valoper operator address (e.g. cheqdvaloper1mhlj3w27lzls8d4vr7fwkycd2ptjmm6aydyq8u)
+
+# Auto-filled by cosmos.directory / chain RPC (do not set manually):
+# active          = false
+# synced          = false
+# jailed          = false
+# missed_blocks   = 0
+# active_proposal = ""
+# vote_by         = ""
+# upgrade         = ""   # pending upgrade halt height; empty when none
+
+[validator.testnet]
+address = ""   # testnet valoper; empty = testnet validator row hidden in dashboard
+
+# ── Chain Ping ────────────────────────────────────────────────────────────────
+# Controls the per-chain datacenter probe in the dashboard.
+# Used when no managed node ([management]) provides datacenter context.
+
+[chain_ping]
+country  = ""   # ISO 3166-1 alpha-2; supported: CA US FR DE NL GB FI JP SG BR IN
+provider = ""   # pin to specific check-host.net node (e.g. "ca1"); empty = random from country

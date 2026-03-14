@@ -1,0 +1,37 @@
+# modules/infra/ca1-dc.toml — Physical host registry (v1.4.0)
+# Replaces: config/infra/ca1.toml
+# Uses [[host]] TOML array-of-tables (Go struct: []InfraHost)
+
+datacenter      = "ca1"
+location        = "Canada - Montreal"
+provider        = "OVH"
+
+[[host]]
+name            = "srv-ca1-01"
+ip              = "10.0.0.10"
+user            = "ubuntu"
+role            = "validator"
+
+  [host.ping]
+  country       = "CA"
+  provider      = "ca1"
+
+[[host]]
+name            = "srv-ca1-02"
+ip              = "10.0.0.11"
+user            = "ubuntu"
+role            = "rpc"
+
+  [host.ping]
+  country       = "CA"
+  provider      = "ca1"
+
+[[host]]
+name            = "vprox-ca1"
+ip              = "10.0.0.1"
+user            = "ubuntu"
+role            = "proxy"
+
+  [host.ping]
+  country       = "CA"
+  provider      = "ca1"

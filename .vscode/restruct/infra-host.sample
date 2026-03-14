@@ -1,0 +1,52 @@
+# vProx Infrastructure — Per-Host VM File
+# rev: r2_031026_0
+#
+# Filename must match [[host]].name in config/vprox/infra/settings.toml
+# Example: BHE_QC.toml  →  host [[host]] name = "BHE_QC"
+#
+# Place in: $VPROX_HOME/config/vprox/infra/
+#
+# List ALL VMs running on this physical host.
+# SSH key and user default to [ssh] in settings.toml — override per-VM only when needed.
+#
+# chain_name links this VM to config/vlog/chains/<chain_name>.toml for chain metadata.
+# type maps to service badges in the Infrastructure dashboard.
+
+# ── VM Entries ────────────────────────────────────────────────────────────────
+
+[[vm]]
+name       = "cheqd-node"      # display name in Infrastructure block
+lan_ip     = "10.0.0.66"       # LAN IP — SSH target + shown in dashboard
+port       = 22                # SSH port
+user       = "vnodesv"         # SSH user; empty = inherits [ssh].user from settings.toml
+chain_name = "cheqd"           # links to config/vlog/chains/cheqd.toml
+type       = "validator"       # validator | sp | relayer | node (comma-separated for multi-role)
+# key_path = ""               # override SSH key only if different from settings.toml [ssh].key
+
+[vm.ping]
+country  = "CA"
+provider = ""
+
+[[vm]]
+name       = "akash-val"
+lan_ip     = "10.0.0.67"
+port       = 22
+user       = "vnodesv"
+chain_name = "akash"
+type       = "validator"
+
+[vm.ping]
+country  = "CA"
+provider = ""
+
+[[vm]]
+name       = "relayer-1"
+lan_ip     = "10.0.0.68"
+port       = 22
+user       = "vnodesv"
+chain_name = ""                # leave empty for infrastructure-only VMs (no chain link)
+type       = "relayer"
+
+[vm.ping]
+country  = "CA"
+provider = ""

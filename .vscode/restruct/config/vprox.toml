@@ -1,0 +1,29 @@
+# vprox.toml — Core proxy settings (v1.4.0)
+# Replaces: config/ports.toml + scattered rate-limit flags
+
+[server]
+addr            = ":3000"         # proxy listen address
+# tls_cert      = ""             # optional: path to TLS cert (if not using Apache)
+# tls_key       = ""             # optional: path to TLS key
+
+[rate_limit]
+rps             = 30.0
+burst           = 60
+auto_rps        = 5.0
+auto_burst      = 10
+auto_quarantine = true
+
+[rpc_ports]
+# Ports proxied from each chain service
+default_rpc     = 26657
+default_rest    = 1317
+default_grpc    = 9090
+default_api     = 8080
+
+[logging]
+level           = "info"          # debug | info | warn | error
+file            = "data/logs/vprox.log"
+access_log      = true
+
+[backup]
+# Backup settings moved to modules/backup/backup.toml
