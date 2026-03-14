@@ -559,11 +559,11 @@ resources infra       → Section 17 (SSH, VM registry, chain upgrade, circuit b
 
 ---
 
-## 17. Infrastructure Deployment & SSH (vProx push module)
+## 17. Infrastructure Deployment & SSH (vProx fleet module)
 
 | Resource | URL | Notes |
 |----------|-----|-------|
-| golang.org/x/crypto/ssh | https://pkg.go.dev/golang.org/x/crypto/ssh | SSH client — production in `internal/push/ssh/` |
+| golang.org/x/crypto/ssh | https://pkg.go.dev/golang.org/x/crypto/ssh | SSH client — production in `internal/fleet/ssh/` |
 | SSH authorized_keys format | https://man.openbsd.org/sshd.8#AUTHORIZED_KEYS_FILE_FORMAT | Key options, from= restriction, command= restriction |
 | CometBFT `/status` sync_info | https://docs.cometbft.com/v0.38/rpc/#/Info/status | `catching_up` bool; `latest_block_height`; used for node health routing |
 | Cosmos upgrade API | https://docs.cosmos.network/api#tag/Upgrade | `/current_plan`, `/applied_plan`, `/module_versions` — upgrade automation |
@@ -584,7 +584,7 @@ resources infra       → Section 17 (SSH, VM registry, chain upgrade, circuit b
 | Server | Install | Why for vProx/vLog |
 |--------|---------|-------------------|
 | `@modelcontextprotocol/server-filesystem` | `npx @modelcontextprotocol/server-filesystem /path` | Direct file ops on config/templates/TOML without shell; secure directory scoping |
-| `@modelcontextprotocol/server-sqlite` | `npx @modelcontextprotocol/server-sqlite --db-path /path/vlog.db` | Direct query access to vlog.db + push.db — debug IP accounts, deployments, intel_cache without Go code |
+| `@modelcontextprotocol/server-sqlite` | `npx @modelcontextprotocol/server-sqlite --db-path /path/vlog.db` | Direct query access to vlog.db + fleet state DB (default `data/push.db`) — debug IP accounts, deployments, and intel_cache without Go code |
 | `@modelcontextprotocol/server-memory` | `npx @modelcontextprotocol/server-memory` | Persistent cross-session knowledge graph — track architecture decisions, pattern evolution across sessions |
 | `@modelcontextprotocol/server-sequentialthinking` | `npx @modelcontextprotocol/server-sequentialthinking` | Structured multi-step reasoning for complex refactors (chain.toml consolidation, binary merger planning) |
 | `mcp-server-git` | `npx @modelcontextprotocol/server-git --repository /path` | Git operations beyond gh CLI — diff analysis, commit history, branch management for multi-branch workflow |
@@ -651,4 +651,4 @@ resources infra       → Section 17 (SSH, VM registry, chain upgrade, circuit b
 
 ---
 
-*Last updated: 2026-03-XX (rev20: §16 Config Architecture — TOML array-of-tables spec added (`[[host]]` + `[host.ping]` scoping), go-toml v2 array struct mapping; Restruct design folder reference added (`.vscode/restruct/PLAN.md`))*
+*Last updated: 2026-03-13 (rev21: fleet naming/paths refreshed (`internal/fleet/*`, `config/fleet/settings.toml` context), MCP SQLite notes clarified for fleet DB defaults, and resource index synchronized with current v1.3.1 settings/wizard delivery context.)*

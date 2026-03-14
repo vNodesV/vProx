@@ -480,4 +480,4 @@ Strategic Thinking:   ████████████         3/4    (RICE/
 ---
 
 *Skills are living documentation. Update this file when capabilities change or new domains are acquired.*
-*Last updated: 2026-03-XX (rev20: §16 TOML config design updated — `[[host]]` array-of-tables + `[host.ping]` subtable scoping, tree-join pattern, v1.4.0 restructure P1–P6 migration path; Config architecture depth note expanded; §18 Config architecture row updated with restructure knowledge)*
+*Last updated: 2026-03-13 (rev21: settings/wizard lifecycle capability reinforced — inline editor UX, chain-service tree controls, legacy TOML field-parity import/apply bridge, and proxy `features.mask_rpc` rewrite parity captured as active delivery patterns.)*

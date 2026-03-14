@@ -1804,3 +1804,38 @@ fe5207e  fix: chain status duplication + delete 405
 ### Patterns Established
 - **`chainBaseSlug`**: fuzzy chain-name dedup for legacy SQLite `registered_chains` (temporary; permanent fix = tree-join in v1.4.0)
 - **Apache DELETE block**: always use POST for fleet mutations; JS client must match
+
+---
+
+## Session: 2026-03-13 05:22:09Z — vLog_v1.3.1 settings/dashboard parity save
+
+### Goal
+- Finalize settings/dashboard UX corrections, preserve chain TOML field parity, and persist a stable checkpoint after commit/push.
+
+### Completed
+- Replaced Settings chain popup workflow with inline editor to match dashboard layout density.
+- Added per-service red remove action (`✕`) on Settings chain tree child rows with persistence guard.
+- Updated Dashboard Chain Services block to always render chain parent + expandable service child rows.
+- Expanded backend chain apply/import parity for legacy fields (host/IP, expose/services/ports/ws/features/logging/management/ping/aliases/messages) and slug normalization fallback.
+- Wired `features.mask_rpc` into RPC link rewriting so landing links render as `//<mask>/status` when configured.
+- Committed and pushed to `vLog_v1.3.1` (`a69ee02`).
+
+### Files Changed
+- `cmd/vprox/main.go`
+- `internal/configwizard/web_apply.go`
+- `internal/vlog/web/templates/dashboard.html`
+- `internal/vlog/web/templates/settings.html`
+- `internal/vlog/web/static/vlog.css`
+
+### Verification
+- `go build ./...` ✅
+- `go vet ./...` ✅
+- `go test ./...` ✅
+- `git push` ✅ (`149178d..a69ee02`)
+
+### Follow-ups
+- Manual browser QA pass still recommended for tree expand/collapse and inline editor density on representative chains.
+- Continue migration clean-up toward v1.4.0 split config model once user confirms current UX baseline.
+
+### Next Steps
+- Run `agentupgrade` protocol and refresh agent state/version history for this delivery.

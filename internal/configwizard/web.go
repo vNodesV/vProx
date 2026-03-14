@@ -588,7 +588,7 @@ func (w *Web) saveStep(step string) http.HandlerFunc {
 		}
 		if err := ApplyFields(w.home, step, fields); err != nil {
 			log.Printf("[wizard] save rejected step=%q: %v", step, err)
-			http.Error(rw, "invalid configuration payload", http.StatusUnprocessableEntity)
+			http.Error(rw, err.Error(), http.StatusUnprocessableEntity)
 			return
 		}
 		writeJSON(rw, map[string]string{"status": "ok"})

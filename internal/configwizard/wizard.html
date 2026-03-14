@@ -901,7 +901,7 @@
         });
         const txt = await resp.text();
         if (!resp.ok) {
-          throw new Error(txt || `HTTP ${resp.status}`);
+          throw new Error(txt.trim() || `HTTP ${resp.status}`);
         }
         setStatus(`Saved: ${endpoint}`, "ok");
         await loadCurrent();

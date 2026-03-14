@@ -45,8 +45,8 @@ You are the repository PR reviewer and quality gatekeeper for `vProx`.
 - **io.LimitReader on all external API response bodies** — `io.ReadAll(io.LimitReader(resp.Body, 1<<20))`; unbounded reads on 3rd-party responses are DoS vectors.
 - **Backup: truncation must follow successful archive write** — source files must not be truncated/deleted until `writeTarGz` returns nil AND archive is stat-verified; failure to do so causes permanent data loss.
 - **HTML templates: escH() must escape " and '** — required for innerHTML use in attribute positions; switch innerHTML → textContent where data is not expected to contain markup.
-- **Push/SSH: dedicated key required** — `internal/push/ssh/` must use a key path from config (`key_path` in vms.toml), never the operator's identity key. Validate target hostname/IP before SSH dial. Remote exec must use `session.CombinedOutput()` with context timeout, not `Run()`.
-- **Push scripts: path must be repo-relative** — remote bash scripts MUST be in `~/vProx/scripts/chains/{chain}/{component}/{script}.sh`; never construct script paths from untrusted request parameters; validate chain/component/script name against allowlist before SSH exec.
+- **Fleet/SSH: dedicated key required** — `internal/fleet/ssh/` must use a key path from config (`key_path` in `config/fleet/settings.toml`), never the operator's identity key. Validate target hostname/IP before SSH dial. Remote exec must use `session.CombinedOutput()` with context timeout, not `Run()`.
+- **Fleet scripts: path must be repo-relative** — remote bash scripts MUST be in `~/vProx/scripts/chains/{chain}/{component}/{script}.sh`; never construct script paths from untrusted request parameters; validate chain/component/script name against allowlist before SSH exec.
 - **Cosmos IBC queries: enforce pagination** — any handler that proxies `/ibc/core/channel/v1/channels` or `/packet_commitments` MUST inject `pagination.limit` if absent; unbounded IBC channel queries can OOM query nodes.
 - **Cosmos upgrade detection: cache /current_plan** — if vProx or vLog polls `/cosmos/upgrade/v1beta1/current_plan`, responses must be cached (60s TTL); never poll on every request; alert/log when `latest_block_height >= Plan.Height`.
 - **Go/JSON nil-vs-empty slice** — API handlers returning `[]T` MUST use `make([]T, 0)` or `[]T{}`, never `var s []T`; `encoding/json` marshals `nil` slice as `null`, breaking frontend `Array.isArray()` / `.length` checks.
@@ -61,7 +61,7 @@ You are the repository PR reviewer and quality gatekeeper for `vProx`.
 - **Backup** (`internal/backup/`): log rotation, multi-file archive, access-count persistence; `automation bool` (TOML) controls auto-scheduler; `--backup` flag always runs; NEW/UPD structured log format; comma-split convenience in `resolveBackupExtraFiles`
 - **Geo** (`internal/geo/`): IP2Location/GeoLite2, lazy init via sync.Once (resettable), micro-cache with periodic sweep, VPROX_HOME-aware path resolution
 - **Web GUI** (P4 planned, `internal/gui/`): embedded admin dashboard — `html/template` + `go:embed` + htmx, served via vProxWeb HTTP server
-- **push** (`internal/push/`): SSH control plane for validator VMs; packages: config/ (vms.toml), ssh/ (dispatcher, x/crypto/ssh), runner/ (remote bash exec), state/ (SQLite deployments), status/ (Cosmos RPC poller), api/ (HTTP handlers); scripts at `scripts/chains/{chain}/{component}/{script}.sh`
+- **fleet** (`internal/fleet/`): SSH control plane for validator VMs; packages: config/ (infra loader), ssh/ (dispatcher, x/crypto/ssh), runner/ (remote bash exec), state/ (SQLite deployments), status/ (Cosmos RPC poller), api/ (HTTP handlers); scripts at `scripts/chains/{chain}/{component}/{script}.sh`
 - **vLog** (`cmd/vlog/`, `internal/vlog/`): standalone log-analyzer binary; SQLite (modernc.org/sqlite) for IP accounts; ingests `archives/*.tar.gz`; VirusTotal + AbuseIPDB + Shodan intel; composite threat score; embedded web UI (Matrix [V] dark theme); session auth (login page, bcrypt, 32-byte `crypto/rand` tokens, 24h TTL, `requireSession` middleware, auth bypass if `password_hash == ""`); `POST /api/v1/ingest` endpoint for vProx backup hook; config at `$VPROX_HOME/config/vlog.toml` (`[vlog.auth]` section for `password_hash`)
 
 ## Config layout (current — v1.3.0 chain.toml consolidation in progress)
@@ -70,7 +70,8 @@ You are the repository PR reviewer and quality gatekeeper for `vProx`.
 - `config/chains/*.toml` — one file per chain (primary); v1.3.0 adds `[management]` + `[management.ping]` sections + `chain_id` + `explorer_base` top-level fields
 - `config/backup/backup.toml` — backup: `automation bool`, `[backup.files]` lists
 - `config/ports.toml` — default proxy ports
-- `config/push/vms.toml` — VM registry (DEPRECATED in v1.3.0; chain.toml `[management]` takes precedence when `managed_host=true`)
+- `config/infra/<datacenter>.toml` — VM registry (all `*.toml` scanned)
+- `config/fleet/settings.toml` — fleet SSH defaults + poll interval (`[ssh]`, `[poll]`, `[defaults]`)
 - TOML config takes priority over `.env` variables; `.env` is for deployment secrets/overrides only
 
 ## Config architecture (P4 planned)

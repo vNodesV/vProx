@@ -65,13 +65,14 @@ performance claim is benchmarked, every recommendation is trade-off-aware.
 - **VM registry**: `config/infra/<datacenter>.toml` — all `*.toml` files scanned; `config/fleet/settings.toml` for SSH defaults + poll interval; `[vm.ping]` subtable: `VMPing{Country string, Provider string}` → datacenter probe country for vLog Chain Status; wired as `ChainStatus.PingCountry`/`.PingProvider`
 - **SSH key**: dedicated fleet→VM key; `key_path` in `config/fleet/settings.toml [ssh]` section; sudoers NOPASSWD on VMs for script execution
 - **Script path**: `~/vProx/scripts/chains/{chain}/{component}/{script}.sh` (VMs clone vProx)
-- **API routes**: `GET /api/v1/fleet/vms`, `GET /api/v1/fleet/chains`, `POST /api/v1/fleet/deploy`, `GET /api/v1/fleet/deployments`, `POST /api/v1/fleet/chains/registered`, `DELETE /api/v1/fleet/chains/registered/{chain}`
+- **API routes**: `GET /api/v1/fleet/vms`, `GET /api/v1/fleet/chains`, `POST /api/v1/fleet/deploy`, `GET /api/v1/fleet/deployments`, `POST /api/v1/fleet/chains/registered`, `POST /api/v1/fleet/chains/registered/{chain}` (Apache-safe delete alias), `DELETE /api/v1/fleet/chains/registered/{chain}` (direct/local)
 - **CLI**: `vprox fleet [hosts|vms|deploy|update|chains|unregister]` — `chains` lists registered chains; `unregister <chain>` removes by name from SQLite
-- **Config structs**: `FleetConfig` (was `PushConfig`), `FleetDefaults` (was `FleetDefaults`) in `internal/vlog/config/config.go`
+- **Config structs**: `FleetConfig` (was `PushConfig`), `FleetDefaults` (was `PushDefaults`) in `internal/vlog/config/config.go`
 - **Dashboard**: Deploy Wizard + Chain Status Table panels on vLog dashboard; **chain delete** moved out of dashboard → `vprox fleet unregister` CLI only (Settings page deferred)
-- **Pending bugs** (from code review of `e52eaf1`): (1) `openFleetDB()` in `cmd/vprox/fleet.go` hardcodes `data/push.db` — HIGH: must load `cfg.VLog.Push.DBPath` from vlog config; (2) `RemoveRegisteredChain()` in `internal/fleet/state/state.go` discards `RowsAffected()` — MEDIUM: silent success on mistyped chain name; fix: check rows affected, return `ErrNotFound` when 0
+- **Stability status**: prior `e52eaf1` review findings are resolved — `openFleetDB()` now reads `cfg.VLog.Push.DBPath` with safe fallback, and `RemoveRegisteredChain()` checks `RowsAffected()` and returns `state.ErrNotFound` when 0.
 - **Chain dedup fix** (commit `fe5207e`): Added `chainBaseSlug(s string) string` (strips from first `-` or `_`); `FindVMForChain(slug string)` tries exact name, exact ChainName, base-slug match against both — eliminates double-rendering of `"cheqd-testnet"` (SQLite) vs `"cheqd"` (VM); `pollAll()` uses `FindVMForChain` instead of `FindVM`
 - **HTTP 405 delete workaround** (commit `fe5207e`): Apache `mod_proxy` blocks HTTP DELETE → 405; fleet delete uses POST alias; JS changed from `method:'DELETE'` to `method:'POST'` for all fleet delete calls
+- **Settings/Wizard UX bridge** (v1.3.1): dashboard-native inline settings editor, chain/service tree controls, legacy TOML import field parity, and `features.mask_rpc` rewrite parity in proxy output.
 
 ### vLog (module — `vLog1.3.0` branch, active)
 - **Binary**: standalone `vLog` — mirrors vProx architecture (single binary, embedded HTTP server, Apache-proxied)
