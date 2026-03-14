@@ -106,6 +106,9 @@ type FleetDefaults struct {
 	User string `toml:"user"`
 	// KeyPath is the default SSH private key path for chain-managed hosts.
 	KeyPath string `toml:"key_path"`
+	// KnownHostsPath is the path to the SSH known_hosts file used to verify
+	// fleet VM host keys. When empty, host key verification is skipped with a warning.
+	KnownHostsPath string `toml:"known_hosts_path"`
 }
 
 // FleetConfig configures the integrated fleet validator deployment module.

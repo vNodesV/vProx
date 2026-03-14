@@ -5,6 +5,8 @@ package runner
 
 import (
 	"fmt"
+	"regexp"
+	"strings"
 
 	"github.com/vNodesV/vProx/internal/fleet/config"
 	fleetssh "github.com/vNodesV/vProx/internal/fleet/ssh"
@@ -12,6 +14,16 @@ import (
 
 // scriptBase is the path on remote VMs where vProx scripts are cloned.
 const scriptBase = "~/vProx/scripts"
+
+// safeSegment matches only alphanumeric characters, hyphens, and underscores
+// — safe for use as path segments and bash positional arguments.
+var safeSegment = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
+
+// shellQuote wraps s in single quotes for safe use in a bash command string.
+// Any single-quote characters inside s are properly escaped.
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
 
 // Result holds the output of a remote script execution.
 type Result struct {
@@ -33,7 +45,12 @@ func New() *Runner { return &Runner{} }
 //   - dryRun:    passes --dry-run flag to the script
 //   - env:       additional KEY=VALUE pairs prepended to the command
 func (r *Runner) Deploy(vm config.VM, chain, component, script string, dryRun bool, env map[string]string) Result {
-	c, err := fleetssh.Dial(vm.Host, vm.Port, vm.User, vm.KeyPath)
+	// Validate path-segment parameters to prevent traversal and shell injection.
+	if !safeSegment.MatchString(chain) || !safeSegment.MatchString(component) || !safeSegment.MatchString(script) {
+		return Result{Err: fmt.Errorf("runner: invalid script parameters (alphanumeric, hyphen, underscore only)")}
+	}
+
+	c, err := fleetssh.Dial(vm.Host, vm.Port, vm.User, vm.KeyPath, vm.KnownHostsPath)
 	if err != nil {
 		return Result{Err: fmt.Errorf("runner: ssh dial: %w", err)}
 	}
@@ -43,7 +60,12 @@ func (r *Runner) Deploy(vm config.VM, chain, component, script string, dryRun bo
 
 	var envStr string
 	for k, v := range env {
-		envStr += fmt.Sprintf("%s=%q ", k, v)
+		// Validate env key: must be a valid shell identifier.
+		if !safeSegment.MatchString(k) {
+			return Result{Err: fmt.Errorf("runner: invalid env key %q (alphanumeric and underscore only)", k)}
+		}
+		// Use single-quote escaping to prevent command substitution in values.
+		envStr += fmt.Sprintf("%s=%s ", k, shellQuote(v))
 	}
 
 	dryRunFlag := ""
@@ -62,7 +84,7 @@ func (r *Runner) Deploy(vm config.VM, chain, component, script string, dryRun bo
 
 // RunCmd executes an arbitrary command on vm (for diagnostics / one-offs).
 func (r *Runner) RunCmd(vm config.VM, cmd string) Result {
-	c, err := fleetssh.Dial(vm.Host, vm.Port, vm.User, vm.KeyPath)
+	c, err := fleetssh.Dial(vm.Host, vm.Port, vm.User, vm.KeyPath, vm.KnownHostsPath)
 	if err != nil {
 		return Result{Err: fmt.Errorf("runner: ssh dial: %w", err)}
 	}

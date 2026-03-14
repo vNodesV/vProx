@@ -899,7 +899,28 @@ func (s *Server) handleAPIProbe(w http.ResponseWriter, r *http.Request) {
 	var localR locResult
 	var bestURL string
 	if rpcURL != "" {
-		// If rpc_url is provided, probe it directly.
+		// SSRF guard: validate rpc_url against the same allowlist used for host.
+		parsed, parseErr := url.Parse(rpcURL)
+		if parseErr != nil || parsed.Host == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid rpc_url"})
+			return
+		}
+		urlHostname := parsed.Hostname()
+		urlHostKey := normalizeProbeHost(urlHostname)
+		if urlHostKey == "" {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "rpc_url host not authorized"})
+			return
+		}
+		// Block private/loopback IPs unless they are an explicitly registered fleet host.
+		if net.ParseIP(urlHostname) != nil && isPrivateIP(urlHostname) {
+			if _, ok := fleetHosts[urlHostKey]; !ok {
+				writeJSON(w, http.StatusForbidden, map[string]string{"error": "rpc_url host not authorized"})
+				return
+			}
+		} else if _, ok := hostSet[urlHostKey]; !ok {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "rpc_url host not authorized"})
+			return
+		}
 		localR, bestURL = probeURL(rpcURL)
 	} else {
 		// Otherwise, discover the best reachable URL.
@@ -1222,12 +1243,19 @@ func (s *Server) handleLoginSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Extract real client IP (Apache sets X-Real-IP; fall back to TCP remote addr).
-	clientIP := r.Header.Get("X-Real-IP")
-	if clientIP == "" {
-		clientIP = r.RemoteAddr
-		if i := strings.LastIndex(clientIP, ":"); i >= 0 {
-			clientIP = clientIP[:i]
+	// Extract real client IP.
+	// Only trust X-Real-IP when the TCP connection is from a trusted proxy on
+	// localhost; otherwise an unauthenticated caller can forge the header to
+	// bypass brute-force lockout.
+	rawAddr := r.RemoteAddr
+	tcpIP := rawAddr
+	if i := strings.LastIndex(rawAddr, ":"); i >= 0 {
+		tcpIP = rawAddr[:i]
+	}
+	clientIP := tcpIP
+	if tcpIP == "127.0.0.1" || tcpIP == "::1" {
+		if xrip := strings.TrimSpace(r.Header.Get("X-Real-IP")); xrip != "" {
+			clientIP = xrip
 		}
 	}
 

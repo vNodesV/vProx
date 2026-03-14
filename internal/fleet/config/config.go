@@ -54,6 +54,9 @@ type VM struct {
 	Port       int    `toml:"port"`
 	User       string `toml:"user"`
 	KeyPath    string `toml:"key_path"`
+	// KnownHostsPath is the SSH known_hosts file for host-key verification on this VM.
+	// Populated from FleetDefaults.KnownHostsPath when not set per-VM.
+	KnownHostsPath string `toml:"-"` // runtime-only; sourced from push.defaults.known_hosts_path
 	Datacenter string `toml:"datacenter"`
 	Type       string `toml:"type"`     // validator | sp | rpc | relayer | node (comma-separated)
 	RPCURL     string `toml:"rpc_url"`  // optional override
@@ -188,8 +191,9 @@ func (c *Config) AllChains() []string {
 // Applied when [management] user or key_path are empty in chain.toml.
 // Sourced from [vops.push.defaults] in vops.toml.
 type FleetDefaults struct {
-	User    string
-	KeyPath string
+	User           string
+	KeyPath        string
+	KnownHostsPath string
 }
 
 // LoadFromNodeConfigs reads all node TOML files from dir (config/vprox/nodes/) and

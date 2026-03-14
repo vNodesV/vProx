@@ -202,7 +202,7 @@ func fleetDeploy(home string, args []string) {
 
 	fmt.Printf("→ %s@%s:%d  %s\n", vm.User, vm.Host, vm.Port, cmd)
 
-	conn, err := fleetssh.Dial(vm.Host, vm.Port, vm.User, vm.KeyPath)
+	conn, err := fleetssh.Dial(vm.Host, vm.Port, vm.User, vm.KeyPath, vm.KnownHostsPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "fleet deploy: ssh: %v\n", err)
 		os.Exit(1)
@@ -244,7 +244,7 @@ func fleetUpdate(home string, args []string) {
 	const upgradeCmd = "sudo apt-get update -qq && sudo apt-get upgrade -y"
 	for _, vm := range vms {
 		fmt.Printf("→ %s (%s) ... ", vm.Name, vm.Host)
-		conn, err := fleetssh.Dial(vm.Host, vm.Port, vm.User, vm.KeyPath)
+		conn, err := fleetssh.Dial(vm.Host, vm.Port, vm.User, vm.KeyPath, vm.KnownHostsPath)
 		if err != nil {
 			fmt.Printf("FAIL: %v\n", err)
 			continue

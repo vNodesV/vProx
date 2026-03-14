@@ -396,10 +396,10 @@ func cmdStart(f flags) int {
 	var fleetSvc *fleet.Service
 	{
 		defs := fleetcfg.FleetDefaults{
-			User:    cfg.VOps.Push.Defaults.User,
-			KeyPath: cfg.VOps.Push.Defaults.KeyPath,
+			User:           cfg.VOps.Push.Defaults.User,
+			KeyPath:        cfg.VOps.Push.Defaults.KeyPath,
+			KnownHostsPath: cfg.VOps.Push.Defaults.KnownHostsPath,
 		}
-
 		runtimeCfg, err := fleetcfg.LoadRuntimeConfig(home, defs, cfg.VOps.Push.ChainsDir, cfg.VOps.Push.InfraDir)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "vops: fleet config warning: %v\n", err)

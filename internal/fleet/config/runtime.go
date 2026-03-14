@@ -61,6 +61,16 @@ func LoadRuntimeConfig(home string, defaults FleetDefaults, legacyChainsDir, inf
 	}
 
 	EnrichVMsFromVOpsChains(merged.VMs, vopsChainsDir)
+
+	// Apply defaults.KnownHostsPath to any VM that doesn't have one set.
+	if defaults.KnownHostsPath != "" {
+		for i := range merged.VMs {
+			if merged.VMs[i].KnownHostsPath == "" {
+				merged.VMs[i].KnownHostsPath = defaults.KnownHostsPath
+			}
+		}
+	}
+
 	return merged, nil
 }
 

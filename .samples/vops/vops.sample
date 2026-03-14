@@ -76,8 +76,12 @@ poll_interval_sec = 60
 # Applied when [management] user or key_path are empty in chain.toml.
 # Generate the push key: ssh-keygen -t ed25519 -C "vprox-push" -f $HOME/.vprox/secret/id.push
 [vops.push.defaults]
-user     = ""    # default SSH user for all chain-managed hosts
-key_path = ""    # default SSH private key path ($HOME expanded at runtime)
+user             = ""    # default SSH user for all chain-managed hosts
+key_path         = ""    # default SSH private key path ($HOME expanded at runtime)
+# known_hosts_path validates fleet VM host keys to prevent MITM attacks.
+# Set to ~/.ssh/known_hosts or a dedicated fleet known_hosts file.
+# When empty, host-key verification is skipped and a warning is logged.
+known_hosts_path = ""    # e.g. "~/.ssh/vprox_known_hosts"
 
 [vops.intel]
 # Automatically enrich new IP accounts with threat intelligence.

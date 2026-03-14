@@ -5,11 +5,13 @@ package ssh
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"strings"
 	"time"
 
 	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/knownhosts"
 )
 
 // Client wraps an active SSH connection.
@@ -17,19 +19,23 @@ type Client struct {
 	c *ssh.Client
 }
 
-// Dial opens an SSH connection to host:port authenticating with the
-// ed25519 private key at keyPath.
-//
-// NOTE: HostKeyCallback is intentionally permissive for now.
-// TODO: validate against a known_hosts file before production use.
-func Dial(host string, port int, user, keyPath string) (*Client, error) {
-	// Expand $HOME / ~ so TOML values like "$HOME/.ssh/id_key" work.
-	keyPath = os.ExpandEnv(keyPath)
-	if strings.HasPrefix(keyPath, "~/") {
+// expandPath resolves ~ and $HOME in path strings from TOML values.
+func expandPath(p string) string {
+	p = os.ExpandEnv(p)
+	if strings.HasPrefix(p, "~/") {
 		if h, err := os.UserHomeDir(); err == nil {
-			keyPath = h + keyPath[1:]
+			p = h + p[1:]
 		}
 	}
+	return p
+}
+
+// Dial opens an SSH connection to host:port authenticating with the private
+// key at keyPath.  When knownHostsPath is non-empty the host key is verified
+// against that file; otherwise the connection proceeds without verification
+// and a warning is logged.
+func Dial(host string, port int, user, keyPath, knownHostsPath string) (*Client, error) {
+	keyPath = expandPath(keyPath)
 
 	keyBytes, err := os.ReadFile(keyPath)
 	if err != nil {
@@ -41,10 +47,23 @@ func Dial(host string, port int, user, keyPath string) (*Client, error) {
 		return nil, fmt.Errorf("fleet/ssh: parse key: %w", err)
 	}
 
+	var hostKeyCallback ssh.HostKeyCallback
+	if knownHostsPath != "" {
+		knownHostsPath = expandPath(knownHostsPath)
+		cb, khErr := knownhosts.New(knownHostsPath)
+		if khErr != nil {
+			return nil, fmt.Errorf("fleet/ssh: load known_hosts %s: %w", knownHostsPath, khErr)
+		}
+		hostKeyCallback = cb
+	} else {
+		log.Printf("[fleet/ssh] WARNING: known_hosts_path not configured — host key verification disabled for %s", host)
+		hostKeyCallback = ssh.InsecureIgnoreHostKey() //nolint:gosec // known_hosts_path not configured; warn logged above
+	}
+
 	cfg := &ssh.ClientConfig{
 		User:            user,
 		Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(), //nolint:gosec // known_hosts TODO
+		HostKeyCallback: hostKeyCallback,
 		Timeout:         15 * time.Second,
 	}
 

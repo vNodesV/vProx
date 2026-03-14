@@ -77,7 +77,7 @@ func pollVM(vm config.VM, cfg *config.Config) VMStatus {
 		PolledAt:     time.Now(),
 	}
 
-	client, err := fleetssh.Dial(vm.Host, vm.Port, vm.User, vm.KeyPath)
+	client, err := fleetssh.Dial(vm.Host, vm.Port, vm.User, vm.KeyPath, vm.KnownHostsPath)
 	if err != nil {
 		st.Online = false
 		st.Error = fmt.Sprintf("ssh: %v", err)
