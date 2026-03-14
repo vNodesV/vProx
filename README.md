@@ -5,7 +5,7 @@
 ![Go Version](https://img.shields.io/github/go-mod/go-version/vNodesV/vProx)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
 
-Production-grade reverse proxy for Cosmos SDK blockchain nodes. vProx routes RPC, REST, gRPC, gRPC-Web, and WebSocket traffic to backend nodes with per-chain configuration, IP-based rate limiting, geo enrichment, Prometheus metrics, and structured logging. Includes **vLog**, a standalone log analysis dashboard with threat intelligence and OSINT capabilities.
+Production-grade reverse proxy for Cosmos SDK blockchain nodes. vProx routes RPC, REST, gRPC, gRPC-Web, and WebSocket traffic to backend nodes with per-chain configuration, IP-based rate limiting, geo enrichment, Prometheus metrics, and structured logging. Includes **vOps**, a standalone log analysis dashboard with threat intelligence and OSINT capabilities (formerly vLog, renamed in v1.4.0).
 
 ## Features
 
@@ -57,7 +57,7 @@ Production-grade reverse proxy for Cosmos SDK blockchain nodes. vProx routes RPC
 | Go | 1.25+ | See `go.mod` |
 | make | GNU make | Build automation |
 | git | Any | Clone the repo |
-| apache2-utils | Any | `htpasswd` for vLog auth (optional) |
+| apache2-utils | Any | `htpasswd` for vOps auth (optional) |
 
 ### Install
 
@@ -91,9 +91,13 @@ $EDITOR ~/.vProx/config/chains/my-chain.toml
 ```bash
 vProx start             # foreground, listens on :3000 by default
 vProx start -d          # start as systemd service (daemon)
+vProx start --with-vops # start proxy + vOps in integrated mode
 vProx stop              # stop the service
 vProx restart           # restart the service
 vProx --validate        # validate config and exit
+vProx completion bash   # generate bash shell completion script
+vProx completion zsh    # generate zsh shell completion script
+vProx completion fish   # generate fish shell completion script
 ```
 
 ## Architecture
@@ -116,9 +120,9 @@ vProx follows a modular internal architecture with clearly separated concerns:
 
 For the full module-by-module reference, see [`MODULES.md`](./MODULES.md).
 
-## vLog
+## vOps
 
-vLog is a standalone companion binary for analyzing vProx log archives. It provides a web-based dashboard with:
+vOps is a standalone companion binary for analyzing vProx log archives (renamed from vLog in v1.4.0). It provides a web-based dashboard with:
 
 - Per-IP account profiles with request history and block/unblock controls
 - Threat intelligence scoring (AbuseIPDB + VirusTotal + Shodan) — composite score 0–100
@@ -130,12 +134,19 @@ vLog is a standalone companion binary for analyzing vProx log archives. It provi
 ### Install and run
 
 ```bash
-make install-vlog        # build + install vLog binary + config
-vlog start               # foreground server (default: :8889)
-vlog start -d            # start as background service
+make install-vops        # build + install vOps binary + config
+vprox vops start         # foreground server (default: :8889)
+vprox vops start -d      # start as background service
+vprox vops stop          # stop vOps service
+vprox vops restart       # restart vOps service
+vprox vops status        # show status and database stats
+vprox vops ingest        # one-shot archive ingest
+vprox vops accounts      # list IP accounts as JSON
+vprox vops threats       # list flagged IPs (score ≥ 50)
+vprox vops cache         # manage intel cache
 ```
 
-For full setup including authentication, API key configuration, and block/unblock, see the [Installing vLog](./INSTALLATION.md#installing-vlog) section in `INSTALLATION.md`.
+For full setup including authentication, API key configuration, and block/unblock, see the [Installing vOps](./INSTALLATION.md#installing-vops) section in `INSTALLATION.md`.
 
 ## Configuration
 
@@ -143,10 +154,11 @@ vProx uses TOML configuration files stored under `~/.vProx/`:
 
 | File | Purpose |
 |------|---------|
-| `config/ports.toml` | Default service ports for all chains |
+| `config/ports.toml` | Default service ports for all chains; `vops_url` for integrated mode |
 | `config/chains/*.toml` | Per-chain routing, services, and feature flags |
+| `config/chains/*.sample` | Identity-only chain samples (`chain_id`, `network_type`, `tree_name`) |
 | `config/backup/backup.toml` | Backup automation schedule and settings |
-| `config/vlog/vlog.toml` | vLog server settings, auth, intel API keys |
+| `config/vops/vops.toml` | vOps server settings, auth, intel API keys |
 | `.env` | Environment variables (rate limits, geo paths, server address) |
 
 Override the config base path:
@@ -163,7 +175,7 @@ For the complete CLI flag reference, see [`CLI_FLAGS_GUIDE.md`](./CLI_FLAGS_GUID
 
 - Run vProx behind a TLS-terminating reverse proxy (nginx, Cloudflare).
 - Set `trusted_proxies` in chain config to restrict X-Forwarded-For trust to known CIDR ranges.
-- Keep vLog's `bind_address` set to `127.0.0.1` (the default).
+- Keep vOps's `bind_address` set to `127.0.0.1` (the default).
 - Rotate API keys regularly.
 
 To report a vulnerability, see [`SECURITY.md`](./SECURITY.md).

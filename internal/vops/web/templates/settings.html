@@ -14,7 +14,7 @@
     <a href="#sec-ports">vProx Ports</a>
     <a href="#sec-settings">vProx Proxy Controls</a>
     <a href="#sec-chain">Chain Profiles</a>
-    <a href="#sec-vlog">vLog Core</a>
+    <a href="#sec-vlog">vOps Core</a>
     <a href="#sec-fleet">Fleet Defaults</a>
     <a href="#sec-infra">Infra Datacenters</a>
     <a href="#sec-backup">Backups</a>
@@ -185,12 +185,12 @@
     <article id="sec-vlog" class="v-block settings-block">
       <details open>
         <summary>
-          <span class="v-block-title">vLog Core</span>
+          <span class="v-block-title">vOps Core</span>
         </summary>
         <div class="v-block-body">
           <div class="settings-import-row">
             <label class="settings-import-toggle">
-              <input class="settings-import-check" data-step="vlog" type="checkbox">
+              <input class="settings-import-check" data-step="vops" type="checkbox">
               I want to convert an existing toml files
             </label>
           </div>
@@ -280,7 +280,7 @@
       <label>grpc<input name="grpc" type="number" min="0" max="65535" value="0"></label>
       <label>grpc_web<input name="grpc_web" type="number" min="0" max="65535" value="0"></label>
       <label>api<input name="api" type="number" min="0" max="65535" value="0"></label>
-      <label>vlog_url<input name="vlog_url" type="text" placeholder="http://127.0.0.1:8889"></label>
+      <label>vops_url<input name="vops_url" type="text" placeholder="http://127.0.0.1:8889"></label>
       <label class="full">trusted_proxies (comma-separated CIDRs)<input name="trusted_proxies" type="text"></label>
     </div>
     <div class="settings-actions"><button type="submit">Save ports.toml</button></div>
@@ -395,7 +395,7 @@
     </article>
   </template>
 
-  <form id="settings-form-vlog" data-step="vlog">
+  <form id="settings-form-vlog" data-step="vops">
     <div class="settings-grid">
       <label>port<input name="port" type="number" min="1" max="65535" value="8889"></label>
       <label>bind_address<input name="bind_address" type="text" value="127.0.0.1"></label>
@@ -415,8 +415,9 @@
       <label>db_path<input name="db_path" type="text"></label>
       <label>archives_dir<input name="archives_dir" type="text"></label>
       <label>vprox_bin<input name="vprox_bin" type="text" value="vprox"></label>
+      <label>watch_interval_sec<input name="watch_interval_sec" type="number" min="10" value="60"></label>
     </div>
-    <div class="settings-actions"><button type="submit">Save vlog.toml</button></div>
+    <div class="settings-actions"><button type="submit">Save vops.toml</button></div>
   </form>
 
   <form id="settings-form-fleet" data-step="fleet">
@@ -424,6 +425,7 @@
       <label>ssh_user <span class="required-dot">*</span><input name="ssh_user" type="text" required></label>
       <label>ssh_key_path <span class="required-dot">*</span><input name="ssh_key_path" type="text" required></label>
       <label>ssh_port<input name="ssh_port" type="number" min="1" max="65535" value="22"></label>
+      <label>ssh_timeout_sec<input name="ssh_timeout_sec" type="number" min="1" value="15"></label>
       <label>poll_interval_sec<input name="poll_interval_sec" type="number" min="1" value="60"></label>
       <label>datacenter (default)<input name="datacenter" type="text"></label>
     </div>
@@ -476,6 +478,7 @@
       <label>max_size_mb<input name="max_size_mb" type="number" min="0" value="100"></label>
       <label>check_interval_min<input name="check_interval_min" type="number" min="1" value="10"></label>
       <label class="full">destination<input name="destination" type="text"></label>
+      <label>compression<input name="compression" type="text" value="tar.gz"></label>
       <label class="full">files_logs<input name="files_logs" type="text"></label>
       <label class="full">files_data<input name="files_data" type="text"></label>
       <label class="full">files_config<input name="files_config" type="text"></label>
@@ -557,7 +560,7 @@
     ports: "vProx Ports",
     settings: "vProx Proxy Controls",
     chain: "Chain Profiles",
-    vlog: "vLog Core",
+    vlog: "vOps Core",
     fleet: "Fleet Defaults",
     infra: "Infrastructure",
     backup: "Backups"
@@ -579,7 +582,7 @@
       ["grpc", "grpc"],
       ["grpc_web", "grpc_web"],
       ["api", "api"],
-      ["vlog_url", "vlog_url"],
+      ["vops_url", "vops_url"],
       ["trusted_proxies", "trusted_proxies"]
     ],
     settings: [
@@ -609,6 +612,7 @@
       ["push_user", "push_user"],
       ["push_key_path", "push_key_path"],
       ["poll_interval_sec", "poll_interval_sec"],
+      ["watch_interval_sec", "watch_interval_sec"],
       ["db_path", "db_path"],
       ["archives_dir", "archives_dir"],
       ["vprox_bin", "vprox_bin"]
@@ -617,6 +621,7 @@
       ["ssh_user", "ssh_user"],
       ["ssh_key_path", "ssh_key_path"],
       ["ssh_port", "ssh_port"],
+      ["ssh_timeout_sec", "ssh_timeout_sec"],
       ["poll_interval_sec", "poll_interval_sec"],
       ["datacenter", "datacenter"]
     ],
@@ -626,6 +631,7 @@
       ["max_size_mb", "max_size_mb"],
       ["check_interval_min", "check_interval_min"],
       ["destination", "destination"],
+      ["compression", "compression"],
       ["files_logs", "files_logs"],
       ["files_data", "files_data"],
       ["files_config", "files_config"]
@@ -1068,7 +1074,7 @@
       setVal(forms.ports, "grpc", asNum(m.root.grpc, 0));
       setVal(forms.ports, "grpc_web", asNum(m.root.grpc_web, 0));
       setVal(forms.ports, "api", asNum(m.root.api, 0));
-      setVal(forms.ports, "vlog_url", unquote(m.root.vlog_url));
+      setVal(forms.ports, "vops_url", unquote(m.root.vops_url));
       setVal(forms.ports, "trusted_proxies", asList(m.root.trusted_proxies));
     }
 
@@ -1086,26 +1092,27 @@
       setVal(forms.settings, "debug_port", asNum((m.debug || {}).port, 6060));
     }
 
-    if (current.vlog) {
-      const m = parseTomlMap(current.vlog);
-      setVal(forms.vlog, "port", asNum((m.vlog || {}).port, 8889));
-      setVal(forms.vlog, "bind_address", unquote((m.vlog || {}).bind_address));
-      setVal(forms.vlog, "base_path", unquote((m.vlog || {}).base_path));
-      setVal(forms.vlog, "api_key", unquote((m.vlog || {}).api_key));
-      setVal(forms.vlog, "username", unquote((m["vlog.auth"] || {}).username));
-      setVal(forms.vlog, "password_hash", unquote((m["vlog.auth"] || {}).password_hash));
-      setCheck(forms.vlog, "auto_enrich", asBool((m["vlog.intel"] || {}).auto_enrich, true));
-      setVal(forms.vlog, "cache_ttl_hours", asNum((m["vlog.intel"] || {}).cache_ttl_hours, 24));
-      setVal(forms.vlog, "rate_limit_rpm", asNum((m["vlog.intel"] || {}).rate_limit_rpm, 10));
-      setVal(forms.vlog, "abuseipdb", unquote((m["vlog.intel.keys"] || {}).abuseipdb));
-      setVal(forms.vlog, "virustotal", unquote((m["vlog.intel.keys"] || {}).virustotal));
-      setVal(forms.vlog, "shodan", unquote((m["vlog.intel.keys"] || {}).shodan));
-      setVal(forms.vlog, "push_user", unquote((m["vlog.push.defaults"] || {}).user));
-      setVal(forms.vlog, "push_key_path", unquote((m["vlog.push.defaults"] || {}).key_path));
-      setVal(forms.vlog, "poll_interval_sec", asNum((m["vlog.push"] || {}).poll_interval_sec, 60));
-      setVal(forms.vlog, "db_path", unquote((m.vlog || {}).db_path));
-      setVal(forms.vlog, "archives_dir", unquote((m.vlog || {}).archives_dir));
-      setVal(forms.vlog, "vprox_bin", unquote((m.vlog || {}).vprox_bin));
+    if (current.vops) {
+      const m = parseTomlMap(current.vops);
+      setVal(forms.vlog, "port", asNum((m.vops || {}).port, 8889));
+      setVal(forms.vlog, "bind_address", unquote((m.vops || {}).bind_address));
+      setVal(forms.vlog, "base_path", unquote((m.vops || {}).base_path));
+      setVal(forms.vlog, "api_key", unquote((m.vops || {}).api_key));
+      setVal(forms.vlog, "username", unquote((m["vops.auth"] || {}).username));
+      setVal(forms.vlog, "password_hash", unquote((m["vops.auth"] || {}).password_hash));
+      setCheck(forms.vlog, "auto_enrich", asBool((m["vops.intel"] || {}).auto_enrich, true));
+      setVal(forms.vlog, "cache_ttl_hours", asNum((m["vops.intel"] || {}).cache_ttl_hours, 24));
+      setVal(forms.vlog, "rate_limit_rpm", asNum((m["vops.intel"] || {}).rate_limit_rpm, 10));
+      setVal(forms.vlog, "abuseipdb", unquote((m["vops.intel.keys"] || {}).abuseipdb));
+      setVal(forms.vlog, "virustotal", unquote((m["vops.intel.keys"] || {}).virustotal));
+      setVal(forms.vlog, "shodan", unquote((m["vops.intel.keys"] || {}).shodan));
+      setVal(forms.vlog, "push_user", unquote((m["vops.push.defaults"] || {}).user));
+      setVal(forms.vlog, "push_key_path", unquote((m["vops.push.defaults"] || {}).key_path));
+      setVal(forms.vlog, "poll_interval_sec", asNum((m["vops.push"] || {}).poll_interval_sec, 60));
+      setVal(forms.vlog, "watch_interval_sec", asNum((m.vops || {}).watch_interval_sec, 60));
+      setVal(forms.vlog, "db_path", unquote((m.vops || {}).db_path));
+      setVal(forms.vlog, "archives_dir", unquote((m.vops || {}).archives_dir));
+      setVal(forms.vlog, "vprox_bin", unquote((m.vops || {}).vprox_bin));
     }
 
     if (current.fleet) {
@@ -1113,6 +1120,7 @@
       setVal(forms.fleet, "ssh_user", unquote((m.ssh || {}).user));
       setVal(forms.fleet, "ssh_key_path", unquote((m.ssh || {}).key_path));
       setVal(forms.fleet, "ssh_port", asNum((m.ssh || {}).port, 22));
+      setVal(forms.fleet, "ssh_timeout_sec", asNum((m.ssh || {}).timeout_sec, 15));
       setVal(forms.fleet, "poll_interval_sec", asNum((m.poll || {}).interval_sec, 60));
       setVal(forms.fleet, "datacenter", unquote((m.defaults || {}).datacenter));
     }
@@ -1124,6 +1132,7 @@
       setVal(forms.backup, "max_size_mb", asNum((m.backup || {}).max_size_mb, 100));
       setVal(forms.backup, "check_interval_min", asNum((m.backup || {}).check_interval_min, 10));
       setVal(forms.backup, "destination", unquote((m.backup || {}).destination));
+      setVal(forms.backup, "compression", unquote((m.backup || {}).compression) || "tar.gz");
       setVal(forms.backup, "files_logs", asList((m["backup.files"] || {}).logs));
       setVal(forms.backup, "files_data", asList((m["backup.files"] || {}).data));
       setVal(forms.backup, "files_config", asList((m["backup.files"] || {}).config));

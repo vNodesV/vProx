@@ -1738,6 +1738,7 @@ func importBackupFields(data []byte) (map[string]any, error) {
 		"max_size_mb":        b.MaxSizeMB,
 		"check_interval_min": b.CheckIntervalMin,
 		"destination":        b.Destination,
+		"compression":        b.Compression,
 		"files_logs":         strings.Join(b.Files.Logs, ","),
 		"files_data":         strings.Join(b.Files.Data, ","),
 		"files_config":       strings.Join(b.Files.Config, ","),

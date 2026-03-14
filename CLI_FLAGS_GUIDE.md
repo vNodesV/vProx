@@ -10,11 +10,26 @@ Start the proxy server in the foreground. Logs to stdout and `main.log`.
 ### `vProx start -d` / `vProx start --daemon`
 Start via systemd service (`sudo service vProx start`). Requires sudoers rule (created by `make systemd`).
 
+### `vProx start --with-vops`
+Start the proxy server and vOps log analyzer in integrated mode (same process, coordinated shutdown). vOps listens on the port configured in `config/vops/vops.toml`.
+
 ### `vProx stop`
 Stop the running service (`sudo service vProx stop`).
 
 ### `vProx restart`
 Restart the running service (`sudo service vProx restart`).
+
+### `vProx completion <shell>`
+Generate shell completion script for the specified shell. Supported shells: `bash`, `zsh`, `fish`.
+
+```bash
+vprox completion bash   >> ~/.bash_completion
+vprox completion zsh    >> ~/.zshrc
+vprox completion fish   > ~/.config/fish/completions/vprox.fish
+```
+
+### `vProx vops <subcommand>`
+Manage the vOps log analyzer. See [vOps CLI Reference](#vops-cli-reference) below.
 
 ---
 
@@ -93,6 +108,12 @@ Show usage and available flags.
 
 ### `--version`
 Print version and exit.
+
+### `--with-vops`
+Start vOps log analyzer alongside the proxy in integrated mode. Both servers share the same process and shut down together. vOps listens on the port in `config/vops/vops.toml` (default `:8889`).
+
+Example:
+- `vProx start --with-vops`
 
 ### `--validate`
 Load and validate configuration, then exit.
@@ -265,27 +286,30 @@ Example:
 
 ---
 
-## vLog CLI Reference
+## vOps CLI Reference {#vops-cli-reference}
 
-vLog is the companion log-analyzer binary shipped with vProxVL v1.2.0.
+vOps is the companion log-analyzer (renamed from vLog in v1.4.0). It is integrated as `vprox vops` subcommand.
 
 ### Commands
 
 | Command | Description |
 |---|---|
-| `vlog start` | Start vLog web server (foreground, default `:8889`) |
-| `vlog start -d` | Start as background service (`sudo service vLog start`) |
-| `vlog stop` | Stop vLog service (`sudo service vLog stop`) |
-| `vlog restart` | Restart vLog service (`sudo service vLog restart`) |
-| `vlog ingest` | One-shot: scan archives, ingest new entries, exit |
-| `vlog status` | Print database stats and exit |
+| `vprox vops start` | Start vOps web server (foreground, default `:8889`) |
+| `vprox vops start -d` | Start as background service (`sudo service vOps start`) |
+| `vprox vops stop` | Stop vOps service (`sudo service vOps stop`) |
+| `vprox vops restart` | Restart vOps service (`sudo service vOps restart`) |
+| `vprox vops ingest` | One-shot: scan archives, ingest new entries, exit |
+| `vprox vops status` | Print database stats and exit |
+| `vprox vops accounts` | List all IP accounts as JSON |
+| `vprox vops threats` | List flagged IPs (score ≥ 50) |
+| `vprox vops cache` | Manage intel cache (purge by IP or all) |
 
 ### Flags (all commands)
 
 | Flag | Default | Description |
 |---|---|---|
 | `--home PATH` | `$VPROX_HOME` or `~/.vProx` | Override vProx home directory |
-| `--port PORT` | from `vlog.toml` | Override web server listen port |
+| `--port PORT` | from `vops.toml` | Override web server listen port |
 | `--quiet` | false | Suppress non-essential output |
 | `--version` | — | Print version and exit |
 | `-h`, `--help` | — | Print usage |
@@ -307,35 +331,35 @@ vLog is the companion log-analyzer binary shipped with vProxVL v1.2.0.
 | `--list-threats` | Print flagged IPs (score ≥ 50) |
 | `--enrich IP` | Run threat intelligence on a single IP and print result |
 | `--purge-cache IP\|all` | Evict cached intel for one IP or all IPs |
-| `--validate` | Validate `vlog.toml` config and exit |
+| `--validate` | Validate `vops.toml` config and exit |
 | `--info` | Print resolved config and exit |
 | `--dry-run` | Validate + print without starting server |
 
 ### Priority order
 
 1. CLI flags
-2. `$VPROX_HOME/config/vlog.toml`
+2. `$VPROX_HOME/config/vops/vops.toml`
 3. Built-in defaults
 
 ### Practical command sets
 
 #### Service management
 ```bash
-vlog start -d         # daemon
-vlog stop             # stop
-vlog restart          # restart
-vlog status           # show stats
+vprox vops start -d    # daemon
+vprox vops stop        # stop
+vprox vops restart     # restart
+vprox vops status      # show stats
 ```
 
 #### Manual ingest
 ```bash
-vlog ingest           # process all pending archives
-vlog ingest --home /custom/path
+vprox vops ingest      # process all pending archives
+vprox vops ingest --home /custom/path
 ```
 
 #### Intelligence
 ```bash
-vlog --enrich 1.2.3.4            # run VT + AbuseIPDB + Shodan on IP
-vlog --purge-cache 1.2.3.4       # clear cached score for IP
-vlog --list-threats               # print IPs with score ≥ 50
+vprox vops --enrich 1.2.3.4       # run VT + AbuseIPDB + Shodan on IP
+vprox vops --purge-cache 1.2.3.4  # clear cached score for IP
+vprox vops --list-threats          # print IPs with score ≥ 50
 ```

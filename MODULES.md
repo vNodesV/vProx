@@ -26,6 +26,10 @@ Override base path with:
 
 Chain configs live in `$HOME/.vProx/config/chains/*.toml`. For backward compatibility, configs in `$HOME/.vProx/chains/*.toml` and `$HOME/.vProx/config/*.toml` are also scanned.
 
+**v1.4.0 config layout additions:**
+- `config/chains/*.sample` — identity-only sample files (`chain_id`, `network_type`, `tree_name`, `dashboard_name`); no proxy/service fields; used as chain identity templates
+- `config/services/nodes/*.toml` — per-node proxy + management config (planned); uses `tree` field as join key to chain identity
+
 **Required fields:**
 
 | Field | Type | Description |
@@ -406,32 +410,35 @@ absolute_links      = "auto" # auto | always | never
 
 ---
 
-## 11) vLog — Log Archive Analyzer
+## 11) vOps — Log Archive Analyzer
 
-**Version**: v1.0.0 (ships with vProxVL v1.2.0)
+**Version**: v1.4.0 (renamed from vLog; previously shipped as vLog with vProxVL v1.2.0)
 
 **Purpose**: Standalone binary that analyzes vProx log archives. Maintains a SQLite database of per-IP accounts, request events, and rate-limit events. Provides a CRM-like web UI and REST API for security intelligence, traffic analysis, and multi-location endpoint health monitoring.
 
 **Location:**
-- `cmd/vlog/` — binary entry point
-- `internal/vlog/` — packages (config, db, ingest, intel, web)
+- `cmd/vops/` — binary entry point
+- `internal/vops/` — packages (config, db, ingest, intel, web)
 
-**Binary**: `vlog` — standalone, mirrors vProx architecture (single binary, embedded HTTP server, Apache-proxied).
+**Binary**: `vops` (integrated via `vprox vops`) — standalone, mirrors vProx architecture (single binary, embedded HTTP server, Apache-proxied).
 
-**Database**: SQLite at `$VPROX_HOME/data/vlog.db` via `modernc.org/sqlite` (pure Go, no CGO required).
+**Database**: SQLite at `$VPROX_HOME/data/vops.db` via `modernc.org/sqlite` (pure Go, no CGO required).
 
-**Config**: `$VPROX_HOME/config/vlog.toml` — sample at `config/vlog.sample.toml`.
+**Config**: `$VPROX_HOME/config/vops/vops.toml` — sample at `config/vops/vops.sample.toml`.
 
 ### CLI Commands
 
 | Command | Action |
 |---|---|
-| `vlog start` | Start vLog server (foreground) |
-| `vlog start -d` | Start as background daemon (`sudo service vLog start`) |
-| `vlog stop` | Stop vLog service (`sudo service vLog stop`) |
-| `vlog restart` | Restart vLog service (`sudo service vLog restart`) |
-| `vlog ingest` | One-shot archive ingest and exit |
-| `vlog status` | Show database stats and exit |
+| `vprox vops start` | Start vOps server (foreground) |
+| `vprox vops start -d` | Start as background daemon (`sudo service vOps start`) |
+| `vprox vops stop` | Stop vOps service (`sudo service vOps stop`) |
+| `vprox vops restart` | Restart vOps service (`sudo service vOps restart`) |
+| `vprox vops ingest` | One-shot archive ingest and exit |
+| `vprox vops status` | Show database stats and exit |
+| `vprox vops accounts` | List IP accounts as JSON |
+| `vprox vops threats` | List flagged IPs (score ≥ 50) |
+| `vprox vops cache` | Manage intel cache |
 
 **Runtime flags (start):** `--home`, `--port`, `--quiet`, `--no-watch`, `--no-enrich`, `--watch-interval`
 **One-shot flags:** `--list-archives`, `--list-accounts`, `--list-threats`, `--enrich <ip>`, `--purge-cache <ip|all>`, `--validate`, `--info`, `--dry-run`
@@ -447,7 +454,7 @@ The dashboard (`GET /`) provides:
 | Column | Source | Description |
 |---|---|---|
 | **Live** | — | Probe trigger button |
-| **Local** | vLog server | Direct HTTP probe from the vLog host; shows latency in green or error in red |
+| **Local** | vOps server | Direct HTTP probe from the vOps host; shows latency in green or error in red |
 | **🇨🇦** | check-host.net — Vancouver | External probe from Canada node |
 | **🌍** | check-host.net — random WW node | External probe from Europe/Asia/Americas |
 
@@ -487,11 +494,11 @@ During probing, each cell shows a CSS spinner ring. On completion, cells show `N
 
 | Package | Description |
 |---|---|
-| `internal/vlog/config/` | TOML config loader (`vlog.toml`) |
-| `internal/vlog/db/` | SQLite schema, connection pool, query methods (5 tables + 6 indexes) |
-| `internal/vlog/ingest/` | Archive scanner, log parser (`main.log` + `rate-limit.jsonl`), FS watcher |
-| `internal/vlog/intel/` | AbuseIPDB v2, VirusTotal v3, Shodan API clients; parallel queries (3 goroutines); composite threat scoring (0–100); ~10s vs former ~30s |
-| `internal/vlog/web/` | Embedded HTTP server, `html/template` + `go:embed` + htmx UI, SSE handlers, probe handler |
+| `internal/vops/config/` | TOML config loader (`vops.toml`) |
+| `internal/vops/db/` | SQLite schema, connection pool, query methods (5 tables + 6 indexes) |
+| `internal/vops/ingest/` | Archive scanner, log parser (`main.log` + `rate-limit.jsonl`), FS watcher |
+| `internal/vops/intel/` | AbuseIPDB v2, VirusTotal v3, Shodan API clients; parallel queries (3 goroutines); composite threat scoring (0–100); ~10s vs former ~30s |
+| `internal/vops/web/` | Embedded HTTP server, `html/template` + `go:embed` + htmx UI, SSE handlers, probe handler |
 
 ### OSINT Engine
 
@@ -509,18 +516,18 @@ Typical completion: ~5s (concurrent) vs ~23s (sequential).
 
 ### vProx Integration
 
-After `--new-backup`, vProx optionally POSTs to `vlog_url/api/v1/ingest` to trigger automatic ingest:
+After `--new-backup`, vProx optionally POSTs to `vops_url/api/v1/ingest` to trigger automatic ingest:
 
 ```toml
 # $VPROX_HOME/config/ports.toml
-vlog_url = "http://localhost:8889"
+vops_url = "http://localhost:8889"
 ```
 
-The POST is non-fatal — if vLog is unavailable, vProx logs a warning and continues normally.
+The POST is non-fatal — if vOps is unavailable, vProx logs a warning and continues normally.
 
 ### Security Assessment
 
-vLog builds a composite threat score (0–100) for each IP using three external intelligence sources (queries run in parallel):
+vOps builds a composite threat score (0–100) for each IP using three external intelligence sources (queries run in parallel):
 
 | Source | Weight | API Version |
 |---|---|---|
@@ -625,10 +632,10 @@ exposed_services = true      # true = probe via chain.host; false = probe via la
 
 | `managed_host` | `exposed_services` | Behaviour |
 |---|---|---|
-| false | false | vLog probes via `lan_ip`; no SSH management |
-| false | true | vLog probes via `chain.host` (through vProx); no SSH management |
-| true | false | SSH management enabled; vLog probes via `lan_ip` (same-LAN case) |
-| true | true | SSH management enabled; vLog probes via `chain.host` (public domain) |
+| false | false | vOps probes via `lan_ip`; no SSH management |
+| false | true | vOps probes via `chain.host` (through vProx); no SSH management |
+| true | false | SSH management enabled; vOps probes via `lan_ip` (same-LAN case) |
+| true | true | SSH management enabled; vOps probes via `chain.host` (public domain) |
 
 ### CLI Commands
 
