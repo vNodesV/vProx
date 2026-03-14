@@ -58,10 +58,10 @@ type ChainStatus struct {
 	ValParticipation string `json:"val_participation,omitempty"` // "12/15"; empty if not a validator or no valoper
 
 	// Validator on-chain status (populated only when a valoper address is configured)
-	HasValidator    bool  `json:"has_validator"`              // true when valoper is set
-	ValBonded       bool  `json:"val_bonded"`                 // in active bonded set
-	ValJailed       bool  `json:"val_jailed"`                 // currently jailed
-	ValMissedBlocks int64 `json:"val_missed_blocks"`          // missed blocks in current window
+	HasValidator    bool  `json:"has_validator"`     // true when valoper is set
+	ValBonded       bool  `json:"val_bonded"`        // in active bonded set
+	ValJailed       bool  `json:"val_jailed"`        // currently jailed
+	ValMissedBlocks int64 `json:"val_missed_blocks"` // missed blocks in current window
 
 	// Metadata
 	Datacenter    string    `json:"datacenter,omitempty"`

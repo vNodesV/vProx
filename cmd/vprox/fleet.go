@@ -167,7 +167,6 @@ func openFleetDB(home string) (*state.DB, error) {
 	return state.Open(dbPath)
 }
 
-
 func fleetDeploy(home string, args []string) {
 	fs := flag.NewFlagSet("fleet deploy", flag.ExitOnError)
 	vmName := fs.String("vm", "", "VM name (required)")

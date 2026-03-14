@@ -1172,6 +1172,8 @@ func main() {
 		fmt.Fprintln(out, "  mod   <sub> [flags]     manage vProx ecosystem modules")
 		fmt.Fprintln(out, "  chain <sub> [flags]     chain node status and upgrade tracking")
 		fmt.Fprintln(out, "  config [step] [--web]   interactive TOML configuration wizard")
+		fmt.Fprintln(out, "  vops [sub] [flags]      vOps log analyzer (start|stop|restart|status)")
+		fmt.Fprintln(out, "  completion <shell>      generate shell completion script (bash|zsh|fish)")
 		fmt.Fprintln(out, "")
 		fmt.Fprintln(out, "Flags:")
 		fmt.Fprintln(out, "  --addr string           listen address (default :3000)")
@@ -1197,6 +1199,7 @@ func main() {
 		fmt.Fprintln(out, "  --validate              validate configs and exit")
 		fmt.Fprintln(out, "  --verbose               verbose logging output")
 		fmt.Fprintln(out, "  --version               show version and exit")
+		fmt.Fprintln(out, "  --with-vops             start vOps server alongside proxy (integrated mode)")
 		fmt.Fprintln(out, "")
 		fmt.Fprintln(out, "Backup output goes to terminal + main.log. When run standalone (not via systemd),")
 		fmt.Fprintln(out, "use 'journalctl -t vProx' to see backup entries in the journal.")
@@ -1229,6 +1232,12 @@ func main() {
 		os.Exit(0)
 	case "config":
 		runConfigCmd(resolveHome(rawArgs[1:]), rawArgs[1:])
+		os.Exit(0)
+	case "vops":
+		runVOpsCmd(resolveHome(rawArgs[1:]), rawArgs[1:])
+		os.Exit(0)
+	case "completion":
+		runCompletionCmd(rawArgs[1:])
 		os.Exit(0)
 	default:
 		// Unknown bare word (not a flag) → error
@@ -1268,6 +1277,7 @@ func main() {
 	autoBurstFlag := flag.Int("auto-burst", 0, "override auto-quarantine burst (env: VPROX_AUTO_BURST)")
 	disableAutoFlag := flag.Bool("disable-auto", false, "disable auto-quarantine")
 	disableBackupFlag := flag.Bool("disable-backup", false, "disable automatic backup loop")
+	withVOpsFlag := flag.Bool("with-vops", false, "start vOps server alongside proxy (integrated mode)")
 
 	flag.Usage = printHelp
 
@@ -1806,6 +1816,17 @@ func main() {
 		closeChainLoggers()
 	}
 
+	// --with-vops: start vOps server alongside proxy in integrated mode.
+	var vopsShutdown func()
+	if *withVOpsFlag && startMode {
+		shutdown, err := startVOpsInBackground(vproxHome)
+		if err != nil {
+			applog.Print("WARN", "vops", "start_failed", applog.F("error", err.Error()))
+		} else {
+			vopsShutdown = shutdown
+		}
+	}
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -1822,6 +1843,9 @@ func main() {
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("Server error: %v", err)
 		}
+		if vopsShutdown != nil {
+			vopsShutdown()
+		}
 		cleanup()
 	case <-ctx.Done():
 		applog.Print("INFO", "server", "shutdown_requested")
@@ -1829,6 +1853,9 @@ func main() {
 		defer cancel()
 		if err := server.Shutdown(ctxTimeout); err != nil {
 			applog.Print("ERROR", "server", "shutdown_error", applog.F("error", err.Error()))
+		}
+		if vopsShutdown != nil {
+			vopsShutdown()
 		}
 		cleanup()
 	}

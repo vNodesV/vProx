@@ -1,0 +1,62 @@
+# vOps Chain Identity Configuration
+# rev: {{SAMPLE_REV}}
+#
+# One file per chain. Place in: $VPROX_HOME/config/vops/chains/
+# Example: config/vops/chains/your_chain.toml
+#
+# This file holds chain identity, validator info, and dashboard probe settings.
+# Proxy settings (host, ports, services, management) live separately in:
+#   config/vprox/nodes/<node>.toml
+#
+# Join via: node (this file) → basename of config/vprox/nodes/<node>.toml
+# vProx never reads this file — it is vOps-only.
+
+schema_version = 2
+
+# ── Node Link ──────────────────────────────────────────────────────────────────
+# node: basename (no extension) of the vprox/nodes/<node>.toml proxying this chain.
+# When empty, tree_name is used as fallback for matching.
+node      = "your_chain"   # → config/vprox/nodes/your_chain.toml
+tree_name = "your_chain"   # chain slug used in log filenames and routes
+
+# ── Chain Identity ─────────────────────────────────────────────────────────────
+# chain_id triggers auto-import from cosmos.directory on vOps startup/reload.
+# Use the first segment before "-" as the chain_name slug for cosmos.directory.
+chain_id       = "your_chain-mainnet-1"   # official chain-id
+chain_name     = "your_chain"             # cosmos.directory slug
+dashboard_name = ""                       # display name; empty = cosmos.directory pretty_name
+
+# Auto-filled from cosmos.directory when chain_id is set:
+network_type        = ""   # e.g. "mainnet" or "testnet"
+recommended_version = ""   # e.g. "v4.2.1"
+explorer_base       = ""   # block explorer base URL
+explorers           = []   # override cosmos.directory explorer list
+
+
+# ── Validator ──────────────────────────────────────────────────────────────────
+# Operator address triggers auto-enrichment via validators.cosmos.directory at runtime.
+# Auto-filled fields (do not set manually — overwritten on each poll):
+
+[chain_services.validator.mainnet]
+address = ""   # valoper operator address; auto-fills active/synced/jailed/missed_blocks
+
+# Auto-filled by cosmos.directory / chain RPC (do not set manually):
+# active          = false
+# synced          = false
+# jailed          = false
+# missed_blocks   = 0
+# active_proposal = ""
+# vote_by         = ""
+# upgrade         = ""   # upgrade halt height if a pending upgrade exists, else ""
+
+[chain_services.validator.testnet]
+address = ""   # testnet valoper; empty = testnet validator row hidden in dashboard
+
+
+# ── Ping ───────────────────────────────────────────────────────────────────────
+# Controls the per-chain datacenter probe in the dashboard DC column.
+# Takes precedence over [management.ping] in the linked vprox/nodes/ file when set.
+
+[chain_ping]
+country  = "CA"   # ISO 3166-1 alpha-2 (CA US FR DE NL GB FI JP SG BR IN)
+provider = ""     # pin to check-host.net node (e.g. "ca1"); empty = random from country

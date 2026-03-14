@@ -21,13 +21,13 @@ type ChainDetails struct {
 
 // ChainService describes one managed service running on the chain.
 type ChainService struct {
-	Name       string `toml:"name"`         // service label shown in dashboard
-	Moniker    string `toml:"moniker"`      // optional node moniker override
+	Name        string `toml:"name"`         // service label shown in dashboard
+	Moniker     string `toml:"moniker"`      // optional node moniker override
 	ServiceType string `toml:"service_type"` // node | validator | relayer | sp
-	Valoper    string `toml:"valoper"`      // required for validator service rows
-	InternalIP string `toml:"internal_ip"`  // LAN IP used for VM linking
-	Host       string `toml:"host"`         // optional hostname/domain
-	LinkToVM   bool   `toml:"link_to_vm"`   // true = match InternalIP against VM registry
+	Valoper     string `toml:"valoper"`      // required for validator service rows
+	InternalIP  string `toml:"internal_ip"`  // LAN IP used for VM linking
+	Host        string `toml:"host"`         // optional hostname/domain
+	LinkToVM    bool   `toml:"link_to_vm"`   // true = match InternalIP against VM registry
 }
 
 // ChainIdentity is the per-chain configuration for config/vops/chains/<chain>.toml.
@@ -240,7 +240,7 @@ func uniqueStrings(in []string) []string {
 }
 
 type legacyChainIdentity struct {
-	SchemaVersion int `toml:"schema_version"`
+	SchemaVersion int    `toml:"schema_version"`
 	Node          string `toml:"node"`
 	TreeName      string `toml:"tree_name"`
 
@@ -259,17 +259,17 @@ type legacyChainIdentity struct {
 
 func (l legacyChainIdentity) toChainIdentity(base string) ChainIdentity {
 	ci := ChainIdentity{
-		SchemaVersion:       l.SchemaVersion,
-		Node:                l.Node,
-		TreeName:            l.TreeName,
-		ChainID:             l.ChainID,
-		ChainName:           l.ChainName,
-		DashboardName:       l.DashboardName,
-		NetworkType:         l.NetworkType,
-		RecommendedVersion:  l.RecommendedVersion,
-		ExplorerBase:        l.ExplorerBase,
-		Explorers:           append([]string(nil), l.Explorers...),
-		ChainPing:           l.ChainPing,
+		SchemaVersion:      l.SchemaVersion,
+		Node:               l.Node,
+		TreeName:           l.TreeName,
+		ChainID:            l.ChainID,
+		ChainName:          l.ChainName,
+		DashboardName:      l.DashboardName,
+		NetworkType:        l.NetworkType,
+		RecommendedVersion: l.RecommendedVersion,
+		ExplorerBase:       l.ExplorerBase,
+		Explorers:          append([]string(nil), l.Explorers...),
+		ChainPing:          l.ChainPing,
 		ChainDetails: ChainDetails{
 			Name:          l.ChainName,
 			DashboardName: l.DashboardName,
@@ -306,21 +306,21 @@ func (l legacyChainIdentity) toChainIdentity(base string) ChainIdentity {
 	if host := strings.TrimSpace(l.ChainServices.SP.Mainnet.Hostname); host != "" ||
 		strings.TrimSpace(l.ChainServices.SP.Mainnet.LanIP) != "" {
 		addService(ChainService{
-			Name:       "service-mainnet",
+			Name:        "service-mainnet",
 			ServiceType: "sp",
-			Host:       strings.TrimSpace(l.ChainServices.SP.Mainnet.Hostname),
-			InternalIP: strings.TrimSpace(l.ChainServices.SP.Mainnet.LanIP),
-			LinkToVM:   true,
+			Host:        strings.TrimSpace(l.ChainServices.SP.Mainnet.Hostname),
+			InternalIP:  strings.TrimSpace(l.ChainServices.SP.Mainnet.LanIP),
+			LinkToVM:    true,
 		})
 	}
 	if host := strings.TrimSpace(l.ChainServices.SP.Testnet.Hostname); host != "" ||
 		strings.TrimSpace(l.ChainServices.SP.Testnet.LanIP) != "" {
 		addService(ChainService{
-			Name:       "service-testnet",
+			Name:        "service-testnet",
 			ServiceType: "sp",
-			Host:       strings.TrimSpace(l.ChainServices.SP.Testnet.Hostname),
-			InternalIP: strings.TrimSpace(l.ChainServices.SP.Testnet.LanIP),
-			LinkToVM:   true,
+			Host:        strings.TrimSpace(l.ChainServices.SP.Testnet.Hostname),
+			InternalIP:  strings.TrimSpace(l.ChainServices.SP.Testnet.LanIP),
+			LinkToVM:    true,
 		})
 	}
 	if strings.TrimSpace(l.Management.Valoper) != "" && ci.PrimaryValoper() == "" {
