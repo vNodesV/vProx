@@ -394,9 +394,25 @@
       <label>port<input name="port" type="number" min="1" max="65535" value="8889"></label>
       <label>bind_address<input name="bind_address" type="text" value="127.0.0.1"></label>
       <label>base_path<input name="base_path" type="text"></label>
-      <label>api_key<input name="api_key" type="password" autocomplete="off"></label>
+      <label class="full key-gen-row">
+        api_key
+        <div class="key-gen-wrap">
+          <input name="api_key" id="settings-api-key-input" type="password" autocomplete="off">
+          <button type="button" class="v-block-btn key-gen-btn" onclick="settingsGenAPIKey()">⟳ Generate</button>
+          <button type="button" class="v-block-btn key-gen-copy" onclick="settingsCopyKey('settings-api-key-input')" title="Copy">⎘</button>
+        </div>
+        <span class="key-gen-hint">Shared secret for /block and /unblock API endpoints. Auto-generate for security.</span>
+      </label>
       <label>username <span class="required-dot">*</span><input name="username" type="text" value="admin" required></label>
-      <label>password_hash<input name="password_hash" type="password" autocomplete="off"></label>
+      <label class="full key-gen-row">
+        password_hash
+        <div class="key-gen-wrap">
+          <input type="password" id="settings-pw-plain" placeholder="Enter password to hash…" autocomplete="off">
+          <button type="button" class="v-block-btn key-gen-btn" onclick="settingsHashPassword()">⟳ Hash &amp; Set</button>
+        </div>
+        <input name="password_hash" id="settings-pw-hash" type="password" autocomplete="off" placeholder="$2a$12$… (bcrypt hash)">
+        <span class="key-gen-hint">Enter a plaintext password and click Hash &amp; Set — the bcrypt hash is written to the field above. Or paste an existing hash directly.</span>
+      </label>
       <label class="check full">intel.auto_enrich <input name="auto_enrich" type="checkbox" checked></label>
       <label>cache_ttl_hours<input name="cache_ttl_hours" type="number" min="1" value="24"></label>
       <label>rate_limit_rpm<input name="rate_limit_rpm" type="number" min="1" value="10"></label>
@@ -2036,6 +2052,63 @@
 </script>
 
 <script>
+// ── API Key generation & password hashing helpers ────────────────────────────
+async function settingsGenAPIKey() {
+  const btn = document.querySelector('.key-gen-btn');
+  const inp = document.getElementById('settings-api-key-input');
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  try {
+    const res = await fetch(apiPath('/settings/api/gen-api-key'));
+    const data = await res.json();
+    if (data.key && inp) {
+      inp.value = data.key;
+      inp.type = 'text';
+      inp.setAttribute('data-generated', '1');
+    }
+  } catch(e) {
+    alert('Failed to generate key: ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '⟳ Generate'; }
+  }
+}
+
+async function settingsHashPassword() {
+  const pw = document.getElementById('settings-pw-plain');
+  const hash = document.getElementById('settings-pw-hash');
+  const btn = pw ? pw.closest('.key-gen-row').querySelector('.key-gen-btn') : null;
+  if (!pw || !pw.value.trim()) { alert('Enter a password first.'); return; }
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  try {
+    const res = await fetch(apiPath('/settings/api/hash-password'), {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({password: pw.value})
+    });
+    const data = await res.json();
+    if (data.hash && hash) {
+      hash.value = data.hash;
+      hash.type = 'text';
+      pw.value = '';
+      pw.placeholder = '✓ Hash set — save the form to apply';
+    } else {
+      alert('Error: ' + (data.error || 'unknown'));
+    }
+  } catch(e) {
+    alert('Failed to hash password: ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '⟳ Hash & Set'; }
+  }
+}
+
+function settingsCopyKey(inputId) {
+  const inp = document.getElementById(inputId);
+  if (!inp || !inp.value) return;
+  navigator.clipboard.writeText(inp.value).then(() => {
+    const btn = inp.closest('.key-gen-row').querySelector('.key-gen-copy');
+    if (btn) { btn.textContent = '✓'; setTimeout(() => btn.textContent = '⎘', 1500); }
+  });
+}
+
 // ── Preferences: localStorage persistence ────────────────────────────────
 // Refresh interval and column visibility are stored client-side only (v1.4.0).
 // Theme is handled by setTheme() in base.html.

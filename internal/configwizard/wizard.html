@@ -503,6 +503,39 @@
       .infra-vm-row .grid { grid-template-columns: 1fr; }
       .toolbar { align-items: stretch; }
     }
+
+    /* ── API key / password generation rows ── */
+    .key-gen-row {
+      display: flex !important;
+      flex-direction: column;
+      gap: .3rem;
+      align-items: flex-start !important;
+    }
+    .key-gen-wrap {
+      display: flex;
+      align-items: center;
+      gap: .4rem;
+      width: 100%;
+    }
+    .key-gen-wrap input { flex: 1; min-width: 0; }
+    .wiz-gen-btn {
+      flex-shrink: 0;
+      white-space: nowrap;
+      font-size: .78rem;
+      padding: .22rem .65rem;
+      border: 1px solid rgba(79,195,247,.30);
+      border-radius: 4px;
+      background: none;
+      color: #4fc3f7;
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .wiz-gen-btn:hover { background: rgba(79,195,247,.08); }
+    .key-gen-hint {
+      font-size: .72rem;
+      color: #7f8cb0;
+      line-height: 1.35;
+    }
   </style>
 </head>
 <body>
@@ -656,9 +689,25 @@
           <label>port<input name="port" type="number" min="1" max="65535" value="8889"></label>
           <label>bind_address<input name="bind_address" type="text" value="127.0.0.1"></label>
           <label>base_path<input name="base_path" type="text"></label>
-          <label>api_key<input name="api_key" type="password" autocomplete="off"></label>
+          <label class="full key-gen-row">
+            api_key
+            <div class="key-gen-wrap">
+              <input name="api_key" id="wiz-api-key-input" type="password" autocomplete="off">
+              <button type="button" class="wiz-gen-btn" onclick="wizGenAPIKey()">⟳ Generate</button>
+              <button type="button" class="wiz-gen-btn wiz-copy-btn" onclick="wizCopyKey('wiz-api-key-input')" title="Copy">⎘</button>
+            </div>
+            <span class="key-gen-hint">Shared secret for /block and /unblock API endpoints. Auto-generate for best security.</span>
+          </label>
           <label>username<span class="required-mark">*</span><input name="username" type="text" value="admin" required></label>
-          <label>password_hash (already hashed)<input name="password_hash" type="password" autocomplete="off"></label>
+          <label class="full key-gen-row">
+            Dashboard password
+            <div class="key-gen-wrap">
+              <input type="password" id="wiz-pw-plain" placeholder="Enter password to hash…" autocomplete="off">
+              <button type="button" class="wiz-gen-btn" onclick="wizHashPassword()">⟳ Hash &amp; Set</button>
+            </div>
+            <input name="password_hash" id="wiz-pw-hash" type="password" autocomplete="off" placeholder="$2a$12$… (bcrypt hash, or click Hash &amp; Set above)">
+            <span class="key-gen-hint">Enter a plaintext password and click Hash &amp; Set. The bcrypt hash is written to the field above. Paste an existing bcrypt hash directly if you already have one.</span>
+          </label>
           <label class="check full"><input name="auto_enrich" type="checkbox" checked> intel.auto_enrich</label>
           <label>cache_ttl_hours<input name="cache_ttl_hours" type="number" min="1" value="24"></label>
           <label>rate_limit_rpm<input name="rate_limit_rpm" type="number" min="1" value="10"></label>
@@ -1540,6 +1589,54 @@
       });
       $("#btn-refresh").addEventListener("click", () => loadCurrent());
       $("#btn-done").addEventListener("click", () => finishWizard());
+    }
+
+    // ── API key generation & password hashing (wizard) ────────────────────
+    async function wizGenAPIKey() {
+      const inp = document.getElementById('wiz-api-key-input');
+      const btn = inp ? inp.closest('.key-gen-row').querySelector('.wiz-gen-btn') : null;
+      if (btn) { btn.disabled = true; btn.textContent = '…'; }
+      try {
+        const res = await fetch('settings/api/gen-api-key');
+        const data = await res.json();
+        if (data.key && inp) {
+          inp.value = data.key;
+          inp.type = 'text';
+        }
+      } catch(e) { alert('Failed: ' + e.message); }
+      finally { if (btn) { btn.disabled = false; btn.textContent = '⟳ Generate'; } }
+    }
+
+    async function wizHashPassword() {
+      const pw = document.getElementById('wiz-pw-plain');
+      const hash = document.getElementById('wiz-pw-hash');
+      const btn = pw ? pw.closest('.key-gen-row').querySelector('.wiz-gen-btn') : null;
+      if (!pw || !pw.value.trim()) { alert('Enter a password first.'); return; }
+      if (btn) { btn.disabled = true; btn.textContent = '…'; }
+      try {
+        const res = await fetch('settings/api/hash-password', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({password: pw.value})
+        });
+        const data = await res.json();
+        if (data.hash && hash) {
+          hash.value = data.hash;
+          hash.type = 'text';
+          pw.value = '';
+          pw.placeholder = '✓ Hash set — save the form to apply';
+        } else { alert('Error: ' + (data.error || 'unknown')); }
+      } catch(e) { alert('Failed: ' + e.message); }
+      finally { if (btn) { btn.disabled = false; btn.textContent = '⟳ Hash & Set'; } }
+    }
+
+    function wizCopyKey(inputId) {
+      const inp = document.getElementById(inputId);
+      if (!inp || !inp.value) return;
+      navigator.clipboard.writeText(inp.value).then(() => {
+        const btn = inp.closest('.key-gen-row').querySelector('.wiz-copy-btn');
+        if (btn) { btn.textContent = '✓'; setTimeout(() => btn.textContent = '⎘', 1500); }
+      });
     }
 
     initTabs();

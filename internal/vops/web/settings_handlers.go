@@ -2,6 +2,8 @@ package web
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -12,6 +14,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"golang.org/x/crypto/bcrypt"
 
 	"github.com/pelletier/go-toml/v2"
 	"github.com/vNodesV/vProx/internal/configwizard"
@@ -254,4 +258,35 @@ func (s *Server) handleWizardPage(w http.ResponseWriter, _ *http.Request) {
 // It simply acknowledges completion — no server-side action needed.
 func (s *Server) handleAPISettingsDone(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "done"})
+}
+
+// handleAPIGenAPIKey generates a cryptographically random 32-byte hex API key.
+// GET /settings/api/gen-api-key → {"key": "vops_<64 hex chars>"}
+func (s *Server) handleAPIGenAPIKey(w http.ResponseWriter, _ *http.Request) {
+b := make([]byte, 32)
+if _, err := rand.Read(b); err != nil {
+writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to generate key"})
+return
+}
+writeJSON(w, http.StatusOK, map[string]string{"key": "vops_" + hex.EncodeToString(b)})
+}
+
+// handleAPIHashPassword hashes a plaintext password with bcrypt cost=12.
+// POST /settings/api/hash-password  body: {"password":"..."}
+// → {"hash": "$2a$12$..."}
+func (s *Server) handleAPIHashPassword(w http.ResponseWriter, r *http.Request) {
+r.Body = http.MaxBytesReader(w, r.Body, 4096)
+var req struct {
+Password string `json:"password"`
+}
+if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Password) == "" {
+writeJSON(w, http.StatusBadRequest, map[string]string{"error": "password is required"})
+return
+}
+hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), 12)
+if err != nil {
+writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "bcrypt failed"})
+return
+}
+writeJSON(w, http.StatusOK, map[string]string{"hash": string(hash)})
 }

@@ -1169,6 +1169,46 @@ summary { list-style: none; }
   gap: .5rem;
   flex-wrap: wrap;
 }
+
+/* ── API-key / password-hash generation row ── */
+.key-gen-row {
+  display: flex !important;
+  flex-direction: column;
+  gap: .3rem;
+  align-items: flex-start !important;
+}
+.key-gen-wrap {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  width: 100%;
+}
+.key-gen-wrap input {
+  flex: 1;
+  min-width: 0;
+}
+.key-gen-btn, .wiz-gen-btn {
+  flex-shrink: 0;
+  white-space: nowrap;
+  font-size: .78rem;
+  padding: .22rem .65rem;
+  border: 1px solid var(--vn-green-border);
+  border-radius: 4px;
+  background: none;
+  color: var(--vn-green);
+  cursor: pointer;
+  transition: all .15s;
+}
+.key-gen-btn:hover, .wiz-gen-btn:hover {
+  background: var(--vn-green-dim);
+}
+.key-gen-copy { opacity: .65; }
+.key-gen-hint {
+  font-size: .72rem;
+  color: var(--vn-text-muted);
+  line-height: 1.35;
+  margin-top: .1rem;
+}
 .settings-import-row {
   margin: .35rem 0 .65rem;
 }
