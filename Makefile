@@ -64,7 +64,7 @@ help:
 	@echo ""
 	@echo "  vProx / vOps — available targets"
 	@echo ""
-	@echo "  make install          Full install: vProx + vOps + SSH control plane, config, systemd"
+	@echo "  make install          Build + install vProx & vOps: bins, config, aliases, systemd"
 	@echo "  make add-<module>     Reinstall one module  (e.g. make add-vOps)"
 	@echo "  make clean            Remove local build artifacts"
 	@echo "  make ufw              Passwordless UFW sudoers for vOps block/unblock"
@@ -72,12 +72,71 @@ help:
 	@echo "  make release-vops     Cross-compile vOps only → dist/"
 	@echo "  make deploy-jarvis    Cross-compile + kill + SCP + restart vOps on jarvis"
 	@echo ""
-	@echo "  SSH control plane (fleet module) is installed automatically."
-	@echo "  Add VM hosts to: ~/.vProx/config/infra/{datacenter}.toml (e.g. qc.toml, rbx.toml)"
-	@echo "  Add chains to:   ~/.vProx/config/chains/{chain}.toml with [management] section"
+	@echo "  Paths (install):"
+	@echo "    Binaries:  $(GOPATH_BIN)/vprox  $(GOPATH_BIN)/vops"
+	@echo "    Config:    $(CFG_DIR)/"
+	@echo "    Data:      $(DATA_DIR)/"
+	@echo "    Samples:   $(SAMPLES_DIR)/"
+	@echo "  SSH control plane (fleet) is installed automatically."
+	@echo "  Add VMs to:    ~/.vProx/config/infra/{datacenter}.toml"
+	@echo "  Add chains to: ~/.vProx/config/chains/{chain}.toml"
 	@echo ""
 
+## Full install — build + config + systemd for vProx and vOps.
+## Phases: validate-go → dirs → geo → config → env → samples → build → symlinks → systemd
+## Each optional step (symlinks, service registration, sudoers) prompts for confirmation.
+
 install: validate-go dirs geo config config-vops config-vprox config-modules env samples-fleet
+	@echo ""
+	@echo "── Building vProx + vOps ────────────────────────────────────────────────"
+	GOROOT="$(EFFECTIVE_GOROOT)" go build -o "$(GOPATH_BIN)/$(APP_NAME)" "$(BUILD_SRC)"
+	GOROOT="$(EFFECTIVE_GOROOT)" go build -o "$(GOPATH_BIN)/$(VOPS_NAME)" "$(VOPS_SRC)"
+	@echo "✓ $(APP_NAME)  → $(GOPATH_BIN)/$(APP_NAME)"
+	@echo "✓ $(VOPS_NAME) → $(GOPATH_BIN)/$(VOPS_NAME)"
+	@echo ""
+	@echo "── Lowercase aliases in GOPATH/bin ──────────────────────────────────────"
+	@ln -sf "$(GOPATH_BIN)/$(APP_NAME)"  "$(GOPATH_BIN)/vprox"
+	@ln -sf "$(GOPATH_BIN)/$(VOPS_NAME)" "$(GOPATH_BIN)/vops"
+	@ln -sf "$(GOPATH_BIN)/$(VOPS_NAME)" "$(GOPATH_BIN)/vlog"
+	@echo "✓ vprox → $(APP_NAME)"
+	@echo "✓ vops  → $(VOPS_NAME)"
+	@echo "✓ vlog  → $(VOPS_NAME)  (compat alias)"
+	@echo ""
+	@echo "── /usr/local/bin symlinks (optional, requires sudo) ────────────────────"
+	@read -p "Create /usr/local/bin/{$(APP_NAME),$(VOPS_NAME),vprox,vops,vlog} symlinks? (y/n) " -n 1 -r; echo ""; \
+	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
+		sudo ln -sf "$(GOPATH_BIN)/$(APP_NAME)"  "/usr/local/bin/$(APP_NAME)"; \
+		sudo ln -sf "$(GOPATH_BIN)/$(VOPS_NAME)" "/usr/local/bin/$(VOPS_NAME)"; \
+		sudo ln -sf "$(GOPATH_BIN)/$(APP_NAME)"  "/usr/local/bin/vprox"; \
+		sudo ln -sf "$(GOPATH_BIN)/$(VOPS_NAME)" "/usr/local/bin/vops"; \
+		sudo ln -sf "$(GOPATH_BIN)/$(VOPS_NAME)" "/usr/local/bin/vlog"; \
+		echo "✓ /usr/local/bin/{$(APP_NAME),$(VOPS_NAME),vprox,vops,vlog} created"; \
+	else \
+		echo "✓ Skipped — run from $(GOPATH_BIN)/ or add it to PATH."; \
+	fi
+	@echo ""
+	@echo "── Systemd services ─────────────────────────────────────────────────────"
+	@$(MAKE) --no-print-directory systemd
+	@$(MAKE) --no-print-directory service-vops
+	@echo ""
+	@echo "════════════════════════════════════════════════════════"
+	@echo "  ✓ Installation complete"
+	@echo "────────────────────────────────────────────────────────"
+	@echo "  Binaries:"
+	@echo "    $(GOPATH_BIN)/vprox   (vProx reverse proxy)"
+	@echo "    $(GOPATH_BIN)/vops    (vOps dashboard)"
+	@echo "  Config:    $(CFG_DIR)/"
+	@echo "  Data:      $(DATA_DIR)/"
+	@echo "  Samples:   $(SAMPLES_DIR)/"
+	@echo "────────────────────────────────────────────────────────"
+	@echo "  Next steps:"
+	@echo "    1. Edit $(CFG_DIR)/vops/vops.toml  — set api_key"
+	@echo "    2. Edit $(CFG_DIR)/chains/*.toml   — add your chains"
+	@echo "    3. Edit $(CFG_DIR)/infra/*.toml    — add VMs (fleet)"
+	@echo "    4. vprox start -d                  — start vProx proxy"
+	@echo "    5. vops start                      — start vOps dashboard"
+	@echo "    6. make ufw                        — UFW block/unblock (optional)"
+	@echo "════════════════════════════════════════════════════════"
 
 ## Validate Go environment
 
@@ -257,28 +316,6 @@ build:
 	GOROOT="$(EFFECTIVE_GOROOT)" go build -o "$(BUILD_OUT)" "$(BUILD_SRC)"
 	@echo "✓ Build complete"
 	@echo "  Output: $(BUILD_OUT)"
-
-## Install vProx + vOps to GOPATH/bin and optional /usr/local/bin symlinks
-
-install:
-	@echo "Building $(APP_NAME) + $(VOPS_NAME)..."
-	GOROOT="$(EFFECTIVE_GOROOT)" go build -o "$(GOPATH_BIN)/$(APP_NAME)" "$(BUILD_SRC)"
-	GOROOT="$(EFFECTIVE_GOROOT)" go build -o "$(GOPATH_BIN)/$(VOPS_NAME)" "$(VOPS_SRC)"
-	@echo "✓ $(APP_NAME) → $(GOPATH_BIN)/$(APP_NAME)"
-	@echo "✓ $(VOPS_NAME) → $(GOPATH_BIN)/$(VOPS_NAME)"
-	@echo ""
-	@echo "The next step creates symlinks at /usr/local/bin/{$(APP_NAME),$(VOPS_NAME)} and may require sudo."
-	@read -p "Create symlinks? (y/n) " -n 1 -r; echo ""; \
-	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
-		sudo ln -sf "$(GOPATH_BIN)/$(APP_NAME)" "/usr/local/bin/$(APP_NAME)"; \
-		sudo ln -sf "$(GOPATH_BIN)/$(VOPS_NAME)" "/usr/local/bin/$(VOPS_NAME)"; \
-		echo "✓ Symlinks created at /usr/local/bin/{$(APP_NAME),$(VOPS_NAME)}"; \
-		$(MAKE) systemd; \
-		$(MAKE) service-vops; \
-	else \
-		echo "✓ Skipped symlinks. Run binaries from $(GOPATH_BIN)/"; \
-	fi
-	@echo ""
 
 ## Reinstall a single module — make add-vOps | make add-vProx
 
