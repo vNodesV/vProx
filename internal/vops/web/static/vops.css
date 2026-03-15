@@ -61,26 +61,48 @@ body::before {
 body > * { position: relative; z-index: 1; }
 main.container { flex: 1; }
 
-/* ── vOps Site Header ── */
-.vops-header {
+/* ── Global checkbox reset — force native rendering over Pico v2 custom styling ── */
+input[type="checkbox"] {
+  appearance: auto;
+  -webkit-appearance: checkbox;
+  accent-color: var(--vn-green);
+}
+
+/* ── vOps Site Header — now unified nav bar ── */
+.vops-header { display: none; } /* legacy, kept for safety */
+
+/* ── Page nav — full-width sticky bar with framed inner content ── */
+.page-nav {
+  border-bottom: 1px solid var(--vn-green-border);
+  position: sticky;
+  top: 0;
+  z-index: 9;
+  background: var(--vn-bg-card);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* Inner wrapper matches .container width */
+.nav-inner {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: .25rem 1.2rem;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: .5rem 1.2rem .3rem;
-  position: relative;
-  z-index: 10;
+  gap: 0.2rem;
 }
 
 .vops-logo-link {
   display: block;
   text-decoration: none;
   flex-shrink: 0;
+  margin-right: .6rem;
 }
 
-/* Logo: CSS background-image swapped per theme — 180px wide, preserves aspect ratio */
+/* Logo: doubled from 180×50 → 360×100, proportional; CSS bg-image swapped per theme */
 .vops-logo {
-  width: 180px;
-  height: 50px;
+  width: 360px;
+  height: 100px;
   background: url('2026_logos/default/logo/logo.png') left center / contain no-repeat;
 }
 [data-theme="dark-blue"] .vops-logo {
@@ -90,11 +112,71 @@ main.container { flex: 1; }
   background-image: url('2026_logos/white_blue/logo/logo.png');
 }
 
-/* Push top-actions to the right; keep it aligned with logo */
-.vops-header .vlog-top-actions {
-  padding: 0;
-  margin-left: auto;
+/* Nav links group */
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
 }
+.nav-links a {
+  font-size: 0.85rem;
+  font-weight: 500;
+  text-decoration: none;
+  color: var(--vn-text-muted);
+  padding: 0.25rem 0.9rem;
+  border-radius: 4px;
+  transition: color 0.15s, background 0.15s;
+}
+.nav-links a:hover { color: var(--vn-text); background: var(--vn-green-dim); }
+.nav-links a.active { font-weight: 700; color: var(--vn-green); background: var(--vn-green-dim); }
+
+.nav-spacer { flex: 1; }
+.nav-chain-badge {
+  font-size: .72rem;
+  font-weight: 500;
+  color: var(--vn-text-muted);
+  border: 1px solid var(--vn-border);
+  border-radius: 12px;
+  padding: .15rem .55rem;
+  letter-spacing: .04em;
+  opacity: .65;
+  cursor: default;
+  user-select: none;
+}
+
+/* Logout button in nav */
+.nav-logout-form { margin: 0; padding: 0; }
+.nav-logout-btn {
+  background: none !important;
+  border: 1px solid var(--vn-border) !important;
+  color: var(--vn-text-muted) !important;
+  padding: .22rem .75rem !important;
+  border-radius: 4px !important;
+  cursor: pointer;
+  font-size: .8rem;
+  font-family: var(--font-sans);
+  transition: all .2s;
+  box-shadow: none !important;
+  line-height: 1.5;
+}
+.nav-logout-btn:hover {
+  color: var(--vn-green) !important;
+  border-color: var(--vn-green-border) !important;
+  background: var(--vn-green-dim) !important;
+}
+
+/* Keep old page-nav link selectors working for legacy references */
+.page-nav a {
+  font-size: 0.85rem;
+  font-weight: 500;
+  text-decoration: none;
+  color: var(--vn-text-muted);
+  padding: 0.25rem 0.9rem;
+  border-radius: 4px;
+  transition: color 0.15s, background 0.15s;
+}
+.page-nav a:hover { color: var(--vn-text); background: var(--vn-green-dim); }
+.page-nav a.active { font-weight: 700; color: var(--vn-green); background: var(--vn-green-dim); }
 
 /* ── Footer ── */
 .vlog-footer {
@@ -124,46 +206,6 @@ a:hover { color: var(--vn-green-hover); }
 nav strong { font-size: 0.95rem; letter-spacing: 0.02em; color: var(--vn-green); }
 nav a      { font-size: 0.82rem; }
 
-/* ── Page nav ── */
-.page-nav {
-  display: flex;
-  justify-content: flex-start;
-  align-items: center;
-  gap: 0.15rem;
-  margin-bottom: 0;
-  padding: .35rem 1.2rem .35rem;
-  border-bottom: 1px solid var(--vn-green-border);
-  position: sticky;
-  top: 0;
-  z-index: 9;
-  background: var(--vn-bg-card);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-}
-.page-nav a {
-  font-size: 0.85rem;
-  font-weight: 500;
-  text-decoration: none;
-  color: var(--vn-text-muted);
-  padding: 0.25rem 0.9rem;
-  border-radius: 4px;
-  transition: color 0.15s, background 0.15s;
-}
-.page-nav a:hover { color: var(--vn-text); background: var(--vn-green-dim); }
-.page-nav a.active { font-weight: 700; color: var(--vn-green); background: var(--vn-green-dim); }
-.nav-spacer { flex: 1; }
-.nav-chain-badge {
-  font-size: .72rem;
-  font-weight: 500;
-  color: var(--vn-text-muted);
-  border: 1px solid var(--vn-border);
-  border-radius: 12px;
-  padding: .15rem .55rem;
-  letter-spacing: .04em;
-  opacity: .65;
-  cursor: default;
-  user-select: none;
-}
 /* Add spacing before first main content block */
 .container > *:first-child { margin-top: .85rem; }
 
@@ -1104,7 +1146,7 @@ summary { list-style: none; }
   border: 1px solid var(--vn-green-border);
   border-radius: 6px;
   color: var(--vn-text);
-  background: rgba(0,0,0,.26);
+  background: var(--vn-green-dim);
 }
 .settings-grid label.check input {
   margin: 0;
@@ -1873,6 +1915,29 @@ html[data-theme="dark-blue"] .v-block-body [style*="color"] {
   color: inherit;
 }
 
+/* Dark themes: GLOBAL table cell overrides — covers Intel page, settings tables,
+   and any table not nested inside .v-block-body */
+html[data-theme="vnodes"] td,
+html[data-theme="dark-blue"] td {
+  background: transparent !important;
+  color: var(--vn-text) !important;
+  border-color: var(--vn-border) !important;
+}
+html[data-theme="vnodes"] th,
+html[data-theme="dark-blue"] th {
+  background: var(--vn-green-dim) !important;
+  color: var(--vn-text-muted) !important;
+  border-color: var(--vn-border) !important;
+}
+html[data-theme="vnodes"] tr,
+html[data-theme="dark-blue"] tr {
+  background: transparent !important;
+}
+html[data-theme="vnodes"] tbody tr:hover td,
+html[data-theme="dark-blue"] tbody tr:hover td {
+  background: var(--vn-green-dim) !important;
+}
+
 /* Dark themes: tbody rows use transparent bg (inherits from article) */
 html[data-theme="vnodes"] .v-block-body tbody tr,
 html[data-theme="dark-blue"] .v-block-body tbody tr {
@@ -1896,10 +1961,10 @@ html[data-theme="dark-blue"] .stats-grid .stat-card {
   color: var(--vn-text) !important;
 }
 
-/* Dark themes: details/summary inside settings blocks inherit dark bg */
+/* Dark themes: details/summary — force transparent bg so article bg shows through */
 html[data-theme="vnodes"] details,
 html[data-theme="dark-blue"] details {
-  background: transparent;
+  background: transparent !important;
 }
 html[data-theme="vnodes"] summary,
 html[data-theme="dark-blue"] summary {
@@ -2005,11 +2070,20 @@ html[data-theme="light-blue"] .v-card {
 
 /* ── Light Blue: tables ── */
 html[data-theme="light-blue"] thead th {
-  background: #e3f2fd;
-  color: #37474f;
+  background: #e3f2fd !important;
+  color: #37474f !important;
+  border-color: rgba(21,101,192,0.15) !important;
 }
-html[data-theme="light-blue"] tbody tr:hover {
-  background: rgba(21, 101, 192, 0.04);
+html[data-theme="light-blue"] td {
+  background: transparent !important;
+  color: #212121 !important;
+  border-color: rgba(0,0,0,0.07) !important;
+}
+html[data-theme="light-blue"] tr {
+  background: transparent !important;
+}
+html[data-theme="light-blue"] tbody tr:hover td {
+  background: rgba(21, 101, 192, 0.04) !important;
 }
 
 /* ── Light Blue: inputs ── */
@@ -2105,20 +2179,32 @@ html[data-theme="light-blue"] .page-nav {
   border-bottom-color: rgba(21, 101, 192, 0.18);
   background: rgba(232, 237, 243, 0.92);
 }
-html[data-theme="light-blue"] .page-nav a {
+html[data-theme="light-blue"] .page-nav a,
+html[data-theme="light-blue"] .nav-links a {
   color: #546e7a;
 }
-html[data-theme="light-blue"] .page-nav a:hover {
+html[data-theme="light-blue"] .page-nav a:hover,
+html[data-theme="light-blue"] .nav-links a:hover {
   color: #1565c0;
   background: rgba(21, 101, 192, 0.07);
 }
-html[data-theme="light-blue"] .page-nav a.active {
+html[data-theme="light-blue"] .page-nav a.active,
+html[data-theme="light-blue"] .nav-links a.active {
   color: #1565c0;
   background: rgba(21, 101, 192, 0.09);
 }
 html[data-theme="light-blue"] .nav-chain-badge {
   color: #78909c;
   border-color: rgba(0,0,0,0.15);
+}
+html[data-theme="light-blue"] .nav-logout-btn {
+  color: #546e7a !important;
+  border-color: rgba(0,0,0,0.18) !important;
+}
+html[data-theme="light-blue"] .nav-logout-btn:hover {
+  color: #1565c0 !important;
+  border-color: rgba(21,101,192,0.45) !important;
+  background: rgba(21,101,192,0.07) !important;
 }
 
 /* ── Light Blue: status badges — adjust contrast ── */
