@@ -79,8 +79,10 @@ poll_interval_sec = 60
 user             = ""    # default SSH user for all chain-managed hosts
 key_path         = ""    # default SSH private key path ($HOME expanded at runtime)
 # known_hosts_path validates fleet VM host keys to prevent MITM attacks.
-# Set to ~/.ssh/known_hosts or a dedicated fleet known_hosts file.
-# When empty, host-key verification is skipped and a warning is logged.
+# Default: auto-resolves to ~/.ssh/known_hosts when the file exists.
+# Set explicitly to use a dedicated fleet-only known_hosts file.
+# When empty AND ~/.ssh/known_hosts is absent, verification is skipped (warning logged).
+# To add a host: ssh-keyscan -H <vm-ip> >> ~/.ssh/known_hosts
 known_hosts_path = ""    # e.g. "~/.ssh/vprox_known_hosts"
 
 [vops.intel]

@@ -30,6 +30,12 @@ func expandPath(p string) string {
 	return p
 }
 
+// fileExists returns true when path exists and is a regular file.
+func fileExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
+}
+
 // Dial opens an SSH connection to host:port authenticating with the private
 // key at keyPath.  When knownHostsPath is non-empty the host key is verified
 // against that file; otherwise the connection proceeds without verification
@@ -48,6 +54,16 @@ func Dial(host string, port int, user, keyPath, knownHostsPath string) (*Client,
 	}
 
 	var hostKeyCallback ssh.HostKeyCallback
+	// When no explicit path is set, fall back to the user's default known_hosts file.
+	// This silently enables host-key verification for any host the user has already
+	// connected to manually — the common case for fleet VMs.
+	if knownHostsPath == "" {
+		if h, err := os.UserHomeDir(); err == nil {
+			if p := h + "/.ssh/known_hosts"; fileExists(p) {
+				knownHostsPath = p
+			}
+		}
+	}
 	if knownHostsPath != "" {
 		knownHostsPath = expandPath(knownHostsPath)
 		cb, khErr := knownhosts.New(knownHostsPath)
@@ -56,8 +72,8 @@ func Dial(host string, port int, user, keyPath, knownHostsPath string) (*Client,
 		}
 		hostKeyCallback = cb
 	} else {
-		log.Printf("[fleet/ssh] WARNING: known_hosts_path not configured — host key verification disabled for %s", host)
-		hostKeyCallback = ssh.InsecureIgnoreHostKey() //nolint:gosec // known_hosts_path not configured; warn logged above
+		log.Printf("[fleet/ssh] WARNING: host key verification disabled for %s — set known_hosts_path in vops.toml [vops.push.defaults] or run: ssh-keyscan -H %s >> ~/.ssh/known_hosts", host, host)
+		hostKeyCallback = ssh.InsecureIgnoreHostKey() //nolint:gosec // explicit config absent and no default known_hosts found
 	}
 
 	cfg := &ssh.ClientConfig{
