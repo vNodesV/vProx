@@ -421,6 +421,9 @@ Copilot session. Invoke them explicitly when the trigger conditions match. Do no
 | [`devops-rollout-plan`](.github/skills/devops-rollout-plan/) | v1.x.0 releases; systemd service deploys; "rollout plan"; preflight + rollback procedures | None |
 | [`refactor`](.github/skills/refactor/) | Code smell removal; extracting functions; breaking god functions; "refactor this"; "improve maintainability" | None |
 | [`documentation-writer`](.github/skills/documentation-writer/) | Writing/updating README, MODULES, SECURITY, CLI guides; Diataxis-style docs | None |
+| [`doublecheck`](.github/skills/doublecheck/) | Verifying agent-generated code or design decisions; QA-ing multi-step output; "double-check this"; "verify this is correct" | `assets/verification-report-template.md` |
+| [`model-recommendation`](.github/skills/model-recommendation/) | Recommending optimal AI models for agent chains/chatmodes; reviewing model routing strategy | None |
+| [`agent-governance`](.github/skills/agent-governance/) | Orchestrating sub-agents with elevated privileges; governance/safety review for multi-agent workflows | None |
 
 **Auto-invoke rules:**
 - Any test generation request → **polyglot-test-agent** (before writing tests manually)
@@ -428,6 +431,8 @@ Copilot session. Invoke them explicitly when the trigger conditions match. Do no
 - Any production deploy / release → **devops-rollout-plan** (before `git push` to main or tag)
 - Any "clean up", "simplify", "extract" code request → **refactor**
 - Any documentation update > 1 file → **documentation-writer**
+- Any "verify", "QA", "double-check" agent output request → **doublecheck**
+- Any agent chain / orchestration design → **agent-governance** + **model-recommendation**
 
 ---
 
