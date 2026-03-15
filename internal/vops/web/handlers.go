@@ -35,6 +35,8 @@ type pageBase struct {
 	Theme string
 	// Version is the running vOps binary version string (e.g. "1.0.0").
 	Version string
+	// CurrentPage identifies the active nav item: "dashboard", "accounts", "settings".
+	CurrentPage string
 }
 
 type dashboardData struct {
@@ -147,6 +149,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		BlockedAccounts:   blocked,
 		TopThreatAccounts: threats,
 	}
+	data.pageBase.CurrentPage = "dashboard"
 	if err := s.pages["dashboard.html"].ExecuteTemplate(w, "base", data); err != nil {
 		log.Printf("[web] dashboard render: %v", err)
 	}
@@ -201,6 +204,7 @@ func (s *Server) handleAccountList(w http.ResponseWriter, r *http.Request) {
 		PageSize: pageSize,
 		Search:   search,
 	}
+	data.pageBase.CurrentPage = "accounts"
 	if err := s.pages["accounts.html"].ExecuteTemplate(w, "base", data); err != nil {
 		log.Printf("[web] account list render: %v", err)
 	}
@@ -250,6 +254,7 @@ func (s *Server) handleAccountDetail(w http.ResponseWriter, r *http.Request) {
 		Ports:          buildPortInfo(account.OpenPorts),
 		ShodanResult:   intel.ParseShodanJSON(account.ShodanData),
 	}
+	data.pageBase.CurrentPage = "accounts"
 	if err := s.pages["account.html"].ExecuteTemplate(w, "base", data); err != nil {
 		log.Printf("[web] account detail render: %v", err)
 	}

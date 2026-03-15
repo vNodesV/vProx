@@ -641,20 +641,42 @@ func parseBytes(s string) int64 {
 	return 0
 }
 
-// runServiceCommand executes "service vProx <action>" and uses sudo when available.
-// This supports interactive password prompts and sudoers NOPASSWD setups.
+// runServiceCommand executes "service <name> <action>" and uses sudo when available.
+// Returns (exitMsg, error) — exitMsg is empty on success.
 func runServiceCommand(action string) error {
+	return runNamedServiceCommand("vProx", action)
+}
+
+func runNamedServiceCommand(name, action string) error {
 	bin := "sudo"
-	args := []string{"service", "vProx", action}
+	args := []string{"service", name, action}
 	if _, err := exec.LookPath("sudo"); err != nil {
 		bin = "service"
-		args = []string{"vProx", action}
+		args = []string{name, action}
 	}
 	cmd := exec.Command(bin, args...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
+}
+
+// printServiceStatus prints the two-line daemon status block.
+// Format:
+//
+//	vProx Online|Offline [reason]
+//	vOps  Online|Offline [reason]
+func printServiceStatus(vproxErr, vopsErr error, withVOps bool) {
+	status := func(err error) string {
+		if err == nil {
+			return "Online"
+		}
+		return "Offline [" + err.Error() + "]"
+	}
+	fmt.Printf("vProx %s\n", status(vproxErr))
+	if withVOps {
+		fmt.Printf("vOps  %s\n", status(vopsErr))
+	}
 }
 
 // proxySettings holds values loaded from config/vprox/settings.toml.
@@ -1226,6 +1248,7 @@ func main() {
 		fmt.Fprintln(out, "  --chains string         override chains directory")
 		fmt.Fprintln(out, "  --config string         override config directory")
 		fmt.Fprintln(out, "  -d, --daemon            start as background daemon (sudo service vProx start)")
+		fmt.Fprintln(out, "  -O, --with-vops         with -d: also start/stop/restart vOps service; prints two-line status")
 		fmt.Fprintln(out, "  --disable-auto          disable auto-quarantine")
 		fmt.Fprintln(out, "  --disable-backup        disable automatic backup loop and persist to backup.toml")
 		fmt.Fprintln(out, "  --dry-run               load everything but don't start server")
@@ -1242,7 +1265,7 @@ func main() {
 		fmt.Fprintln(out, "  --validate              validate configs and exit")
 		fmt.Fprintln(out, "  --verbose               verbose logging output")
 		fmt.Fprintln(out, "  --version               show version and exit")
-		fmt.Fprintln(out, "  --with-vops             start vOps server alongside proxy (integrated mode)")
+		fmt.Fprintln(out, "  --with-vops             start vOps alongside proxy (use -O for short form)")
 		fmt.Fprintln(out, "")
 		fmt.Fprintln(out, "Backup output goes to terminal + main.log. When run standalone (not via systemd),")
 		fmt.Fprintln(out, "use 'journalctl -t vProx' to see backup entries in the journal.")
@@ -1300,6 +1323,8 @@ func main() {
 	daemonShortFlag := flag.Bool("d", false, "alias for --daemon")
 	// --backup kept as hidden alias for --new-backup (backward compatibility)
 	backupFlagAlias := flag.Bool("backup", false, "")
+	withVOpsFlag := flag.Bool("with-vops", false, "start vOps server alongside proxy (integrated mode)")
+	withVOpsFlagShort := flag.Bool("O", false, "alias for --with-vops")
 	var resetCount bool
 	flag.BoolVar(&resetCount, "reset_count", false, "reset persisted access counters (for backup mode)")
 	flag.BoolVar(&resetCount, "reset-count", false, "reset persisted access counters (for backup mode)")
@@ -1320,7 +1345,6 @@ func main() {
 	autoBurstFlag := flag.Int("auto-burst", 0, "override auto-quarantine burst (env: VPROX_AUTO_BURST)")
 	disableAutoFlag := flag.Bool("disable-auto", false, "disable auto-quarantine")
 	disableBackupFlag := flag.Bool("disable-backup", false, "disable automatic backup loop")
-	withVOpsFlag := flag.Bool("with-vops", false, "start vOps server alongside proxy (integrated mode)")
 
 	flag.Usage = printHelp
 
@@ -1336,8 +1360,14 @@ func main() {
 
 	// restart command: delegate to service command
 	if restartSubcmd {
-		if err := runServiceCommand("restart"); err != nil {
-			fmt.Fprintf(os.Stderr, "restart failed: %v\n", err)
+		withVO := *withVOpsFlag || *withVOpsFlagShort
+		vproxErr := runNamedServiceCommand("vProx", "restart")
+		var vopsErr error
+		if withVO {
+			vopsErr = runNamedServiceCommand("vOps", "restart")
+		}
+		printServiceStatus(vproxErr, vopsErr, withVO)
+		if vproxErr != nil {
 			os.Exit(1)
 		}
 		return
@@ -1345,8 +1375,14 @@ func main() {
 
 	// stop command: delegate to service command
 	if stopSubcmd {
-		if err := runServiceCommand("stop"); err != nil {
-			fmt.Fprintf(os.Stderr, "stop failed: %v\n", err)
+		withVO := *withVOpsFlag || *withVOpsFlagShort
+		vproxErr := runNamedServiceCommand("vProx", "stop")
+		var vopsErr error
+		if withVO {
+			vopsErr = runNamedServiceCommand("vOps", "stop")
+		}
+		printServiceStatus(vproxErr, vopsErr, withVO)
+		if vproxErr != nil {
 			os.Exit(1)
 		}
 		return
@@ -1354,8 +1390,14 @@ func main() {
 
 	// --daemon / -d: start service via service command
 	if *daemonFlag || *daemonShortFlag {
-		if err := runServiceCommand("start"); err != nil {
-			fmt.Fprintf(os.Stderr, "daemon start failed: %v\n", err)
+		withVO := *withVOpsFlag || *withVOpsFlagShort
+		vproxErr := runNamedServiceCommand("vProx", "start")
+		var vopsErr error
+		if withVO {
+			vopsErr = runNamedServiceCommand("vOps", "start")
+		}
+		printServiceStatus(vproxErr, vopsErr, withVO)
+		if vproxErr != nil {
 			os.Exit(1)
 		}
 		return

@@ -130,9 +130,15 @@ nav a      { font-size: 0.82rem; }
   justify-content: flex-start;
   align-items: center;
   gap: 0.15rem;
-  margin-bottom: 1.25rem;
-  padding-bottom: 0.75rem;
+  margin-bottom: 0;
+  padding: .35rem 1.2rem .35rem;
   border-bottom: 1px solid var(--vn-green-border);
+  position: sticky;
+  top: 0;
+  z-index: 9;
+  background: var(--vn-bg-card);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 .page-nav a {
   font-size: 0.85rem;
@@ -145,20 +151,35 @@ nav a      { font-size: 0.82rem; }
 }
 .page-nav a:hover { color: var(--vn-text); background: var(--vn-green-dim); }
 .page-nav a.active { font-weight: 700; color: var(--vn-green); background: var(--vn-green-dim); }
+.nav-spacer { flex: 1; }
+.nav-chain-badge {
+  font-size: .72rem;
+  font-weight: 500;
+  color: var(--vn-text-muted);
+  border: 1px solid var(--vn-border);
+  border-radius: 12px;
+  padding: .15rem .55rem;
+  letter-spacing: .04em;
+  opacity: .65;
+  cursor: default;
+  user-select: none;
+}
+/* Add spacing before first main content block */
+.container > *:first-child { margin-top: .85rem; }
 
 /* ── Glass cards ── */
 .stat-card, .chart-block, .intel-card, article {
   background: var(--vn-bg-card);
   border: 1px solid var(--vn-green-border);
   border-radius: 8px;
-  box-shadow: 0 0 28px var(--vn-green-glow), inset 0 1px 0 rgba(0,255,0,0.06), 0 4px 20px rgba(0,0,0,0.6);
+  box-shadow: 0 0 28px var(--vn-green-glow), 0 4px 20px rgba(0,0,0,0.45);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
 }
 
 /* ── Tables ── */
 thead th {
-  background: rgba(0,255,0,0.05);
+  background: var(--vn-green-dim);
   color: var(--vn-text-muted);
   font-size: 0.72rem;
   font-weight: 700;
@@ -167,7 +188,7 @@ thead th {
   border-bottom: 1px solid var(--vn-green-border);
 }
 tbody tr { border-bottom: 1px solid var(--vn-border); }
-tbody tr:hover { background: rgba(0,255,0,0.03); }
+tbody tr:hover { background: var(--vn-green-dim); }
 tbody tr:last-child { border-bottom: none; }
 
 /* ── Inputs / selects ── */
@@ -181,16 +202,46 @@ input:focus, select:focus {
   box-shadow: 0 0 0 2px rgba(0,255,0,0.20) !important;
 }
 
+/* ── Block action buttons — theme-aware (replaces hardcoded inline styles) ── */
+.v-block-btn {
+  background: none;
+  border: 1px solid var(--vn-green-border);
+  color: var(--vn-green);
+  padding: .25rem .7rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: .8rem;
+  font-family: var(--font-sans);
+  transition: all .2s;
+  font-weight: 400;
+  line-height: 1.4;
+}
+.v-block-btn:hover {
+  background: var(--vn-green-dim);
+  border-color: var(--vn-green);
+  color: var(--vn-green);
+}
+.v-block-btn-muted {
+  color: var(--vn-text-muted);
+  border-color: var(--vn-border);
+}
+.v-block-btn-muted:hover {
+  color: var(--vn-green);
+  border-color: var(--vn-green-border);
+}
+
 /* ── Primary action buttons — use theme variables (no hardcoded colours) ── */
-[role="button"]:not(.outline):not(.secondary),
-button[type="submit"]:not(.btn-block):not(.btn-unblock):not(.btn-investigate):not(.btn-update):not(.enrich-dismiss) {
+[role="button"]:not(.outline):not(.secondary):not(.theme-swatch),
+button[type="submit"]:not(.btn-block):not(.btn-unblock):not(.btn-investigate):not(.btn-update):not(.enrich-dismiss),
+button[type="button"]:not(.outline):not(.secondary):not(.danger):not(.theme-swatch):not(.settings-pill):not(.settings-tree-toggle):not(.settings-tree-remove):not(.v-block-btn):not(.enrich-dismiss):not(.vlog-top-btn):not(.btn-block):not(.btn-unblock):not(.btn-investigate):not([id="settings-apply-btn"]) {
   background: var(--vn-btn-bg) !important;
   border: 1px solid var(--vn-green) !important;
   color: var(--vn-green) !important;
   box-shadow: 0 0 8px var(--vn-green-glow);
 }
-[role="button"]:not(.outline):not(.secondary):hover,
-button[type="submit"]:not(.btn-block):not(.btn-unblock):not(.btn-investigate):not(.btn-update):not(.enrich-dismiss):hover {
+[role="button"]:not(.outline):not(.secondary):not(.theme-swatch):hover,
+button[type="submit"]:not(.btn-block):not(.btn-unblock):not(.btn-investigate):not(.btn-update):not(.enrich-dismiss):hover,
+button[type="button"]:not(.outline):not(.secondary):not(.danger):not(.theme-swatch):not(.settings-pill):not(.settings-tree-toggle):not(.settings-tree-remove):not(.v-block-btn):not(.enrich-dismiss):not(.vlog-top-btn):not(.btn-block):not(.btn-unblock):not(.btn-investigate):not([id="settings-apply-btn"]):hover {
   background: var(--vn-green-dim) !important;
   box-shadow: 0 0 14px var(--vn-green-glow);
 }
@@ -1061,6 +1112,9 @@ summary { list-style: none; }
   height: .95rem;
   min-width: .95rem;
   accent-color: var(--vn-green);
+  appearance: auto;
+  -webkit-appearance: checkbox;
+  flex-shrink: 0;
 }
 .settings-grid label.check:has(input[type="checkbox"]:checked) {
   border-color: var(--vn-green-border);
@@ -1493,6 +1547,8 @@ summary { list-style: none; }
   flex-shrink: 0;
   margin: 0;
   accent-color: var(--vn-green);
+  appearance: auto;
+  -webkit-appearance: checkbox;
 }
 
 /* Inputs fill the remainder of the flex label row.
@@ -1797,7 +1853,47 @@ html[data-theme="dark-blue"] .chart-block,
 html[data-theme="dark-blue"] .intel-card {
   background: var(--vn-bg-card) !important;
   border-color: var(--vn-green-border) !important;
+  color: var(--vn-text) !important;
+}
+
+/* Dark themes: all block body / inner container content uses theme colours */
+html[data-theme="vnodes"] .v-block-body,
+html[data-theme="vnodes"] .v-block-body *,
+html[data-theme="dark-blue"] .v-block-body,
+html[data-theme="dark-blue"] .v-block-body * {
   color: var(--vn-text);
+}
+/* Override for badges and coloured spans — let them keep their own color */
+html[data-theme="vnodes"] .v-block-body .badge,
+html[data-theme="vnodes"] .v-block-body .svc-pill,
+html[data-theme="vnodes"] .v-block-body [style*="color"],
+html[data-theme="dark-blue"] .v-block-body .badge,
+html[data-theme="dark-blue"] .v-block-body .svc-pill,
+html[data-theme="dark-blue"] .v-block-body [style*="color"] {
+  color: inherit;
+}
+
+/* Dark themes: tbody rows use transparent bg (inherits from article) */
+html[data-theme="vnodes"] .v-block-body tbody tr,
+html[data-theme="dark-blue"] .v-block-body tbody tr {
+  background: transparent !important;
+}
+html[data-theme="vnodes"] .v-block-body tbody tr:hover,
+html[data-theme="dark-blue"] .v-block-body tbody tr:hover {
+  background: var(--vn-green-dim) !important;
+}
+html[data-theme="vnodes"] .v-block-body thead th,
+html[data-theme="dark-blue"] .v-block-body thead th {
+  background: var(--vn-green-dim) !important;
+  color: var(--vn-text-muted) !important;
+  border-color: var(--vn-green-border) !important;
+}
+
+/* Dark themes: stats grid cards */
+html[data-theme="vnodes"] .stats-grid .stat-card,
+html[data-theme="dark-blue"] .stats-grid .stat-card {
+  background: var(--vn-bg-card) !important;
+  color: var(--vn-text) !important;
 }
 
 /* Dark themes: details/summary inside settings blocks inherit dark bg */
@@ -1937,6 +2033,42 @@ html[data-theme="light-blue"] button {
   box-shadow: none !important;
 }
 
+/* ── Light Blue: v-block-btn ── */
+html[data-theme="light-blue"] .v-block-btn {
+  color: #1565c0;
+  border-color: rgba(21, 101, 192, 0.30);
+}
+html[data-theme="light-blue"] .v-block-btn:hover {
+  background: rgba(21, 101, 192, 0.07);
+  border-color: #1565c0;
+  color: #1565c0;
+}
+html[data-theme="light-blue"] .v-block-btn-muted {
+  color: #78909c;
+  border-color: rgba(0, 0, 0, 0.15);
+}
+
+/* ── Light Blue: svc-pill ── */
+html[data-theme="light-blue"] .svc-pill.svc-on {
+  border-color: rgba(21, 101, 192, 0.45);
+  color: #1565c0;
+}
+
+/* ── Light Blue: settings-pill-save/validate ready state ── */
+html[data-theme="light-blue"] .settings-pill-validate.is-ready,
+html[data-theme="light-blue"] .settings-pill-save.is-ready {
+  border-color: rgba(21, 101, 192, 0.55);
+  color: #1565c0;
+  background: rgba(21, 101, 192, 0.10);
+}
+
+/* ── Light Blue: base checkbox labels (not just inside editor-host) ── */
+html[data-theme="light-blue"] .settings-grid label.check {
+  background: rgba(21, 101, 192, 0.03);
+  border-color: rgba(21, 101, 192, 0.18);
+  color: #263238;
+}
+
 /* ── Light Blue: settings checkbox labels ── */
 html[data-theme="light-blue"] .settings-editor-host .settings-grid label.check {
   background: rgba(21, 101, 192, 0.04);
@@ -1971,6 +2103,7 @@ html[data-theme="light-blue"] ::-webkit-scrollbar-thumb:hover { background: #607
 /* ── Light Blue: page-nav ── */
 html[data-theme="light-blue"] .page-nav {
   border-bottom-color: rgba(21, 101, 192, 0.18);
+  background: rgba(232, 237, 243, 0.92);
 }
 html[data-theme="light-blue"] .page-nav a {
   color: #546e7a;
@@ -1982,6 +2115,10 @@ html[data-theme="light-blue"] .page-nav a:hover {
 html[data-theme="light-blue"] .page-nav a.active {
   color: #1565c0;
   background: rgba(21, 101, 192, 0.09);
+}
+html[data-theme="light-blue"] .nav-chain-badge {
+  color: #78909c;
+  border-color: rgba(0,0,0,0.15);
 }
 
 /* ── Light Blue: status badges — adjust contrast ── */

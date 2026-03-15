@@ -25,6 +25,7 @@ type settingsData struct {
 
 func (s *Server) handleSettingsPage(w http.ResponseWriter, _ *http.Request) {
 	data := settingsData{pageBase: s.newPageBase()}
+	data.pageBase.CurrentPage = "settings"
 	if err := s.pages["settings.html"].ExecuteTemplate(w, "base", data); err != nil {
 		log.Printf("[web] settings render: %v", err)
 	}

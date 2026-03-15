@@ -184,12 +184,18 @@
       <div class="vops-logo" role="img" aria-label="vOps — Proxy &amp; Access Intelligence"></div>
     </a>
     {{if .AuthEnabled}}<div class="vlog-top-actions">
-      <a href="{{.BasePath}}/settings" class="vlog-top-link">⚙ Settings</a>
       <form method="POST" action="{{.BasePath}}/logout" class="vlog-top-form">
         <button type="submit" class="vlog-top-btn">↪ Logout</button>
       </form>
     </div>{{end}}
   </header>
+  <nav class="page-nav" id="page-nav" aria-label="Main navigation">
+    <a href="{{.BasePath}}/"{{if eq .CurrentPage "dashboard"}} class="active"{{end}}>Dashboard</a>
+    <a href="{{.BasePath}}/accounts"{{if eq .CurrentPage "accounts"}} class="active"{{end}}>Intel</a>
+    <a href="{{.BasePath}}/settings"{{if eq .CurrentPage "settings"}} class="active"{{end}}>Settings</a>
+    <span class="nav-spacer"></span>
+    <span class="nav-chain-badge" title="Web3 / dApps — coming soon">⬡ Web3</span>
+  </nav>
   <main class="container">
     {{block "content" .}}{{end}}
   </main>

@@ -1,11 +1,5 @@
 {{define "title"}}Dashboard{{end}}
 {{define "content"}}
-<nav class="page-nav">
-  <a href="{{.BasePath}}/" class="active">Dashboard</a>
-  <a href="{{.BasePath}}/accounts">Intel</a>
-  <a href="{{.BasePath}}/settings">Settings</a>
-</nav>
-
 <div class="stats-grid">
   <div class="stat-card">
     <h3>{{index .Stats "total_requests"}}</h3>
@@ -148,18 +142,9 @@
     <summary onclick="if(event.target.closest('button')){event.preventDefault()}">
       <span class="v-block-title">Chain Services</span>
       <div class="v-block-actions">
-        <button id="chain-ping-btn" onclick="doPing()"
-          style="background:none;border:1px solid rgba(0,255,0,0.35);color:#00ff00;padding:.25rem .7rem;border-radius:4px;cursor:pointer;font-size:.8rem;font-family:Inter,sans-serif;transition:all 0.2s"
-          onmouseover="this.style.background='rgba(0,255,0,0.10)';this.style.borderColor='#00ff00'"
-          onmouseout="this.style.background='none';this.style.borderColor='rgba(0,255,0,0.35)'">Ping</button>
-        <button id="chain-refresh-btn" onclick="doRefresh()"
-          style="background:none;border:1px solid rgba(0,255,0,0.35);color:#00ff00;padding:.25rem .7rem;border-radius:4px;cursor:pointer;font-size:.8rem;font-family:Inter,sans-serif;transition:all 0.2s"
-          onmouseover="this.style.background='rgba(0,255,0,0.10)';this.style.borderColor='#00ff00'"
-          onmouseout="this.style.background='none';this.style.borderColor='rgba(0,255,0,0.35)'">Refresh</button>
-        <button id="chain-hcol-btn" onclick="toggleHcol('left')"
-          style="background:none;border:1px solid rgba(0,255,0,0.20);color:rgba(0,255,0,0.5);padding:.25rem .7rem;border-radius:4px;cursor:pointer;font-size:.8rem;font-family:Inter,sans-serif;line-height:1;transition:all 0.2s"
-          onmouseover="this.style.color='#00ff00';this.style.borderColor='rgba(0,255,0,0.6)'"
-          onmouseout="this.style.color='rgba(0,255,0,0.5)';this.style.borderColor='rgba(0,255,0,0.20)'">More &gt;</button>
+        <button id="chain-ping-btn" onclick="doPing()" class="v-block-btn">Ping</button>
+        <button id="chain-refresh-btn" onclick="doRefresh()" class="v-block-btn">Refresh</button>
+        <button id="chain-hcol-btn" onclick="toggleHcol('left')" class="v-block-btn v-block-btn-muted">More &gt;</button>
         <button id="chain-lock-btn" onclick="toggleLock('left')"
           style="display:none;background:rgba(0,0,0,0.40);border:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.30);padding:.25rem .7rem;border-radius:4px;cursor:pointer;font-size:.8rem;font-family:Inter,sans-serif;transition:all 0.2s"
           title="Lock expanded">🔓</button>
@@ -176,21 +161,12 @@
     <summary onclick="if(event.target.closest('button')){event.preventDefault()}">
       <span class="v-block-title">INFRASTRUCTURE</span>
       <div class="v-block-actions">
-        <button id="server-hcol-btn" onclick="toggleHcol('right')"
-          style="background:none;border:1px solid rgba(0,255,0,0.20);color:rgba(0,255,0,0.5);padding:.25rem .7rem;border-radius:4px;cursor:pointer;font-size:.8rem;font-family:Inter,sans-serif;line-height:1;transition:all 0.2s"
-          onmouseover="this.style.color='#00ff00';this.style.borderColor='rgba(0,255,0,0.6)'"
-          onmouseout="this.style.color='rgba(0,255,0,0.5)';this.style.borderColor='rgba(0,255,0,0.20)'">&lt; More</button>
+        <button id="server-hcol-btn" onclick="toggleHcol('right')" class="v-block-btn v-block-btn-muted">&lt; More</button>
         <button id="server-lock-btn" onclick="toggleLock('right')"
           style="display:none;background:rgba(0,0,0,0.40);border:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.30);padding:.25rem .7rem;border-radius:4px;cursor:pointer;font-size:.8rem;font-family:Inter,sans-serif;transition:all 0.2s"
           title="Lock expanded">🔓</button>
-        <button id="vm-ping-btn" onclick="doVMPing()"
-          style="background:none;border:1px solid rgba(0,255,0,0.35);color:#00ff00;padding:.25rem .7rem;border-radius:4px;cursor:pointer;font-size:.8rem;font-family:Inter,sans-serif;transition:all 0.2s"
-          onmouseover="this.style.background='rgba(0,255,0,0.10)';this.style.borderColor='#00ff00'"
-          onmouseout="this.style.background='none';this.style.borderColor='rgba(0,255,0,0.35)'">Ping</button>
-        <button id="vm-refresh-btn" onclick="doVMRefresh()"
-          style="background:none;border:1px solid rgba(0,255,0,0.35);color:#00ff00;padding:.25rem .7rem;border-radius:4px;cursor:pointer;font-size:.8rem;font-family:Inter,sans-serif;transition:all 0.2s"
-          onmouseover="this.style.background='rgba(0,255,0,0.10)';this.style.borderColor='#00ff00'"
-          onmouseout="this.style.background='none';this.style.borderColor='rgba(0,255,0,0.35)'">Refresh</button>
+        <button id="vm-ping-btn" onclick="doVMPing()" class="v-block-btn">Ping</button>
+        <button id="vm-refresh-btn" onclick="doVMRefresh()" class="v-block-btn">Refresh</button>
       </div>
     </summary>
     <div class="v-block-body">
@@ -206,18 +182,9 @@
   <div class="v-block-header">
     <span class="v-block-title">Archive Ingestion</span>
     <div class="v-block-actions">
-      <button id="arc-backup-btn" onclick="doBackupAndImport()"
-        style="background:none;border:1px solid rgba(0,255,0,0.35);color:#00ff00;padding:.25rem .7rem;border-radius:4px;cursor:pointer;font-size:.8rem;font-family:Inter,sans-serif;transition:all 0.2s"
-        onmouseover="this.style.background='rgba(0,255,0,0.10)';this.style.borderColor='#00ff00'"
-        onmouseout="this.style.background='none';this.style.borderColor='rgba(0,255,0,0.35)'">Refresh</button>
-      <button id="arc-import-btn" onclick="doImportOnly()"
-        style="background:none;border:1px solid rgba(0,255,0,0.35);color:#00ff00;padding:.25rem .7rem;border-radius:4px;cursor:pointer;font-size:.8rem;font-family:Inter,sans-serif;transition:all 0.2s;margin-left:.4rem"
-        onmouseover="this.style.background='rgba(0,255,0,0.10)';this.style.borderColor='#00ff00'"
-        onmouseout="this.style.background='none';this.style.borderColor='rgba(0,255,0,0.35)'">Manual Import</button>
-      <button id="arc-ufw-btn" onclick="doUFWSync()"
-        style="background:none;border:1px solid rgba(0,255,0,0.20);color:rgba(0,255,0,0.55);padding:.25rem .7rem;border-radius:4px;cursor:pointer;font-size:.8rem;font-family:Inter,sans-serif;transition:all 0.2s;margin-left:.4rem"
-        onmouseover="this.style.background='rgba(0,255,0,0.08)';this.style.borderColor='rgba(0,255,0,0.5)';this.style.color='#00ff00'"
-        onmouseout="this.style.background='none';this.style.borderColor='rgba(0,255,0,0.20)';this.style.color='rgba(0,255,0,0.55)'">Sync UFW</button>
+      <button id="arc-backup-btn" onclick="doBackupAndImport()" class="v-block-btn">Refresh</button>
+      <button id="arc-import-btn" onclick="doImportOnly()" class="v-block-btn" style="margin-left:.4rem">Manual Import</button>
+      <button id="arc-ufw-btn" onclick="doUFWSync()" class="v-block-btn v-block-btn-muted" style="margin-left:.4rem">Sync UFW</button>
     </div>
   </div>
   <div class="v-block-body">
